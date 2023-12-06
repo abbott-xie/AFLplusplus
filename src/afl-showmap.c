@@ -257,7 +257,7 @@ static void analyze_results(afl_forkserver_t *fsrv) {
 
 static u32 write_results_to_file(afl_forkserver_t *fsrv, u8 *outfile) {
 
-  s32 fd;
+  s32 fd, cov_fd;
   u32 i, ret = 0;
 
   u8 cco = !!getenv("AFL_CMIN_CRASHES_ONLY"),
@@ -301,6 +301,9 @@ static u32 write_results_to_file(afl_forkserver_t *fsrv, u8 *outfile) {
     fd = open(outfile, O_WRONLY | O_CREAT | O_EXCL, DEFAULT_PERMISSION);
     if (fd < 0) { PFATAL("Unable to create '%s'", outfile); }
 
+    unlink("/dev/shm/afl_showmap_br_map");                 /* Ignore errors */
+    cov_fd = open("/dev/shm/afl_showmap_br_map", O_WRONLY | O_CREAT | O_EXCL, DEFAULT_PERMISSION);
+    if (cov_fd < 0) { PFATAL("Unable to create '%s'", "/dev/shm/afl_showmap_br_map"); }
   }
 
   if (binary_mode) {
@@ -312,6 +315,9 @@ static u32 write_results_to_file(afl_forkserver_t *fsrv, u8 *outfile) {
     }
 
     ck_write(fd, fsrv->trace_bits, map_size, outfile);
+    close(fd);
+
+    ck_write(cov_fd, fsrv->br_bits, map_size*8, "/dev/shm/afl_showmap_br_map");
     close(fd);
 
   } else {
@@ -1395,6 +1401,7 @@ int main(int argc, char **argv_orig, char **envp) {
 #endif
 
   fsrv->trace_bits = afl_shm_init(&shm, map_size, 0);
+  fsrv->br_bits = shm.br_map;
 
   if (!quiet_mode) {
 
@@ -1589,6 +1596,7 @@ int main(int argc, char **argv_orig, char **envp) {
         afl_fsrv_kill(fsrv);
         fsrv->map_size = new_map_size;
         fsrv->trace_bits = afl_shm_init(&shm, new_map_size, 0);
+        fsrv->br_bits = shm.br_map;
 
       }
 
