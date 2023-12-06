@@ -867,6 +867,82 @@ void read_testcases(afl_state_t *afl, u8 *directory) {
 
 }
 
+void load_fox_metadata(afl_state_t *afl) {
+  FILE *fp;
+  char *line;
+  size_t len;
+  ssize_t read;
+
+  // read border edge file
+  // FORMAT: (border_edge_parent, border_edge_child, border_edge_2_br_dist_id)
+  fp = fopen("border_edges", "r");
+  if (!fp) { FATAL("border_edges open failed"); }
+
+  line = NULL;
+  int line_cnt = 0;
+  while ((read = getline(&line, &len, fp)) != -1) {
+    char *parent_ptr = strtok(line, " ");
+    int parent = atoi(parent_ptr);
+
+    char *child_ptr = strtok(NULL, " ");
+    int child = atoi(child_ptr);
+
+    char *br_dist_id_ptr = strtok(NULL, " ");
+    int br_dist_id = atoi(br_dist_id_ptr);
+
+    char *str_len_ptr = strtok(NULL, " ");
+    int str_len = atoi(str_len_ptr);
+    afl->fsrv.border_edge_2_str_len[line_cnt] = str_len;
+
+    afl->fsrv.border_edge_parent[line_cnt] = parent;
+    afl->fsrv.border_edge_child[line_cnt] = child;
+    afl->fsrv.border_edge_2_br_dist[line_cnt] = br_dist_id;
+
+    line_cnt++;
+  }
+
+  free(line);
+  fclose(fp);
+
+  // read border edge fast access cache
+  // FORMAT: (border_edge_parent, first_id, num_of_children)
+  fp = fopen("border_edges_cache", "r");
+  if (!fp) { FATAL("border_edges_cache open failed"); }
+
+  line = NULL;
+  while((read = getline(&line, &len, fp)) != -1){
+    char *parent_ptr = strtok(line, " ");
+    int parent = atoi(parent_ptr);
+    char *first_id_ptr = strtok(NULL, " ");
+    int first_id = atoi(first_id_ptr);
+    char *num_of_children_ptr = strtok(NULL, " ");
+    int num_of_children = atoi(num_of_children_ptr);
+
+    afl->fsrv.border_edge_parent_first_id[parent] = first_id;
+    afl->fsrv.num_of_children[parent] = num_of_children;
+  }
+
+  free(line);
+  fclose(fp);
+
+  // read border edge cmp type
+  // FORMAT: (border_edge_parent, cmp_type)
+  fp = fopen("br_node_id_2_cmp_type", "r");
+  if (!fp) { FATAL("br_node_id_2_cmp_type open failed"); }
+
+  line = NULL;
+  while((read = getline(&line, &len, fp)) != -1){
+    char *parent_ptr = strtok(line, " ");
+    int parent = atoi(parent_ptr);
+    char *cmp_type_ptr = strtok(NULL, " ");
+    int cmp_type = atoi(cmp_type_ptr);
+    afl->fsrv.cmp_type[parent] = (u8) cmp_type;
+  }
+  free(line);
+  fclose(fp);
+}
+
+
 /* Perform dry run of all test cases to confirm that the app is working as
    expected. This is done only for the initial inputs, and only once. */
 
