@@ -889,6 +889,7 @@ void sync_fuzzers(afl_state_t *afl) {
 u8 trim_case(afl_state_t *afl, struct queue_entry *q, u8 *in_buf) {
 
   u32 orig_len = q->len;
+  u64 old_exec_us = q->exec_us;
 
   /* Custom mutator trimmer */
   if (afl->custom_mutators_count) {
@@ -921,6 +922,7 @@ u8 trim_case(afl_state_t *afl, struct queue_entry *q, u8 *in_buf) {
   u32 trim_exec = 0;
   u32 remove_len;
   u32 len_p2;
+  u64 start_us, new_exec_us;
 
   u8 val_bufs[2][STRINGIFY_VAL_SIZE_MAX];
 
@@ -955,6 +957,7 @@ u8 trim_case(afl_state_t *afl, struct queue_entry *q, u8 *in_buf) {
 
     while (remove_pos < q->len) {
 
+      start_us = get_cur_time_us();
       u32 trim_avail = MIN(remove_len, q->len - remove_pos);
       u64 cksum;
 
@@ -977,6 +980,8 @@ u8 trim_case(afl_state_t *afl, struct queue_entry *q, u8 *in_buf) {
          negatives every now and then. */
 
       if (cksum == q->exec_cksum) {
+
+        new_exec_us = get_cur_time_us() - start_us;
 
         u32 move_tail = q->len - remove_pos - trim_avail;
 
@@ -1050,8 +1055,13 @@ u8 trim_case(afl_state_t *afl, struct queue_entry *q, u8 *in_buf) {
     queue_testcase_retake_mem(afl, q, in_buf, q->len, orig_len);
 
     memcpy(afl->fsrv.trace_bits, afl->clean_trace, afl->fsrv.map_size);
-    update_bitmap_score(afl, q);
-
+    if (afl->schedule != WD_SCHEDULER)
+      update_bitmap_score(afl, q);
+    else if (new_exec_us && old_exec_us > new_exec_us) {
+      q->exec_us = new_exec_us;
+      afl->wd_scheduler_total_cal_us -= old_exec_us - new_exec_us;
+      afl->wd_scheduler_avg_us = afl->wd_scheduler_total_cal_us / afl->wd_scheduler_total_cal_cycles;
+    }
   }
 
 abort_trimming:
