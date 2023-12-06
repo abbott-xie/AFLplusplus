@@ -44,7 +44,13 @@ typedef struct sharedmem {
 #else
   s32 shm_id;                          /* ID of the SHM region              */
   s32 cmplog_shm_id;
+  s32 shm_id1;
+  s32 shm_id2;
+  s32 shm_id3;
 #endif
+  s64 *br_map;
+  u8 *br_cov;
+  u8 *br_hit;
 
   u8 *map;                                          /* shared memory region */
 
