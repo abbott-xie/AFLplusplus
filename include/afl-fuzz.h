@@ -292,6 +292,7 @@ enum {
   /* 06 */ QUAD,    /* Quadratic schedule               */
   /* 07 */ RARE,    /* Rare edges                       */
   /* 08 */ SEEK,    /* EXPLORE that ignores timings     */
+  /* 09 */ WD_SCHEDULER, /* WD scheduler                */
 
   POWER_SCHEDULES_NUM
 
@@ -1096,6 +1097,7 @@ void mark_as_redundant(afl_state_t *, struct queue_entry *, u8);
 void add_to_queue(afl_state_t *, u8 *, u32, u8);
 void destroy_queue(afl_state_t *);
 void update_bitmap_score(afl_state_t *, struct queue_entry *);
+void update_bitmap_score_wd_scheduler(afl_state_t *, struct queue_entry *);
 void cull_queue(afl_state_t *);
 u32  calculate_score(afl_state_t *, struct queue_entry *);
 
@@ -1194,6 +1196,7 @@ void   check_crash_handling(void);
 void   check_cpu_governor(afl_state_t *);
 void   get_core_count(afl_state_t *);
 void   fix_up_sync(afl_state_t *);
+void   load_fox_metadata(afl_state_t *);
 void   check_asan_opts(afl_state_t *);
 void   check_binary(afl_state_t *, u8 *);
 void   check_if_tty(afl_state_t *);

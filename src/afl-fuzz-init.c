@@ -982,10 +982,21 @@ void perform_dry_run(afl_state_t *afl) {
 
     close(fd);
 
-    if (afl->schedule == WD_SCHEDULER)
-      res = calibrate_case_dry_run(afl, q, use_mem, 0, 1);
-    else
+    if (afl->schedule == WD_SCHEDULER) {
+      afl->wd_scheduler_dry_run = 1;
       res = calibrate_case(afl, q, use_mem, 0, 1);
+      afl->wd_scheduler_dry_run = 0;
+
+      u32 winning_cnt = afl->fsrv.winning_cnt;
+      u32 *winning_list = afl->fsrv.winning_list;
+      struct queue_entry **wd_scheduler_top_rated = afl->wd_scheduler_top_rated;
+      for (u32 i = 0; i < winning_cnt; i++) {
+        u32 border_edge_id = winning_list[i];
+        wd_scheduler_top_rated[border_edge_id] = q;
+      }
+    } else {
+      res = calibrate_case(afl, q, use_mem, 0, 1);
+    }
 
     if (afl->stop_soon) { return; }
 

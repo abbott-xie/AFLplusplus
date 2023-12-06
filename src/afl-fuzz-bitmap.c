@@ -617,6 +617,15 @@ save_if_interesting(afl_state_t *afl, void *mem, u32 len, u8 fault) {
 
     keeping = 1;
 
+    if (afl->schedule == WD_SCHEDULER) {
+      u32 winning_cnt = afl->fsrv.winning_cnt;
+      u32 *winning_list = afl->fsrv.winning_list;
+      struct queue_entry **wd_scheduler_top_rated = afl->wd_scheduler_top_rated;
+      for (u32 i = 0; i < winning_cnt; i++) {
+        u32 border_edge_id = winning_list[i];
+        wd_scheduler_top_rated[border_edge_id] = q;
+      }
+    }
   }
 
   switch (fault) {

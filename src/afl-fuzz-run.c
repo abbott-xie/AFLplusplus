@@ -607,6 +607,13 @@ u8 calibrate_case(afl_state_t *afl, struct queue_entry *q, u8 *use_mem,
   }
 
   q->exec_us = diff_us / afl->stage_max;
+
+  if (afl->schedule == WD_SCHEDULER && (afl->wd_scheduler_avg_us == 0 || q->exec_us <= 2 * afl->wd_scheduler_avg_us)) {
+    afl->wd_scheduler_total_cal_us += q->exec_us;
+    afl->wd_scheduler_total_cal_cycles++;
+    afl->wd_scheduler_avg_us = afl->wd_scheduler_total_cal_us / afl->wd_scheduler_total_cal_cycles;
+  }
+
   q->bitmap_size = count_bytes(afl, afl->fsrv.trace_bits);
   q->handicap = handicap;
   q->cal_failed = 0;
@@ -614,7 +621,10 @@ u8 calibrate_case(afl_state_t *afl, struct queue_entry *q, u8 *use_mem,
   afl->total_bitmap_size += q->bitmap_size;
   ++afl->total_bitmap_entries;
 
-  update_bitmap_score(afl, q);
+  if (afl->schedule == WD_SCHEDULER)
+    update_bitmap_score_wd_scheduler(afl, q);
+  else
+    update_bitmap_score(afl, q);
 
   /* If this case didn't result in new output from the instrumentation, tell
      parent. This is a non-critical problem, but something to warn the user
