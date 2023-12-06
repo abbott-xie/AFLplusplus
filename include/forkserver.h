@@ -96,11 +96,64 @@ nyx_plugin_handler_t *afl_load_libnyx_plugin(u8 *libnyx_binary);
 
 #endif
 
+#define WINNING_CAPACITY 5120
+#define FOX_BR_CANDIDATE_CAPACITY 5120
+#define FOX_MUTANT_BUF_CAPACITY 10240
+
 typedef struct afl_forkserver {
 
   /* a program that includes afl-forkserver needs to define these */
 
+  /* FOX-specific members */
   u8 *trace_bits;                       /* SHM with instrumentation bitmap  */
+  u32 *winning_list;                    /* List of line search winners      */
+  u32 winning_cnt;                      /* Count of line search winners     */
+  u8 skip_classify_count;               /* Skip classify count              */
+  u8 br_trace_setting;                  /* Branch trace setting             */
+  u32 *br_inc_winner;                   /* Branch increment winner array    */
+  u32 *br_dec_winner;                   /* Branch decrement winner array    */
+  u8 **mutant_buf;                      /* Array of mutant buffers          */
+  u32 *mutant_len;                      /* Array of mutant lengths          */
+  u32 mutant_ref_cnt;                   /* Reference count of the mutant    */
+  u32 *br_inc_id;                       /* Branch increment id array        */
+  u32 *br_inc_dist_id;                  /* Branch increment distance id array */
+  u32 br_inc_cnt;                       /* Branch increment array count     */
+  u32 *br_dec_id;                       /* Branch decrement id array        */
+  u32 *br_dec_dist_id;                  /* Branch decrement distance id array */
+  u32 br_dec_cnt;                       /* Branch decrement array count     */
+  u32 *handler_candidate_id;            /* Handler candidate id array       */
+  u32 *handler_candidate_dist_id;       /* Handler candidate distance id array */
+  u32 handler_candidate_cnt;            /* Handler candidate array count    */
+  u8 *icmp_default_line_search;         /* ICMP should defaul to line search*/
+  u8 *size_gradient_checked;            /* Size gradient checked            */
+  s64 *br_inc;                          /* Branch increment array           */
+  s64 *br_dec;                          /* Branch decrement array           */
+  float *subgrad_inc;                   /* Subgradient increment array      */
+  float *subgrad_dec;                   /* Subgradient decrement array      */
+  s64 *local_br_bits;                   /* Local branch bits                */
+  u8 *local_bits;                       /* Local bits                       */
+  s64 *br_bits;                         /* Branch bits                      */
+  u8 *br_cov;                           /* Branch coverage instrumentation is active */
+  u8 *br_hit;                           /* Branch hit instrumentation array */
+  u8 *br_dist_id;                       /* Branch distance id array         */
+  u8 *cmp_type;                         /* Comparison type array            */
+  u64 *spent_time_us;                   /* Spent time in us                 */
+  u64 *productive_time_us;              /* Productive time in us            */
+  u32 *added_seeds;                     /* Added seeds                      */
+  s64 *global_br_bits;                  /* Global branch bits               */
+  u32 fox_br_candidate_capacity;        /* Fox branch candidate capacity    */
+  u32 fox_mutant_buf_capacity;          /* Fox mutant buffer capacity       */
+  u32 *border_edge_parent;              /* Border edge parent               */
+  u32 *border_edge_child;               /* Border edge child                */
+  u32 *border_edge_2_br_dist;           /* Border edge to branch distance   */
+  u32 *border_edge_2_str_len;           /* Border edge to string length     */
+  struct queue_entry ***border_edge_seed_list; /* Border edge to seed list  */
+  u32 *border_edge_seed_list_cnt;       /* Border edge to seed list count   */
+  u32 *border_edge_seed_list_capacity;  /* Border edge to seed list capacity*/
+  u32 *border_edge_parent_first_id;     /* Border edge parent first id      */
+  u32 *num_of_children;                 /* Number of children               */
+  FILE *wd_scheduler_log_file;          /* WD scheduler log file            */
+  FILE *fox_debug_log_file;             /* FOX debug log file               */
 
   s32 fsrv_pid,                         /* PID of the fork server           */
       child_pid,                        /* PID of the fuzzed program        */
