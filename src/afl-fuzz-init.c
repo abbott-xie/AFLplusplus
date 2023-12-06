@@ -982,7 +982,10 @@ void perform_dry_run(afl_state_t *afl) {
 
     close(fd);
 
-    res = calibrate_case(afl, q, use_mem, 0, 1);
+    if (afl->schedule == WD_SCHEDULER)
+      res = calibrate_case_dry_run(afl, q, use_mem, 0, 1);
+    else
+      res = calibrate_case(afl, q, use_mem, 0, 1);
 
     if (afl->stop_soon) { return; }
 
@@ -2199,6 +2202,12 @@ void setup_dirs_fds(afl_state_t *afl) {
   if (mkdir(tmp, 0700)) { PFATAL("Unable to create '%s'", tmp); }
   ck_free(tmp);
 
+#ifdef FOX_INTROSPECTION
+  tmp = alloc_printf("%s/queue_bitmap", afl->out_dir);
+  if (mkdir(tmp, 0700)) { PFATAL("Unable to create '%s'", tmp); }
+  ck_free(tmp);
+#endif
+
   /* Top-level directory for queue metadata used for session
      resume and related tasks. */
 
@@ -2300,6 +2309,25 @@ void setup_dirs_fds(afl_state_t *afl) {
   }
 
   fflush(afl->fsrv.plot_file);
+
+  int fd;
+  tmp = alloc_printf("%s/wd_scheduler_log", afl->out_dir);
+  fd = open(tmp, O_WRONLY | O_CREAT | O_EXCL, 0600);
+  if (fd < 0) PFATAL("Unable to create '%s'", tmp);
+  ck_free(tmp);
+
+  afl->fsrv.wd_scheduler_log_file = fdopen(fd, "w");
+  if (!afl->fsrv.wd_scheduler_log_file) PFATAL("fdopen() failed");
+
+#ifdef FOX_INTROSPECTION
+  tmp = alloc_printf("%s/sched_debug_log", afl->out_dir);
+  fd = open(tmp, O_WRONLY | O_CREAT | O_EXCL, 0600);
+  if (fd < 0) PFATAL("Unable to create '%s'", tmp);
+  ck_free(tmp);
+
+  afl->fsrv.sched_debug_file = fdopen(fd, "w");
+  if (!afl->fsrv.sched_debug_file) PFATAL("fdopen() failed");
+#endif
 
   /* ignore errors */
 
