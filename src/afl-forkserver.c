@@ -1650,12 +1650,16 @@ afl_fsrv_run_target(afl_forkserver_t *fsrv, u32 timeout,
   if (!fsrv->nyx_mode) {
 
     memset(fsrv->trace_bits, 0, fsrv->map_size);
+    memset(fsrv->br_bits, 0, 8 * fsrv->map_size);
+    memset(fsrv->br_hit, 0, fsrv->map_size);
     MEM_BARRIER();
 
   }
 
 #else
   memset(fsrv->trace_bits, 0, fsrv->map_size);
+  memset(fsrv->br_bits, 0, 8 * fsrv->map_size);
+  memset(fsrv->br_hit, 0, fsrv->map_size);
   MEM_BARRIER();
 #endif
 
