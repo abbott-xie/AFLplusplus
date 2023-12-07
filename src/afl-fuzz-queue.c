@@ -297,7 +297,7 @@ void create_alias_table_wd_scheduler_new(afl_state_t *afl) {
     }
   }
 
-  if (!(afl->border_edge_cnt = border_edge_cnt))
+  if (!border_edge_cnt)
     PFATAL("BUG: no horizon branches traversed.");
 
   afl->wd_scheduler_shared_mode = total_frontier_discovery_time > MAX_TOTAL_FRONTIER_DISCOVERY_TIME_US;

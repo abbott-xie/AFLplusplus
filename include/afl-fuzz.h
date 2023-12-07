@@ -602,7 +602,14 @@ typedef struct afl_state {
       wd_scheduler_shared_mode;
   u32 fox_total_border_edge_cnt,
       fox_map_size,
-      wd_scheduler_selected_border_edge_idx;
+      wd_scheduler_selected_border_edge_idx,
+      queued_val_items,
+      queued_new_items,
+      num_diff,
+      mut_len;
+  u64 line_search_count;
+  s64 diff_l1_norm;
+  line_search_stats_t line_stats;
 
   u8 *virgin_bits,                      /* Regions yet untouched by fuzzing */
       *virgin_tmout,                    /* Bits we haven't seen in tmouts   */
