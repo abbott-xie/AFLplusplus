@@ -607,9 +607,13 @@ typedef struct afl_state {
       queued_new_items,
       num_diff,
       mut_len;
-  u64 line_search_count;
+  u64 line_search_count,
+      wd_scheduler_total_cal_us,
+      wd_scheduler_total_cal_cycles,
+      wd_scheduler_avg_us;
   s64 diff_l1_norm;
   line_search_stats_t line_stats;
+  struct queue_entry **wd_scheduler_top_rated;
 
   u8 *virgin_bits,                      /* Regions yet untouched by fuzzing */
       *virgin_tmout,                    /* Bits we haven't seen in tmouts   */
@@ -1169,6 +1173,7 @@ void update_bitmap_score(afl_state_t *, struct queue_entry *);
 void update_bitmap_score_wd_scheduler(afl_state_t *, struct queue_entry *);
 void cull_queue(afl_state_t *);
 u32  calculate_score(afl_state_t *, struct queue_entry *);
+double calculate_score_wd_scheduler(afl_state_t *, struct queue_entry *);
 
 /* Bitmap */
 
@@ -1190,6 +1195,8 @@ u8 *describe_op(afl_state_t *, u8, size_t);
 u8 save_if_interesting(afl_state_t *, void *, u32, u8);
 u8 has_new_bits(afl_state_t *, u8 *);
 u8 has_new_bits_unclassified(afl_state_t *, u8 *);
+u8 increment_hit_bits(afl_state_t *);
+u8 increment_hit_bits_timeout(afl_state_t *);
 #ifndef AFL_SHOWMAP
 void classify_counts(afl_forkserver_t *);
 #endif
@@ -1257,7 +1264,9 @@ double get_runnable_processes(void);
 void   nuke_resume_dir(afl_state_t *);
 int    check_main_node_exists(afl_state_t *);
 u32    select_next_queue_entry(afl_state_t *afl);
+u32    select_next_queue_entry_wd_scheduler(afl_state_t *afl);
 void   create_alias_table(afl_state_t *afl);
+void   create_alias_table_wd_scheduler(afl_state_t *afl);
 void   setup_dirs_fds(afl_state_t *);
 void   setup_cmdline_file(afl_state_t *, char **);
 void   setup_stdio_file(afl_state_t *);
@@ -1393,6 +1402,47 @@ void queue_testcase_retake_mem(afl_state_t *afl, struct queue_entry *q, u8 *in,
 /* Add a new queue entry directly to the cache */
 
 void queue_testcase_store_mem(afl_state_t *afl, struct queue_entry *q, u8 *mem);
+
+
+/* FOX-related helper functions */
+
+static inline u8 was_reached(u32 node, u8 *virgin_bits) {
+  return virgin_bits[node] != 0xff;
+}
+
+static inline u8 cur_mutant_reached(u32 node, u8 *trace_bits) {
+  return trace_bits[node];
+}
+
+static inline u8 is_reached(u32 child, u8 *virgin_bits, u8 *trace_bits) {
+  return !is_reached(child, virgin_bits) && !cur_mutant_reached(child, trace_bits);
+}
+
+static inline u8 is_handler(u8 cmp_type_parent) {
+  switch (cmp_type_parent) {
+    case ICMP_EQ:
+    case ICMP_NE:
+    case SWITCH:
+    case STRCMP:
+    case STRNCMP:
+    case MEMCMP:
+    case STRSTR:
+      return 1;
+  }
+  return 0;
+}
+
+static inline u32 u32_min2(u32 a, u32 b) {
+  return a < b ? a : b;
+}
+
+static inline s16 s16_min2(s16 a, s16 b) {
+  return a < b ? a : b;
+}
+
+static inline s16 s16_min3(s16 a, s16 b, s16 c) {
+  return s16_min2(s16_min2(a, b), c);
+}
 
 #if TESTCASE_CACHE == 1
   #error define of TESTCASE_CACHE must be zero or larger than 1

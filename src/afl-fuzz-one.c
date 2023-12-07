@@ -3362,7 +3362,8 @@ havoc_stage:
 
 retry_splicing:
 
-  if (afl->use_splicing && splice_cycle++ < SPLICE_CYCLES &&
+  u32 splice_cycles = afl->schedule == WD_SCHEDULER ? SPLICE_CYCLES_WD_SCHEDULER : SPLICE_CYCLES;
+  if (afl->use_splicing && splice_cycle++ < splice_cycles &&
       afl->ready_for_splicing_count > 1 && afl->queue_cur->len >= 4) {
 
     struct queue_entry *target;

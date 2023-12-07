@@ -299,7 +299,7 @@ static inline s64 icmp_single_br_dist_le(s16 *br_dist_buf, s16 sw_len, bool *has
           if (br_cov[base_br_dist_edge_id])
             continue;
 
-          if (!is_horizon_branch(child_node, virgin_bits, trace_bits)) {
+          if (!is_reached(child_node, virgin_bits, trace_bits)) {
             if (++branch_flip == 2)
               br_cov[base_br_dist_edge_id] = 1;
             continue;
@@ -403,7 +403,7 @@ static inline s64 icmp_single_br_dist_le(s16 *br_dist_buf, s16 sw_len, bool *has
         if (br_cov[br_dist_edge_id])
           continue;
 
-        if (!is_horizon_branch(child_node, virgin_bits, trace_bits)) {
+        if (!is_reached(child_node, virgin_bits, trace_bits)) {
           if (++branch_flip == 2)
             br_cov[br_dist_edge_id] = 1;
           continue;

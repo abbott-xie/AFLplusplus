@@ -67,7 +67,6 @@ inline u32 select_next_queue_entry_wd_scheduler(afl_state_t *afl) {
   u32 seed_idx = afl->wd_scheduler_top_rated[border_edge_idx]->id;
 
   afl->queue_buf[seed_idx]->perf_score = calculate_score_wd_scheduler(afl, afl->queue_buf[seed_idx]);
-  afl->fsrv.schedule_cycles++;
 
   return seed_idx;
 }
@@ -155,16 +154,6 @@ double calculate_score_wd_scheduler(afl_state_t *afl, struct queue_entry *q) {
 
 }
 
-int energy_cmp(const void *p1, const void *p2)
-{
-    const my_union *e1 = p1;
-    const my_union *e2 = p2;
-
-    if (isless(e1->energy, e2->energy)) return 1;
-    if (isgreater(e1->energy, e2->energy)) return -1;
-    return 0;
-}
-
 static inline struct queue_entry *get_least_scheduled_seed(struct queue_entry **seed_list, u32 len) {
   u64 min_exec_us = UINT64_MAX;
   struct queue_entry *min_seed = NULL;
@@ -187,7 +176,7 @@ static inline struct queue_entry *top_rated_seed(afl_state_t *afl, u32 cur_borde
   return afl->wd_scheduler_top_rated[cur_border_edge_id];
 }
 
-void create_alias_table_wd_scheduler_new(afl_state_t *afl) {
+void create_alias_table_wd_scheduler(afl_state_t *afl) {
 
   u64 *cur_virgin_bit_batch = (u64 *)afl->virgin_bits;
   u32 map_size_batched = (afl->fsrv.real_map_size + 7) >> 3;
@@ -245,7 +234,7 @@ void create_alias_table_wd_scheduler_new(afl_state_t *afl) {
         u32 child_node = border_edge_child[cur_border_edge_id];
 
         // AS: Release resources for non-horizon branch seed lists
-        if (is_reached(child_node, virgin_bits)) {
+        if (was_reached(child_node, virgin_bits)) {
           if (border_edge_seed_list[cur_border_edge_id]) {
             ck_free(border_edge_seed_list[cur_border_edge_id]);
             border_edge_seed_list[cur_border_edge_id] = 0;
@@ -415,7 +404,7 @@ void update_bitmap_score_wd_scheduler(afl_state_t *afl, struct queue_entry* q) {
       u32 base_border_edge_id = border_edge_parent_first_id[parent];
       for (u32 cur_border_edge_id = base_border_edge_id; cur_border_edge_id < base_border_edge_id + cur_num_of_children; cur_border_edge_id++) {
         u32 child_node = border_edge_child[cur_border_edge_id];
-        if (is_reached(child_node, virgin_bits))
+        if (was_reached(child_node, virgin_bits))
           continue;
 
         if (cmp_type_parent == NOT_INSTRUMENTED) {

@@ -178,6 +178,7 @@
 
 #define HAVOC_MAX_MULT 64U
 #define HAVOC_MAX_MULT_MOPT 64U
+#define HAVOC_MAX_MULT_WD_SCHEDULER 16U
 
 /* Absolute minimum number of havoc cycles (after all adjustments): */
 
@@ -219,7 +220,8 @@
 
 /* Splicing cycle count: */
 
-#define SPLICE_CYCLES 15
+#define SPLICE_CYCLES 15U
+#define SPLICE_CYCLES_WD_SCHEDULER 7U
 
 /* Nominal per-splice havoc cycle length: */
 
@@ -241,6 +243,7 @@
    and afl-fuzz-state.c have to be changed as well! */
 
 #define MAX_FILE (1 * 1024 * 1024L)
+#define MAX_STEP_FILE (10000.0d)
 
 /* The same, for the test case minimizer: */
 
