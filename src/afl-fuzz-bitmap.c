@@ -243,7 +243,7 @@ static inline s64 icmp_single_br_dist_le(s16 *br_dist_buf, s16 sw_len, bool *has
   s64 diff_l1_norm = afl->diff_l1_norm;
   u32 *handler_candidate_id = afl->fsrv.handler_candidate_id;
   u32 *handler_candidate_dist_id = afl->fsrv.handler_candidate_dist_id;
-  u32 handler_cand_cnt = afl->fsrv.handler_cand_cnt;
+  u32 handler_candidate_cnt = afl->fsrv.handler_candidate_cnt;
   u8 *icmp_default_line_search = afl->fsrv.icmp_default_line_search;
   u8* size_gradient_checked = afl->fsrv.size_gradient_checked;
   u32 *added_seeds = afl->fsrv.added_seeds;
@@ -383,9 +383,9 @@ static inline s64 icmp_single_br_dist_le(s16 *br_dist_buf, s16 sw_len, bool *has
           if (!br_diff)
             continue;
 
-          if (unlikely(handler_cand_cnt >= fox_br_candidate_capacity)) { PFATAL("BUG: number of handler candidates exceeds capacity"); }
-          handler_candidate_id[handler_cand_cnt] = cur_border_edge_id;
-          handler_candidate_dist_id[handler_cand_cnt++] = base_br_dist_edge_id;
+          if (unlikely(handler_candidate_cnt >= fox_br_candidate_capacity)) { PFATAL("BUG: number of handler candidates exceeds capacity"); }
+          handler_candidate_id[handler_candidate_cnt] = cur_border_edge_id;
+          handler_candidate_dist_id[handler_candidate_cnt++] = base_br_dist_edge_id;
           br_inc_winner[base_br_dist_edge_id] = cur_mutant_id;
           (*mutant_ref_cnt)++;
         }
@@ -551,7 +551,7 @@ static inline s64 icmp_single_br_dist_le(s16 *br_dist_buf, s16 sw_len, bool *has
   afl->fsrv.winning_cnt = winning_cnt;
   afl->fsrv.br_inc_cnt = br_inc_cnt;
   afl->fsrv.br_dec_cnt = br_dec_cnt;
-  afl->fsrv.handler_cand_cnt = handler_cand_cnt;
+  afl->fsrv.handler_candidate_cnt = handler_candidate_cnt;
 }
 
 inline void increment_hit_bits_timeout(afl_state_t *afl) {
@@ -1029,6 +1029,7 @@ save_if_interesting(afl_state_t *afl, void *mem, u32 len, u8 fault) {
     if (afl->schedule == WD_SCHEDULER) {
       u32 winning_cnt = afl->fsrv.winning_cnt;
       u32 *winning_list = afl->fsrv.winning_list;
+      struct queue_entry *q = afl->queue_top;
       struct queue_entry **wd_scheduler_top_rated = afl->wd_scheduler_top_rated;
       for (u32 i = 0; i < winning_cnt; i++) {
         u32 border_edge_id = winning_list[i];

@@ -172,6 +172,7 @@
 
 #define HAVOC_CYCLES 256U
 #define HAVOC_CYCLES_INIT 1024U
+#define HAVOC_LINE_SEARCH_BASE_MAX 2048U;
 
 /* Maximum multiplier for the above (should be a power of two, beware
    of 32-bit int overflows): */
@@ -226,6 +227,7 @@
 /* Nominal per-splice havoc cycle length: */
 
 #define SPLICE_HAVOC 32
+#define SPLICE_HAVOC_LINE_SEARCH_BASE_MAX 32U
 
 /* Maximum offset for integer addition / subtraction stages: */
 

@@ -225,10 +225,11 @@ struct auto_extra_data {
 
 typedef struct line_search_stats {
 
-  u32 success,                          /* Number of flipped branches             */
-      true_progress,                    /* Number of global minimum mutants found */
-      progress,                         /* Number of local minimum mutants found  */
-      step;                             /* Number of mutants resulted in          */
+  u32 success,                          /* Number of flip steps                   */
+      true_progress,                    /* Number of global minimum steps         */
+      progress,                         /* Number of local minimum steps          */
+      reached,                          /* Number of steps reaching               */
+      step;                             /* Number of steps                        */
 
 } line_search_stats_t;
 
@@ -258,6 +259,7 @@ enum {
 
 /* FOX-related definitions */
 
+#define WD_SCHEDULER_STACK_MAX 3
 #define MAX_ADDED_SEEDS 15
 #define MAX_HANDLER_TIME_US 10000000 /* 10 seconds */
 #define MAX_HANDLER_NUM_DIFF 1000
@@ -1415,7 +1417,7 @@ static inline u8 cur_mutant_reached(u32 node, u8 *trace_bits) {
 }
 
 static inline u8 is_reached(u32 child, u8 *virgin_bits, u8 *trace_bits) {
-  return !is_reached(child, virgin_bits) && !cur_mutant_reached(child, trace_bits);
+  return !was_reached(child, virgin_bits) && !cur_mutant_reached(child, trace_bits);
 }
 
 static inline u8 is_handler(u8 cmp_type_parent) {

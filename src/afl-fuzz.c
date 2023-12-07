@@ -2780,8 +2780,8 @@ int main(int argc, char **argv_orig, char **envp) {
         if (afl->schedule == WD_SCHEDULER) {
           // reinit_table: after compute_math_cache(), hit cnt change
           // new queued_items: number of border edges change
-          create_alias_table_wd_scheduler_new(afl);
-          afl->current_entry = select_next_queue_entry_wd_scheduler_new(afl);
+          create_alias_table_wd_scheduler(afl);
+          afl->current_entry = select_next_queue_entry_wd_scheduler(afl);
         } else {
           if (unlikely(prev_queued_items < afl->queued_items ||
                       afl->reinit_table)) {

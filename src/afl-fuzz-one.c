@@ -26,6 +26,7 @@
 #include "afl-fuzz.h"
 #include <string.h>
 #include <limits.h>
+#include <math.h>
 #include "cmplog.h"
 #include "afl-mutations.h"
 
@@ -320,6 +321,50 @@ static void locate_diffs(u8 *ptr1, u8 *ptr2, u32 len, s32 *first, s32 *last) {
 
 #endif                                                     /* !IGNORE_FINDS */
 
+
+static inline u8 s32_to_u8_checked(s32 v, bool *overflow) {
+ if (v < 0 || v > 255) {
+     *overflow = true;
+     return (u8) 0;
+ }
+ return (u8) v;
+}
+
+static inline u8 s32_to_u8(s32 v) {
+ if (v < 0)
+   return (u8) 0;
+ if (v > 255)
+   return (u8) 255;
+ return (u8) v;
+}
+
+static inline u8 s16_to_u8(s16 v) {
+ if (v < 0)
+   return (u8) 0;
+ if (v > 255)
+   return (u8) 255;
+ return (u8) v;
+}
+
+void reset_line_stats(afl_state_t *afl) {
+  memset(&afl->line_stats, 0, sizeof(line_search_stats_t));
+}
+
+ void range_apply_newton_method(u8 *out_buf, u8 *seed_x, s16 *seed_y, u32 x_loc_start, u32 x_loc_end, double slope, s64 flip_boundary) {
+  for (u32 i = x_loc_start; i < x_loc_end; i++)
+    out_buf[i] = s32_to_u8((s32)round((flip_boundary - (seed_y[i - x_loc_start] - slope * seed_x[i])) / slope));
+}
+
+void range_apply_newton_method_reverse(u8 *out_buf, u8 *seed_x, s16 *seed_y, u32 x_loc_start, u32 x_loc_end, double slope, s64 flip_boundary) {
+  for (u32 i = x_loc_start; i < x_loc_end; i++)
+    out_buf[i] = s32_to_u8((s32)round((flip_boundary - (seed_y[i + x_loc_end - x_loc_start] - slope * seed_x[i])) / slope));
+}
+
+void range_apply_newton_method_remaining(u8 *out_buf, s16 *seed_y, u32 seed_var_len, u32 x_loc_start, u32 x_loc_end) {
+  for (u32 i = x_loc_start; i < x_loc_end; i++)
+    out_buf[i] = s16_to_u8(seed_y[i + seed_var_len - x_loc_start]); // out_buf = const
+}
+
 /* Take the current entry from the queue, fuzz it for a while. This
    function is a tad too long... returns 0 if fuzzed successfully, 1 if
    skipped or bailed out. */
@@ -332,6 +377,10 @@ u8 fuzz_one_original(afl_state_t *afl) {
   u8 *in_buf, *out_buf, *orig_in, *ex_tmp, *eff_map = 0;
   u64 havoc_queued = 0, orig_hit_cnt, new_hit_cnt = 0, prev_cksum, _prev_cksum;
   u32 splice_cycle = 0, perf_score = 100, orig_perf, eff_cnt = 1;
+
+  u64 havoc_queued_new = 0, havoc_queued_val = 0;
+  u32 *mutant_len = afl->fsrv.mutant_len;
+  u8 **mutant_buf = afl->fsrv.mutant_buf;
 
   u8 ret_val = 1, doing_det = 0;
 
@@ -364,7 +413,7 @@ u8 fuzz_one_original(afl_state_t *afl) {
 
   }
 
-  if (likely(afl->pending_favored)) {
+  if (afl->schedule != WD_SCHEDULER && likely(afl->pending_favored)) {
 
     /* If we have any favored, non-fuzzed new arrivals in the queue,
        possibly skip to them at the expense of already-fuzzed or non-favored
@@ -423,6 +472,64 @@ u8 fuzz_one_original(afl_state_t *afl) {
 
   orig_in = in_buf = queue_testcase_get(afl, afl->queue_cur);
   len = afl->queue_cur->len;
+
+  s64 *br_inc = afl->fsrv.br_inc;
+  s64 *br_dec = afl->fsrv.br_dec;
+  float *subgrad_inc = afl->fsrv.subgrad_inc;
+  float *subgrad_dec = afl->fsrv.subgrad_dec;
+  u32 *br_inc_winner = afl->fsrv.br_inc_winner;
+  u32 *br_dec_winner = afl->fsrv.br_dec_winner;
+  u32 *handler_candidate_id = afl->fsrv.handler_candidate_id;
+  u32 *handler_candidate_dist_id = afl->fsrv.handler_candidate_dist_id;
+  u8 *br_cov = afl->fsrv.br_cov;
+  u8 *icmp_default_line_search = afl->fsrv.icmp_default_line_search;
+  u32 fox_total_border_edge_cnt = afl->fox_total_border_edge_cnt;
+  u32 fox_br_candidate_capacity = afl->fsrv.fox_br_candidate_capacity;
+  u32 fox_mutant_buf_capacity = afl->fsrv.fox_mutant_buf_capacity;
+  u8 shared_mode = afl->wd_scheduler_shared_mode;
+
+  memset(afl->fsrv.local_br_bits, 0, sizeof(s64) * fox_total_border_edge_cnt);
+  memset(afl->fsrv.local_bits, 0, sizeof(u8) * fox_total_border_edge_cnt);
+  memset(br_inc, 0, sizeof(s64) * fox_total_border_edge_cnt);
+  memset(br_dec, 0, sizeof(s64) * fox_total_border_edge_cnt);
+  memset(subgrad_inc, 0, sizeof(float) * fox_total_border_edge_cnt);
+  memset(subgrad_dec, 0, sizeof(float) * fox_total_border_edge_cnt);
+  memset(br_inc_winner, 0, sizeof(u32) * fox_total_border_edge_cnt);
+  memset(br_dec_winner, 0, sizeof(u32) * fox_total_border_edge_cnt);
+  memset(handler_candidate_id, 0, sizeof(u32) * fox_br_candidate_capacity);
+  memset(handler_candidate_dist_id, 0, sizeof(u32) * fox_br_candidate_capacity);
+  memset(mutant_buf, 0, sizeof(u8 *) * fox_mutant_buf_capacity);
+  memset(mutant_len, 0, sizeof(u32) * fox_mutant_buf_capacity);
+
+  afl->fsrv.br_inc_cnt = 0;
+  afl->fsrv.br_dec_cnt = 0;
+  afl->fsrv.handler_candidate_cnt = 0;
+
+  u32 *br_inc_id = afl->fsrv.br_inc_id;
+  u32 *br_inc_dist_id = afl->fsrv.br_inc_dist_id;
+  u32 *br_dec_id = afl->fsrv.br_dec_id;
+  u32 *br_dec_dist_id = afl->fsrv.br_dec_dist_id;
+
+  memset(br_inc_id, 0, sizeof(u32) * fox_br_candidate_capacity);
+  memset(br_inc_dist_id, 0, sizeof(u32) * fox_br_candidate_capacity);
+  memset(br_dec_id, 0, sizeof(u32) * fox_br_candidate_capacity);
+  memset(br_dec_dist_id, 0, sizeof(u32) * fox_br_candidate_capacity);
+
+  afl->line_search_count = 0;
+
+  s64 *br_bits = afl->fsrv.br_bits;
+  u8 *trace_bits = afl->fsrv.trace_bits;
+  u8 *virgin_bits = afl->virgin_bits;
+  s64 *global_br_bits = afl->fsrv.global_br_bits;
+
+  u8 *cmp_type = afl->fsrv.cmp_type;
+  s64 *local_br_bits = afl->fsrv.local_br_bits;
+  u8 *local_bits = afl->fsrv.local_bits;
+
+  u32 *border_edge_parent = afl->fsrv.border_edge_parent;
+  u32 *border_edge_child = afl->fsrv.border_edge_child;
+  u32 *border_edge_parent_first_id = afl->fsrv.border_edge_parent_first_id;
+  u32 *border_edge_2_str_len = afl->fsrv.border_edge_2_str_len;
 
   out_buf = afl_realloc(AFL_BUF_PARAM(out), len);
   if (unlikely(!out_buf)) { PFATAL("alloc"); }
@@ -501,11 +608,15 @@ u8 fuzz_one_original(afl_state_t *afl) {
 
   memcpy(out_buf, in_buf, len);
 
+  afl->fsrv.br_trace_setting = BR_TRACE_SEED_INPUT;
+  if (common_fuzz_stuff(afl, out_buf, len)) { goto abandon_entry; }
+  afl->fsrv.br_trace_setting = BR_TRACE_DEFAULT;
+
   /*********************
    * PERFORMANCE SCORE *
    *********************/
 
-  if (likely(!afl->old_seed_selection))
+  if (afl->schedule == WD_SCHEDULER || likely(!afl->old_seed_selection))
     orig_perf = perf_score = afl->queue_cur->perf_score;
   else
     afl->queue_cur->perf_score = orig_perf = perf_score =
@@ -2033,13 +2144,40 @@ havoc_stage:
   /* The havoc stage mutation code is also invoked when splicing files; if the
      splice_cycle variable is set, generate different descriptions and such. */
 
+  u32 base_stage_max = HAVOC_LINE_SEARCH_BASE_MAX;
+  u32 base_stage_max_splice = SPLICE_HAVOC_LINE_SEARCH_BASE_MAX;
+  u32 cur_selected_br = afl->fsrv.border_edge_parent[afl->wd_scheduler_selected_border_edge_idx];
+  u32 switch_case_num = 1;
+
   if (!splice_cycle) {
 
     afl->stage_name = "havoc";
     afl->stage_short = "havoc";
-    afl->stage_max = ((doing_det ? HAVOC_CYCLES_INIT : HAVOC_CYCLES) *
-                      perf_score / afl->havoc_div) >>
-                     8;
+
+    if (afl->schedule == WD_SCHEDULER) {
+      if (afl->fsrv.cmp_type[cur_selected_br] == SWITCH) {
+        u32 base_border_edge_id = border_edge_parent_first_id[cur_selected_br];
+        u32 non_flip_children_cnt = 0;
+        for (u32 cur_border_edge_id = base_border_edge_id; cur_border_edge_id < base_border_edge_id + afl->fsrv.num_of_children[cur_selected_br]; cur_border_edge_id++) {
+          u32 child_node = border_edge_child[base_border_edge_id];
+          if (!was_reached(child_node, virgin_bits))
+            non_flip_children_cnt++;
+        }
+
+        if (!non_flip_children_cnt)
+          non_flip_children_cnt = 1;
+
+        base_stage_max = base_stage_max / non_flip_children_cnt;
+        base_stage_max_splice = base_stage_max_splice / non_flip_children_cnt;
+        switch_case_num = non_flip_children_cnt;
+      }
+      afl->queue_cur->schedule_cnt += (double) 1.0 / switch_case_num;
+      afl->stage_max = base_stage_max * perf_score / afl->havoc_div / 100;
+    } else {
+      afl->stage_max = ((doing_det ? HAVOC_CYCLES_INIT : HAVOC_CYCLES) *
+                        perf_score / afl->havoc_div) >>
+                      8;
+    }
 
   } else {
 
@@ -2048,7 +2186,33 @@ havoc_stage:
     snprintf(afl->stage_name_buf, STAGE_BUF_SIZE, "splice %u", splice_cycle);
     afl->stage_name = afl->stage_name_buf;
     afl->stage_short = "splice";
-    afl->stage_max = (SPLICE_HAVOC * perf_score / afl->havoc_div) >> 8;
+
+    if (afl->schedule == WD_SCHEDULER) {
+      memset(local_br_bits, 0, sizeof(s64) * fox_total_border_edge_cnt);
+      memset(local_bits, 0, sizeof(u8) * fox_total_border_edge_cnt);
+      memset(br_inc, 0, sizeof(s64) * fox_total_border_edge_cnt);
+      memset(br_dec, 0, sizeof(s64) * fox_total_border_edge_cnt);
+      memset(subgrad_inc, 0, sizeof(float) * fox_total_border_edge_cnt);
+      memset(subgrad_dec, 0, sizeof(float) * fox_total_border_edge_cnt);
+      memset(br_inc_winner, 0, sizeof(u32) * fox_total_border_edge_cnt);
+      memset(br_dec_winner, 0, sizeof(u32) * fox_total_border_edge_cnt);
+      memset(br_inc_id, 0, sizeof(u32) * fox_br_candidate_capacity);
+      memset(br_inc_dist_id, 0, sizeof(u32) * fox_br_candidate_capacity);
+      memset(br_dec_id, 0, sizeof(u32) * fox_br_candidate_capacity);
+      memset(br_dec_dist_id, 0, sizeof(u32) * fox_br_candidate_capacity);
+      memset(mutant_buf, 0, sizeof(u8 *) * fox_mutant_buf_capacity);
+      memset(mutant_len, 0, sizeof(u32) * fox_mutant_buf_capacity);
+
+      afl->fsrv.br_inc_cnt = 0;
+      afl->fsrv.br_dec_cnt = 0;
+      afl->fsrv.br_trace_setting = BR_TRACE_SEED_INPUT;
+      if (common_fuzz_stuff(afl, out_buf, temp_len)) { goto abandon_entry; }
+      afl->fsrv.br_trace_setting = BR_TRACE_DEFAULT;
+
+      afl->stage_max = base_stage_max_splice * perf_score / afl->havoc_div / 100;
+    } else {
+      afl->stage_max = (SPLICE_HAVOC * perf_score / afl->havoc_div) >> 8;
+    }
 
   }
 
@@ -2058,7 +2222,10 @@ havoc_stage:
 
   orig_hit_cnt = afl->queued_items + afl->saved_crashes;
 
-  havoc_queued = afl->queued_items;
+  havoc_queued_new = afl->queued_new_items;
+  havoc_queued_val = afl->queued_val_items;
+  if (afl->schedule != WD_SCHEDULER)
+    havoc_queued = afl->queued_items;
 
   if (afl->custom_mutators_count) {
 
@@ -2164,7 +2331,10 @@ havoc_stage:
 
   */
 
-  stack_max = 1 << (1 + rand_below(afl, afl->havoc_stack_pow2));
+  if (afl->schedule == WD_SCHEDULER && !afl->wd_scheduler_shared_mode)
+    stack_max = WD_SCHEDULER_STACK_MAX;
+  else
+    stack_max = 1 << (1 + rand_below(afl, afl->havoc_stack_pow2));
 
   // + (afl->extras_cnt ? 2 : 0) + (afl->a_extras_cnt ? 2 : 0);
 
@@ -3301,7 +3471,36 @@ havoc_stage:
 
     }
 
+    // only do line search on fixed length mutation
+    afl->fsrv.br_trace_setting = BR_TRACE_LOCAL_SEARCH;                                                                                                                                       
+    u32 cur_mutant_id = afl->stage_cur;                                                                                                                                                       
+
+    u32 min_len = temp_len < len ? temp_len : len;
+    u32 cur_num_diff = 0;
+    afl->diff_l1_norm = 0;
+    for (u32 i=0; i < min_len; i++) {
+      if (out_buf[i] != in_buf[i]) {
+        cur_num_diff++;
+        afl->diff_l1_norm += llabs((s64) (out_buf[i] - in_buf[i]));
+      }
+    }
+    afl->num_diff = cur_num_diff;
+
+    afl->fsrv.mutant_ref_cnt = 0;
+
     if (common_fuzz_stuff(afl, out_buf, temp_len)) { goto abandon_entry; }
+
+    afl->fsrv.br_trace_setting = BR_TRACE_DEFAULT;
+
+    if (afl->fsrv.mutant_ref_cnt) {
+      u8 *cur_seed_buf = ck_alloc(temp_len);
+      if (unlikely(!cur_seed_buf)) { PFATAL("alloc"); }
+      memcpy(cur_seed_buf, out_buf, temp_len);
+      if (unlikely(cur_mutant_id >= fox_mutant_buf_capacity)) { PFATAL("BUG: more mutants than buffer capacity"); }
+      mutant_buf[cur_mutant_id] = cur_seed_buf;
+      mutant_len[cur_mutant_id] = temp_len;
+    }
+    afl->fsrv.mutant_ref_cnt = 0;
 
     /* out_buf might have been mangled a bit, so let's restore it to its
        original size and shape. */
@@ -3314,7 +3513,7 @@ havoc_stage:
     /* If we're finding new stuff, let's run for a bit longer, limits
        permitting. */
 
-    if (afl->queued_items != havoc_queued) {
+    if (afl->schedule != WD_SCHEDULER && afl->queued_items != havoc_queued) {
 
       if (perf_score <= afl->havoc_max_mult * 100) {
 
@@ -3325,8 +3524,596 @@ havoc_stage:
 
       havoc_queued = afl->queued_items;
 
+    } else {
+      u32 queued_new_items = afl->queued_new_items;
+      u32 queued_val_items = afl->queued_val_items;
+      u32 havoc_div = afl->havoc_div;
+      if ((queued_new_items + queued_val_items) != (havoc_queued_new + havoc_queued_val)) {
+        if (splice_cycle && base_stage_max < (u32) (1024/switch_case_num)) {
+          base_stage_max_splice += 64;
+          if (perf_score / havoc_div / 100.0 <= 1.0)
+            afl->stage_max = base_stage_max_splice * perf_score / havoc_div / 100;
+        } else if (!splice_cycle && base_stage_max < (u32) (8192/switch_case_num)) {
+          base_stage_max += 512;
+          if (perf_score / havoc_div / 100.0 <= 1.0)
+            afl->stage_max = base_stage_max * perf_score / havoc_div / 100;
+        }
+        havoc_queued_val = queued_val_items;
+        havoc_queued_new = queued_new_items;
+      }
     }
 
+    // STRCMP handler
+    // Assumptions:
+    // x in out_buf
+    if (afl->fsrv.handler_candidate_cnt) {
+      u32 cur_mutant_id = br_inc_winner[handler_candidate_dist_id[0]];
+      u8 *mutant_x = mutant_buf[cur_mutant_id];
+      u32 mutant_x_len = mutant_len[cur_mutant_id];
+      u8 *seed_x = in_buf;
+      u32 seed_x_len = len;
+      s64 flip_boundary = 0;
+      // populate list of differences (indices, values) between out_buf, x_prime, get (x_prime - x)
+      u32 cur_num_diff = afl->num_diff;
+      u32 *diff_idx = ck_alloc(sizeof(u32) * cur_num_diff);
+      if (!diff_idx) { PFATAL("alloc"); }
+      s16 *diff_val = ck_alloc(sizeof(s16) * cur_num_diff);
+      if (!diff_val) { PFATAL("alloc"); }
+      u8 *orig_val = ck_alloc(sizeof(u8) * cur_num_diff);
+      if (!orig_val) { PFATAL("alloc"); }
+
+      u32 min_len = u32_min2(mutant_x_len, seed_x_len);
+      u32 num_diff = 0;
+      for (u32 local_ii=0; local_ii < min_len; local_ii++) {
+        if (seed_x[local_ii] != mutant_x[local_ii]) {
+          diff_idx[num_diff] = local_ii;
+          diff_val[num_diff] = (s16)(mutant_x[local_ii] - seed_x[local_ii]);
+          orig_val[num_diff] = seed_x[local_ii];
+          num_diff++;
+        }
+      }
+
+      if (num_diff != cur_num_diff) {
+#ifdef FOX_INTROSPECTION
+        fprintf(afl->fox_debug_file, "BUG: in STRCMP handler: num_diff != cur_num_diff\n");
+#endif
+        continue;
+      }
+
+      if (num_diff * afl->queue_cur->exec_us < MAX_HANDLER_TIME_US && num_diff < MAX_HANDLER_NUM_DIFF) {
+        for (u32 handler_cand_idx = 0; handler_cand_idx < afl->fsrv.handler_candidate_cnt; handler_cand_idx++) {
+          u32 cur_edge_id = handler_candidate_id[handler_cand_idx];
+          u32 br_dist_edge_id = handler_candidate_dist_id[handler_cand_idx];
+          u32 parent = border_edge_parent[cur_edge_id];
+          u32 child = border_edge_child[cur_edge_id];
+          u8 cmp_type_parent = cmp_type[parent];
+
+          if (unlikely(br_cov[br_dist_edge_id] || icmp_default_line_search[br_dist_edge_id]))
+            continue;
+
+          s16 *seed_y = (s16 *)(local_br_bits + br_dist_edge_id);
+          s16 *mutant_y = (s16 *)(br_bits + br_dist_edge_id);
+
+          u8 has_var_len = cmp_type_parent == STRCMP || cmp_type_parent == STRNCMP || cmp_type_parent == STRSTR;
+
+          s16 const_len = border_edge_2_str_len[cur_edge_id];
+          s16 seed_var_len = has_var_len ? seed_y[const_len] : const_len;
+          s16 mutant_var_len = has_var_len ? mutant_y[const_len] : const_len;
+
+          // We can't find a mapping if one of the strings is empty
+          if (!seed_var_len || !mutant_var_len)
+            continue;
+
+          // step 1: find single input byte - single output byte mapping
+          u32 x_loc = 0;
+          u32 y_loc = 0;
+          u8 mapping_found = 0;
+          for (u32 i = 0; i < num_diff && !mapping_found; i++) {
+            // find diff x location
+            x_loc = diff_idx[i];
+
+            // replace x with mutant_x at x_loc
+            out_buf[x_loc] = mutant_x[x_loc];
+
+            // fuzz to get br dist
+            if (common_fuzz_stuff(afl, out_buf, temp_len)) { goto handler_fuzz_failure; }
+
+            // skip non-reach case
+            if (!trace_bits[parent]) continue;
+
+            // find x_loc -> y_loc mapping
+            s16 mutant_var_len = has_var_len ? mutant_y[const_len] : const_len;
+            u32 min_len = (u32) s16_min3(seed_var_len, mutant_var_len, const_len);
+            u32 total_br_dist_diff_l0_norm = 0;
+            for (u32 i = 0; i < min_len; i++) {
+              if (seed_y[i] != mutant_y[i]) {
+                total_br_dist_diff_l0_norm++;
+                y_loc = i;
+              }
+            }
+
+            // return original x at x_loc
+            out_buf[x_loc] = orig_val[i];
+
+            // if mapping 1 input byte -> 1 output byte not found, try another map
+            mapping_found = total_br_dist_diff_l0_norm == 1;
+          }
+
+          if (!mapping_found || x_loc < y_loc) {
+            if (cmp_type_parent == ICMP_EQ || cmp_type_parent == ICMP_NE)
+              icmp_default_line_search[br_dist_edge_id] = 1;
+            else
+              br_cov[br_dist_edge_id] = 1;
+            continue;
+          }
+
+          // step 2: try to solve
+
+          // compute slope
+          double slope = (mutant_y[y_loc] - seed_y[y_loc]) / (double) ((s16) mutant_x[x_loc] - seed_x[x_loc]);
+
+          u32 x_loc_start = x_loc - y_loc;
+          u32 x_loc_end_const = x_loc_start + const_len;
+          u32 x_loc_end_seed_var = x_loc_start + seed_var_len;
+
+          // First approach: Overwrite Mode - overwrite constant len, then write null terminator.
+          u8 out_buf_long_enough_for_const = temp_len >= x_loc_end_const;
+
+          if (cmp_type_parent == MEMCMP && !out_buf_long_enough_for_const) {
+            u32 extra_len = x_loc_end_const - temp_len;
+            out_buf = afl_realloc(AFL_BUF_PARAM(out), temp_len + extra_len);
+            if (unlikely(!out_buf)) { PFATAL("alloc"); }
+            // The last few bytes of out_buf will be garbage data because they are not cleaned up during the malloc process, and will not match the result of seed_y
+            memset(out_buf+temp_len, 0x00, extra_len);
+            temp_len += extra_len;
+          }
+
+          if (out_buf_long_enough_for_const) {
+            // overwrite min(seed_var_len, const_len)
+            u32 x_loc_end = u32_min2(x_loc_end_const, x_loc_end_seed_var);
+            range_apply_newton_method(out_buf, seed_x, seed_y, x_loc_start, x_loc_end, slope, flip_boundary);
+
+            // if seed_var_len < const_len, overwrite seed_var_len <-> constant_len with const bytes
+            if (seed_var_len < const_len)
+              range_apply_newton_method_remaining(out_buf, seed_y, seed_var_len, x_loc_end_seed_var, x_loc_end_const);
+
+            if (common_fuzz_stuff(afl, out_buf, temp_len)) { goto handler_fuzz_failure; }
+
+            if (cur_mutant_reached(child, trace_bits)) {
+              goto handler_cleanup;
+            }
+
+            // try little endian order
+            if (cmp_type_parent == SWITCH || cmp_type_parent == ICMP_EQ || cmp_type_parent == ICMP_NE) {
+              range_apply_newton_method_reverse(out_buf, seed_x, seed_y, x_loc_start, x_loc_end, slope, flip_boundary);
+              if (common_fuzz_stuff(afl, out_buf, temp_len)) { goto handler_fuzz_failure; }
+              goto handler_cleanup; // skip insert mode for SWITCH, ICMP_EQ, ICMP_NE
+            }
+
+            // return original values
+            memcpy(out_buf, in_buf, len);
+          }
+
+          // skip insert mode if seed_var_len == const_len (and therefore if MEMCMP, SWITCH, ICMP_EQ, ICMP_NE)
+          if (seed_var_len == const_len)
+            goto handler_cleanup;
+
+          // Second approach: Insert Mode
+          // 1) seed_var_len > const_len: overwrite constant len, then remove additional chunk, then write null terminator.
+          // 2) seed_var_len < const_len: overwrite constant len, then insert seed_var <-> constant_len with const bytes, then write null terminator
+          u8 out_buf_long_enough_for_seed_var = temp_len >= x_loc_end_seed_var;
+          if (out_buf_long_enough_for_seed_var) {
+            u32 x_loc_end = u32_min2(x_loc_end_const, x_loc_end_seed_var);
+            range_apply_newton_method(out_buf, seed_x, seed_y, x_loc_start, x_loc_end, slope, flip_boundary);
+
+            if (seed_var_len < const_len) {
+              out_buf = afl_realloc(AFL_BUF_PARAM(out), temp_len + (const_len - seed_var_len));
+              if (unlikely(!out_buf)) { PFATAL("alloc"); }
+            }
+
+            // move up/down the rest of the input
+            memmove(out_buf + x_loc_end_const, out_buf + x_loc_end_seed_var, temp_len - x_loc_end_seed_var);
+
+            // adjust input length
+            temp_len = temp_len - (seed_var_len-const_len); 
+
+            if (seed_var_len < const_len)
+              range_apply_newton_method_remaining(out_buf, seed_y, seed_var_len, x_loc_end_seed_var, x_loc_end_const);
+
+            if (common_fuzz_stuff(afl, out_buf, temp_len)) { goto handler_fuzz_failure; }
+
+            if (cur_mutant_reached(child, trace_bits)) {
+              goto handler_cleanup;
+            }
+          }
+
+handler_cleanup:
+          if (!cur_mutant_reached(child, trace_bits) && (cmp_type_parent == ICMP_EQ || cmp_type_parent == ICMP_NE))
+            icmp_default_line_search[br_dist_edge_id] = 1;
+          else
+            br_cov[br_dist_edge_id] = 1;
+          out_buf = afl_realloc(AFL_BUF_PARAM(out), len);
+          if (unlikely(!out_buf)) { PFATAL("alloc"); }
+          temp_len = len;
+          memcpy(out_buf, in_buf, len);
+          continue;
+
+handler_fuzz_failure:
+          if (!cur_mutant_reached(child, trace_bits) && (cmp_type_parent == ICMP_EQ || cmp_type_parent == ICMP_NE))
+            icmp_default_line_search[br_dist_edge_id] = 1;
+          else
+            br_cov[br_dist_edge_id] = 1;
+          ck_free(diff_idx);
+          ck_free(diff_val);
+          ck_free(orig_val);
+          goto abandon_entry;
+        }
+      }
+
+      ck_free(diff_idx);
+      ck_free(diff_val);
+      ck_free(orig_val);
+      memset(handler_candidate_id, 0, sizeof(u32) * fox_br_candidate_capacity);
+      memset(handler_candidate_dist_id, 0, sizeof(u32) * fox_br_candidate_capacity);
+      afl->fsrv.handler_candidate_cnt = 0;
+    }
+
+    bool has_overflown = false;
+    // run line search once a batch on the most promising mutants for each branch in the batch
+    u32 last_mutant_id = afl->stage_max - 1;
+    if (afl->line_search && ((cur_mutant_id && cur_mutant_id % LINE_SEARCH_MIN_MUTANTS == 0) || (cur_mutant_id == last_mutant_id && (!shared_mode || cur_mutant_id % LINE_SEARCH_MIN_MUTANTS > SHARED_MODE_LINE_SEARCH_MIN)))) {
+      afl->line_search_count++;
+      reset_line_stats(afl);
+
+      for (u32 br_inc_idx = 0; br_inc_idx < afl->fsrv.br_inc_cnt; br_inc_idx++) {
+        u32 cur_edge_id = br_inc_id[br_inc_idx];
+        u32 br_dist_edge_id = br_inc_dist_id[br_inc_idx];
+        u32 cur_mutant_id = br_inc_winner[br_dist_edge_id];
+        u32 parent = border_edge_parent[cur_edge_id];
+        u32 child = border_edge_child[cur_edge_id];
+        u8 cmp_type_parent = cmp_type[parent];
+
+        // skip non-instrumented branches
+        if (cmp_type_parent == NOT_INSTRUMENTED) {
+#ifdef FOX_INTROSPECTION
+          fprintf(afl->fox_debug_file, "BUG: attempting line search on a non-instrumented branch for cmp_type %u, parent %u, child %u, edge %u\n", cmp_type_parent, parent, child, cur_edge_id);
+#endif
+          continue;
+        }
+
+        // skip if already reached (not a horizon branch anymore)
+        if (was_reached(child, virgin_bits)) { continue; }
+
+        u8 *x = in_buf;
+        u32 len_x = len;
+        u8 *x_prime = mutant_buf[cur_mutant_id];
+        u32 len_x_prime = mutant_len[cur_mutant_id];
+
+        s64 y = local_br_bits[br_dist_edge_id];
+        s64 diff = br_inc[br_dist_edge_id];
+        s64 y_prime = y + diff;
+
+        if (unlikely(!x_prime)) {
+#ifdef FOX_INTROSPECTION
+          fprintf(afl->fox_debug_file, "BUG: current mutant is not in mutant buffer");
+#endif
+          continue;
+        }
+
+        if (cmp_type_parent < STRCMP && cmp_type_parent != ICMP_EQ && cmp_type_parent != ICMP_NE) {
+            if (!afl->fsrv.size_gradient_checked[br_dist_edge_id] && unlikely(llabs(y) < llabs(global_br_bits[br_dist_edge_id]))) {
+#ifdef FOX_INTROSPECTION
+              fprintf(afl->fox_debug_file, "BUG: local min distance lower than global min distance for cmp_type %u, parent %u, child %u, edge %u, br_dist_edge_id %u, global_br_bits %ld, local_br_bits %ld\n", cmp_type_parent, parent, child, cur_edge_id, br_dist_edge_id, y, global_br_bits[br_dist_edge_id], llabs(y));
+#endif
+              continue;
+            }
+            if (unlikely(diff < 0)) {
+#ifdef FOX_INTROSPECTION
+              fprintf(afl->fox_debug_file, "BUG: branch distance increment is negative for cmp_type %u, parent %u, child %u, edge %u, br_dist_edge_id %u, diff %ld\n", cmp_type_parent, parent, child, cur_edge_id, br_dist_edge_id, diff);
+#endif
+              continue;
+            }
+            if (unlikely(diff == 0)) {
+#ifdef FOX_INTROSPECTION
+              printf(afl->fox_debug_file, "BUG: branch distance difference is 0 which might lead to division by zero for cmp_type %u, parent %u, child %u, edge %u, br_dist_edge_id %u, diff %ld\n", cmp_type_parent, parent, child, cur_edge_id, br_dist_edge_id, diff);
+#endif
+              continue;
+            }
+        }
+
+        // choose the input that is closer to a branch flip
+        s64 flip_boundary = 0;
+        u8 use_prime = 0;
+        switch (cmp_type_parent) {
+          case ICMP_EQ:
+          case ICMP_NE:
+          case SWITCH:
+            use_prime = llabs(y) > llabs(y_prime);
+            break;
+          case ICMP_UGT:
+          case ICMP_SGT:
+          case ICMP_ULE:
+          case ICMP_SLE:
+            if (unlikely(y <= 0 && y_prime > 0)) {
+#ifdef FOX_INTROSPECTION
+              printf(afl->fox_debug_file, "BUG: branch appears flipped for cmp_type %u, parent %u, child %u, edge %u, br_dist_edge_id %u, y %ld, y_prime %ld\n", cmp_type_parent, parent, child, cur_edge_id, br_dist_edge_id, y, y_prime);
+#endif
+              continue;
+            }
+            if ((use_prime = y <= 0))
+              flip_boundary++;
+            break;
+          case ICMP_UGE:
+          case ICMP_SGE:
+          case ICMP_ULT:
+          case ICMP_SLT:
+            if (unlikely(y < 0 && y_prime >= 0)) {
+#ifdef FOX_INTROSPECTION
+              printf(afl->fox_debug_file, "BUG: branch appears flipped for cmp_type %u, parent %u, child %u, edge %u, br_dist_edge_id %u, y %ld, y_prime %ld\n", cmp_type_parent, parent, child, cur_edge_id, br_dist_edge_id, y, y_prime);
+#endif
+              continue;
+            }
+            if (!(use_prime = y < 0))
+              flip_boundary--;
+            break;
+        }
+
+        u8 *start_x = use_prime ? x_prime : x;
+        s64 start_y = use_prime ? y_prime : y;
+
+        // populate list of differences (indices, values) between out_buf, x_prime, get (x_prime - x)
+        u32 min_len = len_x_prime < len_x ? len_x_prime : len_x;
+        u32 num_diff = 0;
+        u32 *diff_idx = ck_alloc(sizeof(u32) * min_len);
+        s16 *diff_val = ck_alloc(sizeof(s16) * min_len);
+        u8 *orig_val = ck_alloc(sizeof(u8) * min_len);
+
+        for (u32 local_ii=0; local_ii < min_len; local_ii++) {
+          if (x[local_ii] != x_prime[local_ii]) {
+            diff_idx[num_diff] = local_ii;
+            diff_val[num_diff] = (s16)(x_prime[local_ii] - x[local_ii]);
+            orig_val[num_diff] = start_x[local_ii];
+            num_diff++;
+          }
+        }
+
+        // if we decided to use y_prime, we need to use x_prime
+        temp_len = use_prime ? len_x_prime : len_x;
+        out_buf = afl_realloc(AFL_BUF_PARAM(out), temp_len);
+        memcpy(out_buf, start_x, temp_len);
+
+        // AS: scale = ((y or y_prime) - flip_boundary) / (y_prime - y)
+        double scale = (start_y - flip_boundary) / (double)diff;
+
+        // make the step: compute (x or x_prime) - (((y or y_prime) - flip_boundary) * ((x_prime - x)/(y_prime - y))
+        for (u32 loc_idx = 0; loc_idx < num_diff; loc_idx++) {
+          u32 loc = diff_idx[loc_idx];
+          has_overflown = false;
+          out_buf[loc] = s32_to_u8_checked((s32)round((double)out_buf[loc] - scale * (double)diff_val[loc_idx]), &has_overflown);
+          if (has_overflown)
+            break;
+        }
+
+        // AS: fuzz and collect statistics
+        s64 prev_global_br_dist_abs = global_br_bits[br_dist_edge_id];
+
+        if (!has_overflown && common_fuzz_stuff(afl, out_buf, temp_len)) {
+          ck_free(diff_idx);
+          ck_free(diff_val);
+          ck_free(orig_val);
+          goto abandon_entry;
+        }
+        afl->line_stats.step++;
+
+        if (cur_mutant_reached(child, trace_bits))
+          afl->line_stats.success++;
+
+        s64 base_y = br_bits[br_dist_edge_id];
+
+        if (cur_mutant_reached(parent, trace_bits)) {
+          afl->line_stats.reached++;
+          if (llabs(base_y) < llabs(start_y)) {
+            afl->line_stats.progress++;
+            if (llabs(base_y) < prev_global_br_dist_abs)
+              afl->line_stats.true_progress++;
+          }
+        }
+
+        ck_free(diff_idx);
+        ck_free(diff_val);
+        ck_free(orig_val);
+      }
+
+      for (u32 br_dec_idx = 0; br_dec_idx < afl->fsrv.br_dec_cnt; br_dec_idx++) {
+        u32 cur_edge_id = br_dec_id[br_dec_idx];
+        u32 br_dist_edge_id = br_dec_dist_id[br_dec_idx];
+        u32 cur_mutant_id = br_dec_winner[br_dist_edge_id];
+        u32 parent = border_edge_parent[cur_edge_id];
+        u32 child = border_edge_child[cur_edge_id];
+        u8 cmp_type_parent = cmp_type[parent];
+
+        // skip non-instrumented branches
+        if (cmp_type_parent == NOT_INSTRUMENTED) {
+#ifdef FOX_INTROSPECTION
+          fprintf(afl->fox_debug_file, "BUG: attempting line search on a non-instrumented branch for cmp_type %u, parent %u, child %u, edge %u\n", cmp_type_parent, parent, child, cur_edge_id);
+#endif
+          continue;
+        }
+
+        // skip if already reached (not a horizon branch anymore)
+        if (was_reached(child, virgin_bits)) { continue; }
+
+        u8 *x = in_buf;
+        u32 len_x = len;
+        u8 *x_prime = mutant_buf[cur_mutant_id];
+        u32 len_x_prime = mutant_len[cur_mutant_id];
+
+        s64 y = local_br_bits[br_dist_edge_id];
+        s64 diff = br_dec[br_dist_edge_id];
+        s64 y_prime = y + diff;
+
+        if (unlikely(!x_prime)) {
+#ifdef FOX_INTROSPECTION
+          printf("BUG: current mutant is not in mutant buffer");
+#endif
+          continue;
+        }
+
+        if (cmp_type_parent < STRCMP && cmp_type_parent != ICMP_EQ && cmp_type_parent != ICMP_NE) {
+            if (!afl->fsrv.size_gradient_checked[br_dist_edge_id] && unlikely(llabs(y) < llabs(global_br_bits[br_dist_edge_id]))) {
+#ifdef FOX_INTROSPECTION
+              fprintf(afl->fox_debug_file, "BUG: local min distance lower than global min distance for cmp_type %u, parent %u, child %u, edge %u, br_dist_edge_id %u, global_br_bits %ld, local_br_bits %ld\n", cmp_type_parent, parent, child, cur_edge_id, br_dist_edge_id, y, global_br_bits[br_dist_edge_id], llabs(y));
+#endif
+              continue;
+            }
+            if (unlikely(diff > 0)) {
+#ifdef FOX_INTROSPECTION
+              fprintf(afl->fox_debug_file, "BUG: branch distance increment is negative for cmp_type %u, parent %u, child %u, edge %u, br_dist_edge_id %u, diff %ld\n", cmp_type_parent, parent, child, cur_edge_id, br_dist_edge_id, diff);
+#endif
+              continue;
+            }
+            if (unlikely(diff == 0)) {
+#ifdef FOX_INTROSPECTION
+              printf(afl->fox_debug_file, "BUG: branch distance difference is 0 which might lead to division by zero for cmp_type %u, parent %u, child %u, edge %u, br_dist_edge_id %u, diff %ld\n", cmp_type_parent, parent, child, cur_edge_id, br_dist_edge_id, diff);
+#endif
+              continue;
+            }
+        }
+
+        // choose the input that is closer to a branch flip
+        s64 flip_boundary = 0;
+        u8 use_prime = 0;
+        switch (cmp_type_parent) {
+          case ICMP_EQ:
+          case ICMP_NE:
+          case SWITCH:
+            use_prime = llabs(y) > llabs(y_prime);
+            break;
+          case ICMP_UGT:
+          case ICMP_SGT:
+          case ICMP_ULE:
+          case ICMP_SLE:
+            if (unlikely(y > 0 && y_prime <= 0)) {
+#ifdef FOX_INTROSPECTION
+              printf("BUG: branch appears flipped for cmp_type %u, parent %u, child %u, edge %u, br_dist_edge_id %u, y %ld, y_prime %ld\n", cmp_type_parent, parent, child, cur_edge_id, br_dist_edge_id, y, y_prime);
+#endif
+              continue;
+            }
+            if (!(use_prime = y > 0))
+              flip_boundary++;
+            break;
+          case ICMP_UGE:
+          case ICMP_SGE:
+          case ICMP_ULT:
+          case ICMP_SLT:
+            if (unlikely(y >= 0 && y_prime < 0)) {
+#ifdef FOX_INTROSPECTION
+              printf("BUG: branch appears flipped for cmp_type %u, parent %u, child %u, edge %u, br_dist_edge_id %u, y %ld, y_prime %ld\n", cmp_type_parent, parent, child, cur_edge_id, br_dist_edge_id, y, y_prime);
+#endif
+              continue;
+            }
+            if ((use_prime = y >= 0))
+              flip_boundary--;
+            break;
+        }
+
+        u8 *start_x = use_prime ? x_prime : x;
+        s64 start_y = use_prime ? y_prime : y;
+
+        // populate list of differences (indices, values) between out_buf, x_prime, get (x_prime - x)
+        u32 min_len = len_x_prime < len_x ? len_x_prime : len_x;
+        u32 num_diff = 0;
+        u32 *diff_idx = ck_alloc(sizeof(u32) * min_len);
+        s16 *diff_val = ck_alloc(sizeof(s16) * min_len);
+        u8 *orig_val = ck_alloc(sizeof(u8) * min_len);
+
+        for (u32 local_ii=0; local_ii < min_len; local_ii++) {
+          if (x[local_ii] != x_prime[local_ii]) {
+            diff_idx[num_diff] = local_ii;
+            diff_val[num_diff] = (s16)(x_prime[local_ii] - x[local_ii]);
+            orig_val[num_diff] = start_x[local_ii];
+            num_diff++;
+          }
+        }
+
+        // if we decided to use y_prime, we need to use x_prime
+        temp_len = use_prime ? len_x_prime : len_x;
+        out_buf = afl_realloc(AFL_BUF_PARAM(out), temp_len);
+        memcpy(out_buf, start_x, temp_len);
+
+        // scale = ((y or y_prime) - flip_boundary) / (y_prime - y)
+        double scale = (start_y - flip_boundary) / (double)diff;
+
+        // make the step: compute (x or x_prime) - (((y or y_prime) - flip_boundary) * ((x_prime - x)/(y_prime - y))
+        for (u32 loc_idx = 0; loc_idx < num_diff; loc_idx++) {
+          u32 loc = diff_idx[loc_idx];
+          has_overflown = false;
+          out_buf[loc] = s32_to_u8_checked((s32)round((double)out_buf[loc] - scale * (double)diff_val[loc_idx]), &has_overflown);
+          if (has_overflown) {
+              break;
+          }
+        }
+
+        // fuzz and collect statistics
+        s64 prev_global_br_dist_abs = global_br_bits[br_dist_edge_id];
+
+        if (!has_overflown && common_fuzz_stuff(afl, out_buf, temp_len)) {  goto abandon_entry; }
+        afl->line_stats.step++;
+
+        if (cur_mutant_reached(child, trace_bits))
+          afl->line_stats.success++;
+
+        s64 base_y = br_bits[br_dist_edge_id];
+
+        if (cur_mutant_reached(parent, trace_bits)) {
+          afl->line_stats.reached++;
+          if (llabs(base_y) < llabs(start_y)) {
+            afl->line_stats.progress++;
+            if (llabs(base_y) < prev_global_br_dist_abs)
+              afl->line_stats.true_progress++;
+          }
+        }
+
+        ck_free(diff_idx);
+        ck_free(diff_val);
+        ck_free(orig_val);
+      }
+      memset(br_inc, 0, sizeof(s64) * fox_total_border_edge_cnt);
+      memset(br_dec, 0, sizeof(s64) * fox_total_border_edge_cnt);
+      memset(subgrad_inc, 0, sizeof(float)* fox_total_border_edge_cnt);
+      memset(subgrad_dec, 0, sizeof(float)* fox_total_border_edge_cnt);
+      memset(br_inc_winner, 0, sizeof(u32) * fox_total_border_edge_cnt);
+      memset(br_dec_winner, 0, sizeof(u32) * fox_total_border_edge_cnt);
+      memset(br_inc_id, 0, sizeof(u32) * fox_br_candidate_capacity);
+      memset(br_inc_dist_id, 0, sizeof(u32) * fox_br_candidate_capacity);
+      memset(br_dec_id, 0, sizeof(u32) * fox_br_candidate_capacity);
+      memset(br_dec_dist_id, 0, sizeof(u32) * fox_br_candidate_capacity);
+      afl->fsrv.br_inc_cnt = 0;
+      afl->fsrv.br_dec_cnt = 0;
+    }
+  }
+
+  if (shared_mode) {
+    memset(br_inc, 0, sizeof(s64) * fox_total_border_edge_cnt);
+    memset(br_dec, 0, sizeof(s64) * fox_total_border_edge_cnt);
+    memset(subgrad_inc, 0, sizeof(float)* fox_total_border_edge_cnt);
+    memset(subgrad_dec, 0, sizeof(float)* fox_total_border_edge_cnt);
+    memset(br_inc_winner, 0, sizeof(u32) * fox_total_border_edge_cnt);
+    memset(br_dec_winner, 0, sizeof(u32) * fox_total_border_edge_cnt);
+    memset(br_inc_id, 0, sizeof(u32) * fox_br_candidate_capacity);
+    memset(br_inc_dist_id, 0, sizeof(u32) * fox_br_candidate_capacity);
+    memset(br_dec_id, 0, sizeof(u32) * fox_br_candidate_capacity);
+    memset(br_dec_dist_id, 0, sizeof(u32) * fox_br_candidate_capacity);
+    afl->fsrv.br_inc_cnt = 0;
+    afl->fsrv.br_dec_cnt = 0;
+  }
+
+  for (u32 i=0; i < afl->stage_max; i++) {
+    if (mutant_buf[i]) {
+      ck_free(mutant_buf[i]);
+      mutant_len[i] = 0;
+      mutant_buf[i] = 0;
+    }
   }
 
   new_hit_cnt = afl->queued_items + afl->saved_crashes;
@@ -3442,7 +4229,8 @@ abandon_entry:
 
     --afl->pending_not_fuzzed;
     afl->queue_cur->was_fuzzed = 1;
-    afl->reinit_table = 1;
+    if (afl->schedule != WD_SCHEDULER)
+      afl->reinit_table = 1;
     if (afl->queue_cur->favored) { --afl->pending_favored; }
 
   }
