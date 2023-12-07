@@ -519,7 +519,7 @@ int main(int argc, char **argv_orig, char **envp) {
 
   // still available: HjJkKqruvwz
   while ((opt = getopt(argc, argv,
-                       "+a:Ab:B:c:CdDe:E:f:F:g:G:hi:I:l:L:m:M:nNo:Op:P:QRs:S:t:"
+                       "+a:Ab:B:c:CdDke:E:f:F:g:G:hi:I:l:L:m:M:nNo:Op:P:QRs:S:t:"
                        "T:UV:WXx:YZ")) > 0) {
 
     switch (opt) {
@@ -576,6 +576,10 @@ int main(int argc, char **argv_orig, char **envp) {
 
       case 'g':
         afl->min_length = atoi(optarg);
+        break;
+
+      case 'k':
+        afl->line_search = 1;
         break;
 
       case 'G':
@@ -677,6 +681,10 @@ int main(int argc, char **argv_orig, char **envp) {
         } else if (!stricmp(optarg, "seek")) {
 
           afl->schedule = SEEK;
+
+        } else if (!stricmp(optarg, "wd_scheduler")) {
+
+          afl->schedule = WD_SCHEDULER;
 
         } else {
 
@@ -1577,6 +1585,9 @@ int main(int argc, char **argv_orig, char **envp) {
     case EXPLORE:
       OKF("Using exploration-based constant power schedule (EXPLORE)");
       break;
+    case WD_SCHEDULER:
+      OKF("Using online stochastic control-based seed scheduler WD-Scheduler");
+      break;
     default:
       FATAL("Unknown power schedule");
       break;
@@ -2170,6 +2181,10 @@ int main(int argc, char **argv_orig, char **envp) {
   afl->fsrv.trace_bits =
       afl_shm_init(&afl->shm, afl->fsrv.map_size, afl->non_instrumented_mode);
 
+  afl->fsrv.br_bits = afl->shm.br_map;
+  afl->fsrv.br_cov = afl->shm.br_cov;
+  afl->fsrv.br_hit = afl->shm.br_hit;
+
   if (!afl->non_instrumented_mode && !afl->fsrv.qemu_mode &&
       !afl->unicorn_mode && !afl->fsrv.frida_mode && !afl->fsrv.cs_mode &&
       !afl->afl_env.afl_skip_bin_check) {
@@ -2185,6 +2200,52 @@ int main(int argc, char **argv_orig, char **envp) {
 
     u32 new_map_size = afl_fsrv_get_mapsize(
         &afl->fsrv, afl->argv, &afl->stop_soon, afl->afl_env.afl_debug_child);
+
+    // TODO: better constrain total_border_edge_cnt
+    afl->fox_map_size = new_map_size + sizeof(u64);
+    afl->fox_total_border_edge_cnt = afl->fsrv.map_size;
+    // index: sancov node id, max number <= new_map_size
+    afl->fsrv.spent_time_us = (u64 *) ck_alloc(sizeof(u64) * afl->fox_map_size);
+    afl->fsrv.productive_time_us = (u64 *) ck_alloc(sizeof(u64) * afl->fox_map_size);
+    afl->fsrv.added_seeds = (u32 *) ck_alloc(sizeof(u32) * afl->fox_map_size);
+    afl->fsrv.cmp_type = (u8 *) ck_alloc(sizeof(u8) * afl->fox_map_size);
+    afl->fsrv.border_edge_parent_first_id = (u32 *) ck_alloc(sizeof(u32) * afl->fox_map_size);
+    afl->fsrv.num_of_children = (u32 *) ck_alloc(sizeof(u32) * afl->fox_map_size);
+
+    // index: br_dist_edge_id, max number <= border_edge_cnt
+    afl->fsrv.global_br_bits = (s64 *) ck_alloc(sizeof(s64) * afl->fox_total_border_edge_cnt);
+    afl->fsrv.local_br_bits = (s64 *) ck_alloc(sizeof(s64) * afl->fox_total_border_edge_cnt);
+    afl->fsrv.br_inc = (s64 *) ck_alloc(sizeof(s64) * afl->fox_total_border_edge_cnt);
+    afl->fsrv.br_dec = (s64 *) ck_alloc(sizeof(s64) * afl->fox_total_border_edge_cnt);
+    afl->fsrv.br_dec_winner = (u32 *) ck_alloc(sizeof(u32) * afl->fox_total_border_edge_cnt);
+    afl->fsrv.br_inc_winner = (u32 *) ck_alloc(sizeof(u32) * afl->fox_total_border_edge_cnt);
+    afl->fsrv.icmp_default_line_search = (u8 *) ck_alloc(sizeof(u8) * afl->fox_total_border_edge_cnt);
+    afl->fsrv.size_gradient_checked = (u8 *) ck_alloc(sizeof(u8) * afl->fox_total_border_edge_cnt);
+
+    // index: border_edge_id, max number <= border_edge_cnt
+    afl->fsrv.subgrad_inc = (float *) ck_alloc(sizeof(float) * afl->fox_total_border_edge_cnt);
+    afl->fsrv.subgrad_dec = (float *) ck_alloc(sizeof(float) * afl->fox_total_border_edge_cnt);
+    afl->fsrv.local_bits = (u8 *) ck_alloc(sizeof(u8) * afl->fox_total_border_edge_cnt);
+    afl->fsrv.border_edge_parent = (u32 *) ck_alloc(sizeof(u32) * afl->fox_total_border_edge_cnt);
+    afl->fsrv.border_edge_child = (u32 *) ck_alloc(sizeof(u32) * afl->fox_total_border_edge_cnt);
+    afl->fsrv.border_edge_2_str_len = (u32 *) ck_alloc(sizeof(u32) * afl->fox_total_border_edge_cnt);
+    afl->fsrv.border_edge_2_br_dist = (u32 *) ck_alloc(sizeof(u32) * afl->fox_total_border_edge_cnt);
+    afl->fsrv.border_edge_seed_list = (struct queue_entry ***) ck_alloc(sizeof(struct queue_entry **) * afl->fox_total_border_edge_cnt);
+    afl->fsrv.border_edge_seed_list_cnt = (u32 *) ck_alloc(sizeof(u32) * afl->fox_total_border_edge_cnt);
+    afl->fsrv.border_edge_seed_list_capacity = (u32 *) ck_alloc(sizeof(u32) * afl->fox_total_border_edge_cnt);
+    afl->wd_scheduler_top_rated = (struct queue_entry **) ck_alloc(sizeof(struct queue_entry *) * afl->fox_total_border_edge_cnt);
+
+    afl->fsrv.fox_br_candidate_capacity = 5120;
+    afl->fsrv.fox_mutant_buf_capacity = 10240;
+    afl->fsrv.handler_candidate_id = (u32 *) ck_alloc(sizeof(u32) * afl->fsrv.fox_br_candidate_capacity);
+    afl->fsrv.handler_candidate_dist_id = (u32 *) ck_alloc(sizeof(u32) * afl->fsrv.fox_br_candidate_capacity);
+    afl->fsrv.br_inc_id = (u32 *) ck_alloc(sizeof(u32) * afl->fsrv.fox_br_candidate_capacity);
+    afl->fsrv.br_inc_dist_id = (u32 *) ck_alloc(sizeof(u32) * afl->fsrv.fox_br_candidate_capacity);
+    afl->fsrv.br_dec_id = (u32 *) ck_alloc(sizeof(u32) * afl->fsrv.fox_br_candidate_capacity);
+    afl->fsrv.br_dec_dist_id = (u32 *) ck_alloc(sizeof(u32) * afl->fsrv.fox_br_candidate_capacity);
+    afl->fsrv.mutant_buf = (u8 **) ck_alloc(sizeof(u8 *) * afl->fsrv.fox_mutant_buf_capacity);
+    afl->fsrv.mutant_len = (u32 *) ck_alloc(sizeof(u32) * afl->fsrv.fox_mutant_buf_capacity);
+    afl->fsrv.mutant_ref_cnt = 0;
 
     // only reinitialize if the map needs to be larger than what we have.
     if (map_size < new_map_size) {
@@ -2221,6 +2282,9 @@ int main(int argc, char **argv_orig, char **envp) {
       afl->fsrv.map_size = new_map_size;
       afl->fsrv.trace_bits =
           afl_shm_init(&afl->shm, new_map_size, afl->non_instrumented_mode);
+      afl->fsrv.br_bits = afl->shm.br_map;
+      afl->fsrv.br_cov = afl->shm.br_cov;
+      afl->fsrv.br_hit = afl->shm.br_hit;
       setenv("AFL_NO_AUTODICT", "1", 1);  // loaded already
       afl_fsrv_start(&afl->fsrv, afl->argv, &afl->stop_soon,
                      afl->afl_env.afl_debug_child);
@@ -2301,6 +2365,9 @@ int main(int argc, char **argv_orig, char **envp) {
       setenv("AFL_NO_AUTODICT", "1", 1);  // loaded already
       afl->fsrv.trace_bits =
           afl_shm_init(&afl->shm, new_map_size, afl->non_instrumented_mode);
+      afl->fsrv.br_bits = afl->shm.br_map;
+      afl->fsrv.br_cov = afl->shm.br_cov;
+      afl->fsrv.br_hit = afl->shm.br_hit;
       afl->cmplog_fsrv.trace_bits = afl->fsrv.trace_bits;
       afl_fsrv_start(&afl->fsrv, afl->argv, &afl->stop_soon,
                      afl->afl_env.afl_debug_child);
@@ -2361,6 +2428,11 @@ int main(int argc, char **argv_orig, char **envp) {
 
   memset(afl->virgin_tmout, 255, map_size);
   memset(afl->virgin_crash, 255, map_size);
+
+  if (afl->schedule == WD_SCHEDULER) {
+    load_fox_metadata(afl);
+    afl->wd_scheduler_havoc_max_mult = HAVOC_MAX_MULT_WD_SCHEDULER;
+  }
 
   if (likely(!afl->afl_env.afl_no_startup_calibration)) {
 
