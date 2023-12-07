@@ -1045,233 +1045,28 @@ void show_stats_normal(afl_state_t *afl) {
 
   /* Aaaalmost there... hold on! */
 
-  SAYF(bVR bH cCYA bSTOP " fuzzing strategy yields " bSTG bH10 bH2 bHT bH10 bH2
-           bH bHB bH bSTOP cCYA " item geometry " bSTG bH5 bH2 bVL "\n");
+  SAYF(bVR bH bSTOP                                             cCYA
+       " line search %-5s " bSTG bH10 bH5 bH2 bH bX bH bSTOP cCYA
+       " local search stats " bSTG bH10 bH5 bH                  bVL "\n",
+       u_stringify_int(IB(0), afl->line_search_count));
 
-  if (unlikely(afl->custom_only)) {
+  SAYF(bV bSTOP "        flipped : " cRST "%-19s " bSTG bV bSTOP
+                "total iter : " cRST "%-24s" bSTG bV "\n",
+       u_stringify_int(IB(0), afl->line_stats.base.success), u_stringify_int(IB(1), afl->stage_max));
 
-    strcpy(tmp, "disabled (custom-mutator-only mode)");
+  SAYF(bV bSTOP "global progress : " cRST "%-19s " bSTG bVR bH20 bH10 bH5 bH2 bRB "\n",
+      u_stringify_int(IB(0), afl->line_stats.base.true_progress));
 
-  } else if (likely(afl->skip_deterministic)) {
+  SAYF(bV bSTOP "       progress : " cRST "%-19s " bSTG bV "\n",
+      u_stringify_int(IB(0), afl->line_stats.base.progress));
 
-    strcpy(tmp, "disabled (default, enable with -D)");
+  SAYF(bV bSTOP "          steps : " cRST "%-19s " bSTG bV "\n",
+      u_stringify_int(IB(0), afl->line_stats.base.step));
 
-  } else {
+  sprintf(tmp, "%0.02f/steps", (double)afl->line_stats.distilled/afl->line_stats.base.step);
 
-    sprintf(tmp, "%s/%s, %s/%s, %s/%s",
-            u_stringify_int(IB(0), afl->stage_finds[STAGE_FLIP1]),
-            u_stringify_int(IB(1), afl->stage_cycles[STAGE_FLIP1]),
-            u_stringify_int(IB(2), afl->stage_finds[STAGE_FLIP2]),
-            u_stringify_int(IB(3), afl->stage_cycles[STAGE_FLIP2]),
-            u_stringify_int(IB(4), afl->stage_finds[STAGE_FLIP4]),
-            u_stringify_int(IB(5), afl->stage_cycles[STAGE_FLIP4]));
-
-  }
-
-  SAYF(bV bSTOP "   bit flips : " cRST "%-36s " bSTG bV bSTOP
-                "    levels : " cRST "%-10s" bSTG       bV "\n",
-       tmp, u_stringify_int(IB(0), afl->max_depth));
-
-  if (unlikely(!afl->skip_deterministic)) {
-
-    sprintf(tmp, "%s/%s, %s/%s, %s/%s",
-            u_stringify_int(IB(0), afl->stage_finds[STAGE_FLIP8]),
-            u_stringify_int(IB(1), afl->stage_cycles[STAGE_FLIP8]),
-            u_stringify_int(IB(2), afl->stage_finds[STAGE_FLIP16]),
-            u_stringify_int(IB(3), afl->stage_cycles[STAGE_FLIP16]),
-            u_stringify_int(IB(4), afl->stage_finds[STAGE_FLIP32]),
-            u_stringify_int(IB(5), afl->stage_cycles[STAGE_FLIP32]));
-
-  }
-
-  SAYF(bV bSTOP "  byte flips : " cRST "%-36s " bSTG bV bSTOP
-                "   pending : " cRST "%-10s" bSTG       bV "\n",
-       tmp, u_stringify_int(IB(0), afl->pending_not_fuzzed));
-
-  if (unlikely(!afl->skip_deterministic)) {
-
-    sprintf(tmp, "%s/%s, %s/%s, %s/%s",
-            u_stringify_int(IB(0), afl->stage_finds[STAGE_ARITH8]),
-            u_stringify_int(IB(1), afl->stage_cycles[STAGE_ARITH8]),
-            u_stringify_int(IB(2), afl->stage_finds[STAGE_ARITH16]),
-            u_stringify_int(IB(3), afl->stage_cycles[STAGE_ARITH16]),
-            u_stringify_int(IB(4), afl->stage_finds[STAGE_ARITH32]),
-            u_stringify_int(IB(5), afl->stage_cycles[STAGE_ARITH32]));
-
-  }
-
-  SAYF(bV bSTOP " arithmetics : " cRST "%-36s " bSTG bV bSTOP
-                "  pend fav : " cRST "%-10s" bSTG       bV "\n",
-       tmp, u_stringify_int(IB(0), afl->pending_favored));
-
-  if (unlikely(!afl->skip_deterministic)) {
-
-    sprintf(tmp, "%s/%s, %s/%s, %s/%s",
-            u_stringify_int(IB(0), afl->stage_finds[STAGE_INTEREST8]),
-            u_stringify_int(IB(1), afl->stage_cycles[STAGE_INTEREST8]),
-            u_stringify_int(IB(2), afl->stage_finds[STAGE_INTEREST16]),
-            u_stringify_int(IB(3), afl->stage_cycles[STAGE_INTEREST16]),
-            u_stringify_int(IB(4), afl->stage_finds[STAGE_INTEREST32]),
-            u_stringify_int(IB(5), afl->stage_cycles[STAGE_INTEREST32]));
-
-  }
-
-  SAYF(bV bSTOP "  known ints : " cRST "%-36s " bSTG bV bSTOP
-                " own finds : " cRST "%-10s" bSTG       bV "\n",
-       tmp, u_stringify_int(IB(0), afl->queued_discovered));
-
-  if (unlikely(!afl->skip_deterministic)) {
-
-    sprintf(tmp, "%s/%s, %s/%s, %s/%s, %s/%s",
-            u_stringify_int(IB(0), afl->stage_finds[STAGE_EXTRAS_UO]),
-            u_stringify_int(IB(1), afl->stage_cycles[STAGE_EXTRAS_UO]),
-            u_stringify_int(IB(2), afl->stage_finds[STAGE_EXTRAS_UI]),
-            u_stringify_int(IB(3), afl->stage_cycles[STAGE_EXTRAS_UI]),
-            u_stringify_int(IB(4), afl->stage_finds[STAGE_EXTRAS_AO]),
-            u_stringify_int(IB(5), afl->stage_cycles[STAGE_EXTRAS_AO]),
-            u_stringify_int(IB(6), afl->stage_finds[STAGE_EXTRAS_AI]),
-            u_stringify_int(IB(7), afl->stage_cycles[STAGE_EXTRAS_AI]));
-
-  } else if (unlikely(!afl->extras_cnt || afl->custom_only)) {
-
-    strcpy(tmp, "n/a");
-
-  } else {
-
-    strcpy(tmp, "havoc mode");
-
-  }
-
-  SAYF(bV bSTOP "  dictionary : " cRST "%-36s " bSTG bV bSTOP
-                "  imported : " cRST "%-10s" bSTG       bV "\n",
-       tmp,
-       afl->sync_id ? u_stringify_int(IB(0), afl->queued_imported)
-                    : (u8 *)"n/a");
-
-  sprintf(tmp, "%s/%s, %s/%s",
-          u_stringify_int(IB(0), afl->stage_finds[STAGE_HAVOC]),
-          u_stringify_int(IB(2), afl->stage_cycles[STAGE_HAVOC]),
-          u_stringify_int(IB(3), afl->stage_finds[STAGE_SPLICE]),
-          u_stringify_int(IB(4), afl->stage_cycles[STAGE_SPLICE]));
-
-  SAYF(bV bSTOP "havoc/splice : " cRST "%-36s " bSTG bV bSTOP, tmp);
-
-  if (t_bytes) {
-
-    sprintf(tmp, "%0.02f%%", stab_ratio);
-
-  } else {
-
-    strcpy(tmp, "n/a");
-
-  }
-
-  SAYF(" stability : %s%-10s" bSTG bV "\n",
-       (stab_ratio < 85 && afl->var_byte_count > 40)
-           ? cLRD
-           : ((afl->queued_variable &&
-               (!afl->persistent_mode || afl->var_byte_count > 20))
-                  ? cMGN
-                  : cRST),
-       tmp);
-
-  if (unlikely(afl->afl_env.afl_python_module)) {
-
-    sprintf(tmp, "%s/%s,",
-            u_stringify_int(IB(0), afl->stage_finds[STAGE_PYTHON]),
-            u_stringify_int(IB(1), afl->stage_cycles[STAGE_PYTHON]));
-
-  } else {
-
-    strcpy(tmp, "unused,");
-
-  }
-
-  if (unlikely(afl->afl_env.afl_custom_mutator_library)) {
-
-    strcat(tmp, " ");
-    strcat(tmp, u_stringify_int(IB(2), afl->stage_finds[STAGE_CUSTOM_MUTATOR]));
-    strcat(tmp, "/");
-    strcat(tmp,
-           u_stringify_int(IB(3), afl->stage_cycles[STAGE_CUSTOM_MUTATOR]));
-    strcat(tmp, ",");
-
-  } else {
-
-    strcat(tmp, " unused,");
-
-  }
-
-  if (unlikely(afl->shm.cmplog_mode)) {
-
-    strcat(tmp, " ");
-    strcat(tmp, u_stringify_int(IB(4), afl->stage_finds[STAGE_COLORIZATION]));
-    strcat(tmp, "/");
-    strcat(tmp, u_stringify_int(IB(5), afl->stage_cycles[STAGE_COLORIZATION]));
-    strcat(tmp, ", ");
-    strcat(tmp, u_stringify_int(IB(6), afl->stage_finds[STAGE_ITS]));
-    strcat(tmp, "/");
-    strcat(tmp, u_stringify_int(IB(7), afl->stage_cycles[STAGE_ITS]));
-
-  } else {
-
-    strcat(tmp, " unused, unused");
-
-  }
-
-  SAYF(bV bSTOP "py/custom/rq : " cRST "%-36s " bSTG bVR bH20 bH2 bH bRB "\n",
-       tmp);
-
-  if (likely(afl->disable_trim)) {
-
-    sprintf(tmp, "disabled, ");
-
-  } else if (unlikely(!afl->bytes_trim_out)) {
-
-    sprintf(tmp, "n/a, ");
-
-  } else {
-
-    sprintf(tmp, "%0.02f%%/%s, ",
-            ((double)(afl->bytes_trim_in - afl->bytes_trim_out)) * 100 /
-                afl->bytes_trim_in,
-            u_stringify_int(IB(0), afl->trim_execs));
-
-  }
-
-  if (likely(afl->skip_deterministic)) {
-
-    strcat(tmp, "disabled");
-
-  } else if (unlikely(!afl->blocks_eff_total)) {
-
-    strcat(tmp, "n/a");
-
-  } else {
-
-    u8 tmp2[128];
-
-    sprintf(tmp2, "%0.02f%%",
-            ((double)(afl->blocks_eff_total - afl->blocks_eff_select)) * 100 /
-                afl->blocks_eff_total);
-
-    strcat(tmp, tmp2);
-
-  }
-
-  // if (afl->custom_mutators_count) {
-
-  //
-  //  sprintf(tmp, "%s/%s",
-  //          u_stringify_int(IB(0), afl->stage_finds[STAGE_CUSTOM_MUTATOR]),
-  //          u_stringify_int(IB(1), afl->stage_cycles[STAGE_CUSTOM_MUTATOR]));
-  //  SAYF(bV bSTOP " custom mut. : " cRST "%-36s " bSTG bV RESET_G1, tmp);
-  //
-  //} else {
-
-  SAYF(bV bSTOP "    trim/eff : " cRST "%-36s " bSTG bV RESET_G1, tmp);
-
-  //}
+  SAYF(bV bSTOP " distilled byte : " cRST "%-19s " bSTG bV RESET_G1,
+      tmp);
 
   /* Provide some CPU utilization stats. */
 
