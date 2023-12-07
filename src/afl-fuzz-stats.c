@@ -1052,21 +1052,16 @@ void show_stats_normal(afl_state_t *afl) {
 
   SAYF(bV bSTOP "        flipped : " cRST "%-19s " bSTG bV bSTOP
                 "total iter : " cRST "%-24s" bSTG bV "\n",
-       u_stringify_int(IB(0), afl->line_stats.base.success), u_stringify_int(IB(1), afl->stage_max));
+       u_stringify_int(IB(0), afl->line_stats.success), u_stringify_int(IB(1), afl->stage_max));
 
-  SAYF(bV bSTOP "global progress : " cRST "%-19s " bSTG bVR bH20 bH10 bH5 bH2 bRB "\n",
-      u_stringify_int(IB(0), afl->line_stats.base.true_progress));
+  SAYF(bV bSTOP "global br dist decrease : " cRST "%-19s " bSTG bVR bH20 bH10 bH5 bH2 bRB "\n",
+      u_stringify_int(IB(0), afl->line_stats.true_progress));
 
-  SAYF(bV bSTOP "       progress : " cRST "%-19s " bSTG bV "\n",
-      u_stringify_int(IB(0), afl->line_stats.base.progress));
+  SAYF(bV bSTOP "       br dist decrease : " cRST "%-19s " bSTG bV "\n",
+      u_stringify_int(IB(0), afl->line_stats.progress));
 
-  SAYF(bV bSTOP "          steps : " cRST "%-19s " bSTG bV "\n",
-      u_stringify_int(IB(0), afl->line_stats.base.step));
-
-  sprintf(tmp, "%0.02f/steps", (double)afl->line_stats.distilled/afl->line_stats.base.step);
-
-  SAYF(bV bSTOP " distilled byte : " cRST "%-19s " bSTG bV RESET_G1,
-      tmp);
+  SAYF(bV bSTOP "           Newton steps : " cRST "%-19s " bSTG bV "\n",
+      u_stringify_int(IB(0), afl->line_stats.step));
 
   /* Provide some CPU utilization stats. */
 

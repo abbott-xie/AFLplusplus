@@ -154,6 +154,7 @@ struct queue_entry {
   u8 *fname;                            /* File name for the test case      */
   u32 len;                              /* Input length                     */
   u32 id;                               /* entry number in queue_buf        */
+  double schedule_cnt;                  /* Number of times scheduled        */
 
   u8 colorized,                         /* Do not run redqueen stage again  */
       cal_failed;                       /* Calibration failed?              */
@@ -219,6 +220,58 @@ struct auto_extra_data {
   u32 len;                              /* Dictionary token length          */
   u32 hit_cnt;                          /* Use count in the corpus          */
 
+};
+
+
+typedef struct line_search_stats {
+
+  u32 success,                          /* Number of flipped branches             */
+      true_progress,                    /* Number of global minimum mutants found */
+      progress,                         /* Number of local minimum mutants found  */
+      step;                             /* Number of mutants resulted in          */
+
+} line_search_stats_t;
+
+/* Comparison types */
+
+enum {
+ /* 00 */  NOT_INSTRUMENTED,
+ /* 01 */  ICMP_UGT,
+ /* 02 */  ICMP_SGT,
+ /* 03 */  ICMP_EQ,
+ /* 04 */  ICMP_UGE,
+ /* 05 */  ICMP_SGE,
+ /* 06 */  ICMP_ULT,
+ /* 07 */  ICMP_SLT,
+ /* 08 */  ICMP_NE,
+ /* 09 */  ICMP_ULE,
+ /* 10 */  ICMP_SLE,
+ /* 11 */  STRCMP,
+ /* 12 */  STRNCMP,
+ /* 13 */  MEMCMP,
+ /* 14 */  STRSTR,
+ /* 15 */  SWITCH,
+
+  CMP_TYPES_MAX
+
+};
+
+/* FOX-related definitions */
+
+#define MAX_ADDED_SEEDS 15
+#define MAX_HANDLER_TIME_US 10000000 /* 10 seconds */
+#define MAX_HANDLER_NUM_DIFF 1000
+#define LINE_SEARCH_MIN_MUTANTS 1024
+#define SHARED_MODE_LINE_SEARCH_MIN 512
+#define MAX_TOTAL_FRONTIER_DISCOVERY_TIME_US 3600000000 /* 1 hour */
+#define WD_SCHED_BREAK_TIE_FASTER_SEED
+
+/* Branch distance trace setting */
+
+enum {
+  /* 00 */ BR_TRACE_DEFAULT,
+  /* 01 */ BR_TRACE_LOCAL_SEARCH,
+  /* 02 */ BR_TRACE_SEED_INPUT
 };
 
 /* Fuzzing stages */
@@ -541,6 +594,15 @@ typedef struct afl_state {
       cycle_schedules,                  /* cycle power schedules?           */
       old_seed_selection,               /* use vanilla afl seed selection   */
       reinit_table;                     /* reinit the queue weight table    */
+
+  /* FOX-related members */
+  u8  wd_scheduler_havoc_max_mult,
+      wd_scheduler_dry_run,
+      line_search,
+      wd_scheduler_shared_mode;
+  u32 fox_total_border_edge_cnt,
+      fox_map_size,
+      wd_scheduler_selected_border_edge_idx;
 
   u8 *virgin_bits,                      /* Regions yet untouched by fuzzing */
       *virgin_tmout,                    /* Bits we haven't seen in tmouts   */
