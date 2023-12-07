@@ -26,6 +26,8 @@
 #include <limits.h>
 #include <ctype.h>
 #include <math.h>
+#include <stdio.h>
+#include <float.h>
 
 #ifdef _STANDALONE_MODULE
 void minimize_bits(afl_state_t *afl, u8 *dst, u8 *src) {
