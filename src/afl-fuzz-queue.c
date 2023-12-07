@@ -60,6 +60,16 @@ inline u32 select_next_queue_entry(afl_state_t *afl) {
 
 }
 
+inline u32 select_next_queue_entry_wd_scheduler(afl_state_t *afl) {
+  u32 border_edge_idx = afl->wd_scheduler_selected_border_edge_idx;
+  u32 seed_idx = afl->wd_scheduler_top_rated[border_edge_idx]->id;
+
+  afl->queue_buf[seed_idx]->perf_score = calculate_score_wd_scheduler(afl, afl->queue_buf[seed_idx]);
+  afl->fsrv.schedule_cycles++;
+
+  return seed_idx;
+}
+
 double compute_weight(afl_state_t *afl, struct queue_entry *q,
                       double avg_exec_us, double avg_bitmap_size,
                       double avg_top_size) {
@@ -83,6 +93,341 @@ double compute_weight(afl_state_t *afl, struct queue_entry *q,
 
   return weight;
 
+}
+
+double calculate_score_wd_scheduler(afl_state_t *afl, struct queue_entry *q) {
+
+  double perf_score = 100;
+
+  /* Adjust score based on execution speed of this path, compared to the
+     global average. Multiplier ranges from 0.1x to 3x. Fast inputs are
+     less expensive to fuzz, so we're giving them more air time. */
+
+  // TODO BUG FIXME: is this really a good idea?
+  // This sounds like looking for lost keys under a street light just because
+  // the light is better there.
+  // Longer execution time means longer work on the input, the deeper in
+  // coverage, the better the fuzzing, right? -mh
+
+  u64 avg_exec_us = afl->wd_scheduler_avg_us;
+
+  if (q->exec_us * 0.1 > avg_exec_us) {
+
+    perf_score = 10;
+
+  } else if (q->exec_us * 0.25 > avg_exec_us) {
+
+    perf_score = 25;
+
+  } else if (q->exec_us * 0.5 > avg_exec_us) {
+
+    perf_score = 50;
+
+  } else if (q->exec_us * 0.75 > avg_exec_us) {
+
+    perf_score = 75;
+
+  } else if (q->exec_us * 4 < avg_exec_us) {
+
+    perf_score = 300;
+
+  } else if (q->exec_us * 3 < avg_exec_us) {
+
+    perf_score = 200;
+
+  } else if (q->exec_us * 2 < avg_exec_us) {
+
+    perf_score = 150;
+
+  }
+
+  /* Make sure that we don't go over limit. */
+
+  if (perf_score > afl->wd_scheduler_havoc_max_mult * 100.0) {
+
+    perf_score = afl->wd_scheduler_havoc_max_mult * 100.0;
+
+  }
+
+  return perf_score;
+
+}
+
+int energy_cmp(const void *p1, const void *p2)
+{
+    const my_union *e1 = p1;
+    const my_union *e2 = p2;
+
+    if (isless(e1->energy, e2->energy)) return 1;
+    if (isgreater(e1->energy, e2->energy)) return -1;
+    return 0;
+}
+
+static inline struct queue_entry *get_least_scheduled_seed(struct queue_entry **seed_list, u32 len) {
+  u64 min_exec_us = UINT64_MAX;
+  struct queue_entry *min_seed = NULL;
+  for (u32 i = 0; i < len; i++) {
+    struct queue_entry *seed = seed_list[i];
+    u64 exec_us = (u64) ((1 + seed->schedule_cnt) * seed->exec_us);
+    if (!seed->disabled && exec_us < min_exec_us) {
+      min_exec_us = exec_us;
+      min_seed = seed;
+    }
+  }
+  return min_seed;
+}
+
+static inline struct queue_entry *top_rated_seed(afl_state_t *afl, u32 cur_border_edge_id, u32 parent) {
+  if (afl->fsrv.cmp_type[parent] == NOT_INSTRUMENTED)
+    return get_least_scheduled_seed(
+        afl->fsrv.border_edge_seed_list[cur_border_edge_id],
+        afl->fsrv.border_edge_seed_list_cnt[cur_border_edge_id]);
+  return afl->wd_scheduler_top_rated[cur_border_edge_id];
+}
+
+void create_alias_table_wd_scheduler_new(afl_state_t *afl) {
+
+  u64 *cur_virgin_bit_batch = (u64 *)afl->virgin_bits;
+  u32 map_size_batched = (afl->fsrv.real_map_size + 7) >> 3;
+  u32 *num_of_children = afl->fsrv.num_of_children;
+  u32 *border_edge_parent_first_id = afl->fsrv.border_edge_parent_first_id;
+  u32 *border_edge_child = afl->fsrv.border_edge_child;
+  u8 *virgin_bits = afl->virgin_bits;
+  struct queue_entry ***border_edge_seed_list = afl->fsrv.border_edge_seed_list;
+  u32 *border_edge_seed_list_cnt = afl->fsrv.border_edge_seed_list_cnt;
+  u32 *border_edge_seed_list_capacity = afl->fsrv.border_edge_seed_list_capacity;
+  struct queue_entry **wd_scheduler_top_rated = afl->wd_scheduler_top_rated;
+  u8 shared_mode = afl->wd_scheduler_shared_mode;
+  u64 *spent_time_us = afl->fsrv.spent_time_us;
+  u64 *productive_time_us = afl->fsrv.productive_time_us;
+  u32 border_edge_cnt = 0;
+  u32 nar_border_edge_cnt = 0;
+  u32 max_weight_border_edge_id = 0;
+  u32 max_weight_nar_border_edge_id = 0;
+  double max_weight = -DBL_MAX;
+  double max_weight_nar = -DBL_MAX;
+  double total_weight = 0.0;
+  double nar_total_weight = 0.0;
+  u64 total_frontier_discovery_time = 0;
+#ifdef WD_SCHED_BREAK_TIE_FASTER_SEED
+  u32 min_exec_us_border_edge_id = 0;
+  u64 min_exec_us = UINT64_MAX;
+#endif
+  u8 *cmp_type = afl->fsrv.cmp_type;
+  u32 *added_seeds = afl->fsrv.added_seeds;
+  u32 *border_edge_2_br_dist = afl->fsrv.border_edge_2_br_dist;
+  u8 *size_gradient_checked = afl->fsrv.size_gradient_checked;
+  u8 *br_cov = afl->fsrv.br_cov;
+  u32 strcmp_cnt = 0;
+
+  for (u32 i = 0; i < map_size_batched; i++) {
+    if (likely(cur_virgin_bit_batch[i] == 0xffffffffffffffff))
+      continue;
+
+    u8 *cur_virgin_bit = (u8 *)(cur_virgin_bit_batch + i);
+    for (u32 j = 0; j < 8; j++) {
+      if (cur_virgin_bit[j] == 0xff)
+        continue;
+
+      u32 parent = i * 8 + j;
+
+      u32 cur_num_of_children = num_of_children[parent];
+
+      // AS: only check conditional branches
+      if (cur_num_of_children < 2)
+        continue;
+
+      u32 base_border_edge_id = border_edge_parent_first_id[parent];
+      u8 cmp_type_parent = cmp_type[parent];
+      for (u32 cur_border_edge_id = base_border_edge_id; cur_border_edge_id < base_border_edge_id + cur_num_of_children; cur_border_edge_id++) {
+        u32 child_node = border_edge_child[cur_border_edge_id];
+
+        // AS: Release resources for non-horizon branch seed lists
+        if (is_reached(child_node, virgin_bits)) {
+          if (border_edge_seed_list[cur_border_edge_id]) {
+            ck_free(border_edge_seed_list[cur_border_edge_id]);
+            border_edge_seed_list[cur_border_edge_id] = 0;
+            border_edge_seed_list_cnt[cur_border_edge_id] = 0;
+            border_edge_seed_list_capacity[cur_border_edge_id] = 0;
+          }
+          continue;
+        }
+
+        struct queue_entry *top_seed = top_rated_seed(afl, cur_border_edge_id, parent);
+        if (!top_seed)
+          continue;
+
+        double border_edge_weight = - log(spent_time_us[parent]) - log1p(top_seed->schedule_cnt);
+        if (!shared_mode && cmp_type_parent != NOT_INSTRUMENTED)
+          border_edge_weight += log(productive_time_us[cur_border_edge_id]);
+
+        if (cmp_type_parent == NOT_INSTRUMENTED) {
+          nar_total_weight += border_edge_weight;
+          if (isgreaterequal(border_edge_weight, max_weight_nar)) {
+            max_weight_nar_border_edge_id = cur_border_edge_id;
+            max_weight_nar = border_edge_weight;
+          }
+          nar_border_edge_cnt++;
+        } else if (added_seeds[cur_border_edge_id] < MAX_ADDED_SEEDS) {
+          u32 br_dist_edge_id = border_edge_2_br_dist[cur_border_edge_id];
+          if (!br_cov[br_dist_edge_id] && !size_gradient_checked[br_dist_edge_id]) {
+#ifdef WD_SCHED_BREAK_TIE_FASTER_SEED
+            if (spent_time_us[cur_border_edge_id] == 1) {
+              u64 seed_exec_us = top_seed->exec_us;
+              if (seed_exec_us < min_exec_us) {
+                min_exec_us = seed_exec_us;
+                min_exec_us_border_edge_id = cur_border_edge_id;
+              }
+            }
+#endif
+            if (isgreaterequal(border_edge_weight, max_weight)) {
+              max_weight_border_edge_id = cur_border_edge_id;
+              max_weight = border_edge_weight;
+            }
+          }
+        }
+        border_edge_cnt++;
+        if (cmp_type_parent<=STRSTR && cmp_type_parent>=STRCMP)
+          strcmp_cnt++;
+        total_weight += border_edge_weight;
+        total_frontier_discovery_time += LINE_SEARCH_MIN_MUTANTS * top_seed->exec_us;
+      }
+    }
+  }
+
+  if (!(afl->border_edge_cnt = border_edge_cnt))
+    PFATAL("BUG: no horizon branches traversed.");
+
+  afl->wd_scheduler_shared_mode = total_frontier_discovery_time > MAX_TOTAL_FRONTIER_DISCOVERY_TIME_US;
+
+#ifdef WD_SCHED_BREAK_TIE_FASTER_SEED
+  if (min_exec_us < UINT64_MAX)
+    max_weight_border_edge_id = min_exec_us_border_edge_id;
+#endif
+
+  afl->wd_scheduler_selected_border_edge_idx = max_weight_border_edge_id;
+
+  u8 selected_nar = 0;
+
+  // AS: select a NAR branch with a probability p = nar_border_edge_count / border_edge_count
+  if (rand_next_percent(afl) < (double) nar_border_edge_cnt / border_edge_cnt) {
+    // AS: select a random NAR branch
+    if (border_edge_seed_list_cnt[max_weight_nar_border_edge_id]) {
+      // AS: select a seed at random from the NAR branch's seed_list
+      struct queue_entry *q = get_least_scheduled_seed(
+          border_edge_seed_list[max_weight_nar_border_edge_id],
+          border_edge_seed_list_cnt[max_weight_nar_border_edge_id]);
+
+      if (q) {
+        afl->wd_scheduler_selected_border_edge_idx = max_weight_nar_border_edge_id;
+        wd_scheduler_top_rated[max_weight_nar_border_edge_id] = q;
+        selected_nar = 1;
+      }
+    }
+#ifdef FOX_INTROSPECTION
+    else {
+      printf("BUG: NAR edge has no associated seed list, defaulting to max weight edge.");
+    }
+#endif
+  }
+
+  fprintf(afl->fsrv.wd_scheduler_log_file, "%llu %u %u %f %f %u %f %u %f %u %u %u %llu\n",
+      ((afl->prev_run_time + get_cur_time() - afl->start_time) / 1000),
+      afl->wd_scheduler_selected_border_edge_idx,
+      wd_scheduler_top_rated[afl->wd_scheduler_selected_border_edge_idx]->id,
+      max_weight,
+      max_weight_nar,
+      selected_nar,
+      nar_total_weight,
+      nar_border_edge_cnt,
+      total_weight,
+      border_edge_cnt,
+      strcmp_cnt,
+      shared_mode,
+      total_frontier_discovery_time);
+  fflush(afl->fsrv.wd_scheduler_log_file);
+
+  if (!wd_scheduler_top_rated[afl->wd_scheduler_selected_border_edge_idx])
+    FATAL("BUG: the selected horizon branch does not have an associated seed.");
+}
+
+static inline void add_capacity(struct queue_entry ***seed_list_p, u32 *capacity_p) {
+  u32 new_capacity = *capacity_p + 1024;
+  struct queue_entry** seed_list = *seed_list_p;
+  struct queue_entry** new_seed_list = ck_alloc(new_capacity * sizeof(struct queue_entry*));
+  if (seed_list) {
+    for (u32 seed_idx=0; seed_idx < *capacity_p; seed_idx++)
+      new_seed_list[seed_idx] = seed_list[seed_idx];
+    ck_free(seed_list);
+  }
+  *seed_list_p = new_seed_list;
+  *capacity_p = new_capacity;
+}
+
+static inline void add_to_seed_list(afl_state_t *afl, u32 cur_border_edge_id, struct queue_entry *q) {
+  struct queue_entry ***seed_list_p = afl->fsrv.border_edge_seed_list + cur_border_edge_id;
+  u32 *cur_seed_cnt_p = afl->fsrv.border_edge_seed_list_cnt + cur_border_edge_id;
+  u32 *capacity_p = afl->fsrv.border_edge_seed_list_capacity + cur_border_edge_id;
+
+  if (*cur_seed_cnt_p >= *capacity_p)
+    add_capacity(seed_list_p, capacity_p);
+
+  (*seed_list_p)[(*cur_seed_cnt_p)++] = q;
+}
+
+/* There are total two cases when update_bitmap_score_wd_scheudler is called()
+ * 1. perform_dry_run()->calibrate_case_dry_run()->update_bitmap_score_wd_scheduler_dry_run()
+ *    In this case, all the testcases already exist in the seed queue, hence save_if_interesting() would not be invoked. And as a result, the logic to associate each seed to the top_rated list is not called. So we add these logic in this update_bitmap_score_wd_scheduler_dry_run()
+ * 2. save_if_interesting()->calibrate_case()->update_bitmap_score_wd_scheduler()
+ */
+void update_bitmap_score_wd_scheduler(afl_state_t *afl, struct queue_entry* q) {
+  /* free child_list if not null */
+  if (q->border_edge)
+    ck_free(q->border_edge);
+
+  if (q->local_br_dist)
+    ck_free(q->local_br_dist);
+
+  u64 *cur_trace_bit_batch = (u64 *)afl->fsrv.trace_bits;
+  u32 map_size_batched = ((afl->fsrv.real_map_size + 7) >> 3);
+  u32 *num_of_children = afl->fsrv.num_of_children;
+  u32 *border_edge_parent_first_id = afl->fsrv.border_edge_parent_first_id;
+  u32 *border_edge_child = afl->fsrv.border_edge_child;
+  u8 *virgin_bits = afl->virgin_bits;
+  u8 *cmp_type = afl->fsrv.cmp_type;
+
+  // AS: Check a sparse array faster by batching eight u8 ptrs as one u64 ptr.
+  for (u32 i = 0; i < map_size_batched; i++) {
+    if (likely(!cur_trace_bit_batch[i]))
+      continue;
+
+    u8 *cur_trace_bit = (u8 *)(cur_trace_bit_batch + i);
+
+    for (u32 j = 0; j < 8; j++){
+      if (!cur_trace_bit[j])
+        continue;
+
+      u32 parent = i * 8 + j;
+
+      u32 cur_num_of_children = num_of_children[parent];
+
+      // AS: only check conditional branches
+      if (cur_num_of_children < 2)
+        continue;
+
+      u32 base_border_edge_id = border_edge_parent_first_id[parent];
+      for (u32 cur_border_edge_id = base_border_edge_id; cur_border_edge_id < base_border_edge_id + cur_num_of_children; cur_border_edge_id++) {
+        u32 child_node = border_edge_child[cur_border_edge_id];
+        if (is_reached(child_node, virgin_bits))
+          continue;
+
+        if (cmp_type[parent] == NOT_INSTRUMENTED) {
+          add_to_seed_list(afl, cur_border_edge_id, q);
+          continue;
+        }
+      }
+    }
+  }
 }
 
 /* create the alias table that allows weighted random selection - expensive */
@@ -804,6 +1149,7 @@ void update_bitmap_score(afl_state_t *afl, struct queue_entry *q) {
 
 void cull_queue(afl_state_t *afl) {
 
+  if (afl->schedule == WD_SCHEDULER) return;
   if (likely(!afl->score_changed || afl->non_instrumented_mode)) { return; }
 
   u32 len = (afl->fsrv.map_size >> 3);
