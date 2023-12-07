@@ -383,12 +383,6 @@ static inline void add_to_seed_list(afl_state_t *afl, u32 cur_border_edge_id, st
  * 2. save_if_interesting()->calibrate_case()->update_bitmap_score_wd_scheduler()
  */
 void update_bitmap_score_wd_scheduler(afl_state_t *afl, struct queue_entry* q) {
-  /* free child_list if not null */
-  if (q->border_edge)
-    ck_free(q->border_edge);
-
-  if (q->local_br_dist)
-    ck_free(q->local_br_dist);
 
   u64 *cur_trace_bit_batch = (u64 *)afl->fsrv.trace_bits;
   u32 map_size_batched = ((afl->fsrv.real_map_size + 7) >> 3);
