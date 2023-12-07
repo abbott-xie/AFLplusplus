@@ -2777,24 +2777,30 @@ int main(int argc, char **argv_orig, char **envp) {
     do {
 
       if (likely(!afl->old_seed_selection)) {
+        if (afl->schedule == WD_SCHEDULER) {
+          // reinit_table: after compute_math_cache(), hit cnt change
+          // new queued_items: number of border edges change
+          create_alias_table_wd_scheduler_new(afl);
+          afl->current_entry = select_next_queue_entry_wd_scheduler_new(afl);
+        } else {
+          if (unlikely(prev_queued_items < afl->queued_items ||
+                      afl->reinit_table)) {
 
-        if (unlikely(prev_queued_items < afl->queued_items ||
-                     afl->reinit_table)) {
+            // we have new queue entries since the last run, recreate alias table
+            prev_queued_items = afl->queued_items;
+            create_alias_table(afl);
 
-          // we have new queue entries since the last run, recreate alias table
-          prev_queued_items = afl->queued_items;
-          create_alias_table(afl);
+          }
+
+          do {
+
+            afl->current_entry = select_next_queue_entry(afl);
+
+          } while (unlikely(afl->current_entry >= afl->queued_items));
+
+          afl->queue_cur = afl->queue_buf[afl->current_entry];
 
         }
-
-        do {
-
-          afl->current_entry = select_next_queue_entry(afl);
-
-        } while (unlikely(afl->current_entry >= afl->queued_items));
-
-        afl->queue_cur = afl->queue_buf[afl->current_entry];
-
       }
 
       skipped_fuzz = fuzz_one(afl);
