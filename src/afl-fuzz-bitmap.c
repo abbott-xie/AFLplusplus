@@ -186,6 +186,397 @@ void init_count_class16(void) {
 
 }
 
+static inline s64 icmp_single_br_dist_le(s16 *br_dist_buf, s16 sw_len, bool *has_overflown) {
+  s64 total = 0;
+  s64 order = 1;
+  for (s16 i = 0; i < sw_len; i++) {
+    // Check for overflow
+    // total += br_dist_buf[i] * order;
+    if (__builtin_add_overflow(total, br_dist_buf[i] * order, &total)) {
+#ifdef FOX_INTROSPECTION
+        fprintf(afl->fox_debug_file, "\nOverflow occurred skipping");
+#endif
+        *has_overflown = true;
+        return -1;
+    }
+    order <<= 8;
+  }
+
+ void increment_hit_bits(afl_state_t *afl) {
+
+  u64 *cur_trace_bit_batch = (u64 *)afl->fsrv.trace_bits;
+  u32 map_size_batched = (afl->fsrv.real_map_size + 7) >> 3;
+  u32 winning_cnt = 0;
+  u32 *num_of_children = afl->fsrv.num_of_children;
+  u32 *border_edge_parent_first_id = afl->fsrv.border_edge_parent_first_id;
+  u32 *border_edge_2_br_dist = afl->fsrv.border_edge_2_br_dist;
+  u32 *border_edge_2_str_len = afl->fsrv.border_edge_2_str_len;
+  u32 *border_edge_child = afl->fsrv.border_edge_child;
+  u8 *virgin_bits = afl->virgin_bits;
+  u8 *trace_bits = afl->fsrv.trace_bits;
+  s64 *global_br_bits = afl->fsrv.global_br_bits;
+  s64 *br_bits = afl->fsrv.br_bits;
+  u8 *br_cov = afl->fsrv.br_cov;
+  u32 *winning_list = afl->fsrv.winning_list;
+  u32 *br_inc_winner = afl->fsrv.br_inc_winner;
+  u32 *br_dec_winner = afl->fsrv.br_dec_winner;
+  u8 *cmp_type = afl->fsrv.cmp_type;
+  s64 *local_br_bits = afl->fsrv.local_br_bits;
+  u8 *local_bits = afl->fsrv.local_bits;
+  u32 cur_mutant_id = afl->stage_cur;
+  u32 cur_num_diff = afl->num_diff;
+  s64 *br_inc = afl->fsrv.br_inc;
+  s64 *br_dec = afl->fsrv.br_dec;
+  u32 br_inc_cnt = afl->fsrv.br_inc_cnt;
+  u32 br_dec_cnt = afl->fsrv.br_dec_cnt;
+  u32 *br_inc_id = afl->fsrv.br_inc_id;
+  u32 *br_inc_dist_id = afl->fsrv.br_inc_dist_id;
+  u32 *br_dec_id = afl->fsrv.br_dec_id;
+  u32 *br_dec_dist_id = afl->fsrv.br_dec_dist_id;
+  u32 *mutant_ref_cnt = &(afl->fsrv.mutant_ref_cnt);
+  float *subgrad_inc = afl->fsrv.subgrad_inc;
+  float *subgrad_dec = afl->fsrv.subgrad_dec;
+  u8 br_trace_setting = afl->fsrv.br_trace_setting;
+  u64 *spent_time_us = afl->fsrv.spent_time_us;
+  u64 *productive_time_us = afl->fsrv.productive_time_us;
+  struct queue_entry **wd_scheduler_top_rated = afl->wd_scheduler_top_rated;
+  s64 diff_l1_norm = afl->diff_l1_norm;
+  u32 *handler_candidate_id = afl->fsrv.handler_candidate_id;
+  u32 *handler_candidate_dist_id = afl->fsrv.handler_candidate_dist_id;
+  u32 handler_cand_cnt = afl->fsrv.handler_cand_cnt;
+  u8 *icmp_default_line_search = afl->fsrv.icmp_default_line_search;
+  u8* size_gradient_checked = afl->fsrv.size_gradient_checked;
+  u32 *added_seeds = afl->fsrv.added_seeds;
+  struct queue_entry *queue_cur = afl->queue_cur;
+  u64 this_exec_us = queue_cur ? queue_cur->exec_us : 1;
+  u32 fox_br_candidate_capacity = afl->fsrv.fox_br_candidate_capacity;
+  u8 handler_ok = cur_num_diff * this_exec_us < MAX_HANDLER_TIME_US && cur_num_diff < MAX_HANDLER_NUM_DIFF;
+  u8 not_dry_run = !afl->wd_scheduler_dry_run;
+
+  // Flag to check if the existing mutant decrease the global branch
+  // distance for at least one branch while staying with estimated size boudns
+  bool has_decreased_global_br = false;
+  bool has_overflown = false;
+
+  // AS: Check a sparse array faster by batching eight u8 ptrs as one u64 ptr.
+  for (u32 i = 0; i < map_size_batched; i++) {
+    if (likely(!cur_trace_bit_batch[i]))
+      continue;
+
+    u8 *cur_trace_bit = (u8 *)(cur_trace_bit_batch + i);
+
+    for (u32 j = 0; j < 8; j++) {
+      if (!cur_trace_bit[j])
+        continue;
+
+      u32 parent = i * 8 + j;
+
+      u32 cur_num_of_children = num_of_children[parent];
+      u8 cmp_type_parent = cmp_type[parent];
+      spent_time_us[parent] += this_exec_us;
+
+      // AS: only check conditional and arithmetic branches
+      if (cur_num_of_children < 2 || cmp_type_parent == NOT_INSTRUMENTED) {
+        continue;
+      }
+
+      u32 base_border_edge_id = border_edge_parent_first_id[parent];
+
+      // Handler branch case:
+      u8 branch_flip = 0;
+      u8 default_line_search_fallthrough = 0;
+
+      u8 handler = is_handler(cmp_type_parent);
+
+      if (handler && handler_ok)
+        continue;
+
+      if (handler) {
+        for (u32 cur_border_edge_id = base_border_edge_id; cur_border_edge_id < base_border_edge_id + cur_num_of_children; cur_border_edge_id++) {
+          u32 child_node = border_edge_child[cur_border_edge_id];
+          u32 base_br_dist_edge_id = border_edge_2_br_dist[cur_border_edge_id];
+
+          if (br_cov[base_br_dist_edge_id])
+            continue;
+
+          if (!is_horizon_branch(child_node, virgin_bits, trace_bits)) {
+            if (++branch_flip == 2)
+              br_cov[base_br_dist_edge_id] = 1;
+            continue;
+          }
+
+          if (icmp_default_line_search[base_br_dist_edge_id]) {
+            default_line_search_fallthrough = 1;
+            continue;
+          }
+
+          u32 const_len = border_edge_2_str_len[cur_border_edge_id];
+
+          // array to store seed's branch distance
+          s16 *this_local_br_bits = (s16 *)(local_br_bits + base_br_dist_edge_id);
+          // array to store current' mutant's branch distance
+          s16 *this_br_bits = (s16 *)(br_bits + base_br_dist_edge_id);
+
+          u8 has_var_len = cmp_type_parent == STRCMP || cmp_type_parent == STRNCMP || cmp_type_parent == STRSTR;
+
+          // current mutant's var length
+          s16 mutant_var_len = has_var_len ? this_br_bits[const_len]: (s16) const_len;
+
+          s64 total_br_dist_abs = 0;
+          if (cmp_type_parent == ICMP_EQ || cmp_type_parent == ICMP_NE) {
+            has_overflown = false;
+            total_br_dist_abs = llabs(icmp_single_br_dist_le(this_br_bits, const_len, &has_overflown));
+            if (has_overflown) {
+                continue;
+            }
+          } else {
+            // number of matched bytes, large is better
+            for (u32 i = 0; i < const_len; i++)
+              total_br_dist_abs += (!this_br_bits[i]);
+          }
+
+          // first time hit
+          if (!wd_scheduler_top_rated[cur_border_edge_id]) {
+            productive_time_us[cur_border_edge_id] += this_exec_us;
+            added_seeds[cur_border_edge_id]++;
+            global_br_bits[base_br_dist_edge_id] = total_br_dist_abs;
+            winning_list[winning_cnt] = cur_border_edge_id;
+            winning_cnt++;
+            has_decreased_global_br = true;
+            continue;
+          }
+
+          // a large number is better
+          if (total_br_dist_abs > global_br_bits[base_br_dist_edge_id] && added_seeds[cur_border_edge_id] < MAX_ADDED_SEEDS) {
+            if (not_dry_run)
+              added_seeds[cur_border_edge_id]++;
+            productive_time_us[cur_border_edge_id] += this_exec_us;
+            global_br_bits[base_br_dist_edge_id] = total_br_dist_abs;
+            winning_list[winning_cnt] = cur_border_edge_id;
+            winning_cnt++;
+            has_decreased_global_br = true;
+          }
+
+          // if tracing seed input, save seed's (local) branch distance
+          if (br_trace_setting == BR_TRACE_SEED_INPUT) {
+            if (cmp_type_parent == ICMP_EQ || cmp_type_parent == ICMP_NE)
+              local_bits[cur_border_edge_id] = 2; // fallthrough need update local_bits
+            else
+              local_bits[cur_border_edge_id] = 1;
+            for (u32 i = 0; i < const_len; i++)
+              this_local_br_bits[i] = this_br_bits[i];
+            if (has_var_len)
+              this_local_br_bits[const_len] = mutant_var_len;
+          }
+
+          // AS: only compute when tracing local search mutations and when the mutant hits the same horizon branch as the seed and when the mutant differs from the seed
+          if (br_trace_setting != BR_TRACE_LOCAL_SEARCH || !local_bits[cur_border_edge_id] || !cur_num_diff)
+            continue;
+
+          s16 seed_var_len = has_var_len ? this_local_br_bits[const_len] : (s16) const_len;
+          // FLAG: promsing mutant must have at least one byte diff
+          s64 br_diff = 0;
+          u32 min_len = (u32) s16_min3(seed_var_len, mutant_var_len, (s16) const_len);
+          for (u32 i = 0; i < min_len; i++)
+            br_diff += (this_br_bits[i] != this_local_br_bits[i]);
+
+          if (!br_diff)
+            continue;
+
+          if (unlikely(handler_cand_cnt >= fox_br_candidate_capacity)) { PFATAL("BUG: number of handler candidates exceeds capacity"); }
+          handler_candidate_id[handler_cand_cnt] = cur_border_edge_id;
+          handler_candidate_dist_id[handler_cand_cnt++] = base_br_dist_edge_id;
+          br_inc_winner[base_br_dist_edge_id] = cur_mutant_id;
+          (*mutant_ref_cnt)++;
+        }
+
+        if (!default_line_search_fallthrough)
+          continue;
+      }
+
+      // binary branch case:
+      branch_flip = 0;
+      for (u32 cur_border_edge_id = base_border_edge_id; cur_border_edge_id < base_border_edge_id + cur_num_of_children; cur_border_edge_id++) {
+        u32 child_node = border_edge_child[cur_border_edge_id];
+        u32 br_dist_edge_id = border_edge_2_br_dist[cur_border_edge_id];
+
+        if (br_cov[br_dist_edge_id])
+          continue;
+
+        if (!is_horizon_branch(child_node, virgin_bits, trace_bits)) {
+          if (++branch_flip == 2)
+            br_cov[br_dist_edge_id] = 1;
+          continue;
+        }
+
+        s64 br_dist = 0;
+        if (cmp_type_parent == ICMP_EQ || cmp_type_parent == ICMP_NE) {
+          u32 sw_len = border_edge_2_str_len[cur_border_edge_id];
+          s16 *this_br_bits = (s16 *)(br_bits + br_dist_edge_id);
+          has_overflown = false;
+          br_dist = icmp_single_br_dist_le(this_br_bits, sw_len, &has_overflown);
+          if (has_overflown)
+              continue;
+        } else {
+          br_dist = br_bits[br_dist_edge_id];
+        }
+
+        // AS: if tracing seed input, save seed's (local) branch distance
+        if (br_trace_setting == BR_TRACE_SEED_INPUT) {
+          local_bits[cur_border_edge_id] = 1;
+          local_br_bits[br_dist_edge_id] = br_dist;
+        }
+
+        s64 br_dist_abs = llabs(br_dist);
+
+        // first time hit
+        if (!wd_scheduler_top_rated[cur_border_edge_id]) {
+          productive_time_us[cur_border_edge_id] += this_exec_us;
+          added_seeds[cur_border_edge_id]++;
+          global_br_bits[br_dist_edge_id] = br_dist_abs;
+          winning_list[winning_cnt] = cur_border_edge_id;
+          winning_cnt++;
+          has_decreased_global_br = true;
+          continue;
+        }
+
+        s64 global_br_dist_abs = global_br_bits[br_dist_edge_id];
+
+        if (handler && global_br_dist_abs == 0)
+          continue;
+
+        if (br_dist_abs < global_br_dist_abs && added_seeds[cur_border_edge_id] < MAX_ADDED_SEEDS) {
+
+          // Calculate gradient with respect to size
+          u32 size_seed = wd_scheduler_top_rated[cur_border_edge_id]->len;
+          u32 size_mut = afl->mut_len;
+          if (!has_decreased_global_br && size_mut > size_seed) {
+
+            if (size_gradient_checked[br_dist_edge_id])
+              continue;
+
+            s64 num = (br_dist_abs - global_br_dist_abs); // y2 - y1
+            s64 size_diff = (s64) size_mut - (s64) size_seed; // x2 - x1
+            double grad_size = ((double)num / (double)size_diff); // m
+            double intercept = br_dist_abs - ((grad_size) * ((double)size_mut)); // c
+            double expected_size = - (intercept / grad_size); // x
+            if (expected_size > MAX_STEP_FILE) {
+                size_gradient_checked[br_dist_edge_id] = 1;
+#ifdef FOX_INTROSPECTION
+	            fprintf(afl->fsrv.fox_debug_file, "\nSkipping Cmp type:%d Num:%ld Size mut:%d Size seed:%d Grad:%f Intercept:%f Step_needed:%f Br_new:%ld Br_old:%ld", cmp_type_parent, num, size_mut, size_seed, grad_size, intercept, expected_size, br_dist_abs, global_br_dist_abs);
+#endif
+	            continue;
+            }
+#ifdef FOX_INTROSPECTION
+            else {
+	            fprintf(afl->fsrv.fox_debug_file,
+                        "\nPreserving Cmp type:%d Border edge:%u Parent:%d "
+                        "Num:%ld Size mut:%d Size seed:%d "
+                        "Grad:%f Intercept:%f Step_needed:%f Br_new:%ld Br_old:%ld",
+                        cmp_type_parent, cur_border_edge_id, parent,
+                        num, size_mut, size_seed,
+                        grad_size, intercept, expected_size, br_dist_abs, global_br_dist_abs);
+            }
+#endif
+          }
+          has_decreased_global_br = true;
+          productive_time_us[cur_border_edge_id] += this_exec_us;
+          if (not_dry_run)
+            added_seeds[cur_border_edge_id]++;
+          global_br_bits[br_dist_edge_id] = br_dist_abs;
+          winning_list[winning_cnt] = cur_border_edge_id;
+          winning_cnt++;
+        }
+
+        // AS: only compute when tracing local search mutations and when the mutant hits the same horizon branch as the seed and when the mutant differs from the seed
+        if (br_trace_setting != BR_TRACE_LOCAL_SEARCH || !local_bits[cur_border_edge_id] || !cur_num_diff)
+          continue;
+
+        if (unlikely(local_bits[cur_border_edge_id] == 2)) { // fallthrough need update local bits
+#ifdef FOX_INTROSPECTION
+          if (unlikely(cmp_type_parent != ICMP_EQ && cmp_type_parent != ICMP_NE))
+            printf("BUG: local_bits == 2 but cmp_type not ICMP_EQ or ICMP_NE\n");
+#endif
+          u32 sw_len = border_edge_2_str_len[cur_border_edge_id];
+          has_overflown = false;
+          local_br_bits[br_dist_edge_id] = icmp_single_br_dist_le((s16 *)(local_br_bits + br_dist_edge_id), sw_len, &has_overflown);
+          if (has_overflown)
+              continue;
+          local_bits[cur_border_edge_id] = 1;
+        }
+        s64 local_br_dist = local_br_bits[br_dist_edge_id];
+        s64 br_diff = br_dist - local_br_dist;
+        float cur_subgrad = ((float)br_diff) / ((float)diff_l1_norm);
+
+        if (!br_diff)
+          continue;
+
+        if (br_diff > 0) {
+          u8 first_time_inc = !br_inc[br_dist_edge_id];
+
+          if (first_time_inc) {
+            if (unlikely(br_inc_cnt >= fox_br_candidate_capacity)) { PFATAL("BUG: number of br inc candidates exceeds capacity"); }
+            br_inc_id[br_inc_cnt] = cur_border_edge_id;
+            br_inc_dist_id[br_inc_cnt] = br_dist_edge_id;
+            br_inc_cnt++;
+          }
+
+          if (first_time_inc || cur_subgrad > subgrad_inc[cur_border_edge_id]) {
+            (*mutant_ref_cnt)++;
+            br_inc[br_dist_edge_id] = br_diff;
+            br_inc_winner[br_dist_edge_id] = cur_mutant_id;
+            subgrad_inc[cur_border_edge_id] = cur_subgrad;
+          }
+        } else {
+          u8 first_time_dec = !br_dec[br_dist_edge_id];
+
+          if (first_time_dec) {
+            if (unlikely(br_dec_cnt >= fox_br_candidate_capacity)) { PFATAL("BUG: number of br inc candidates exceeds capacity"); }
+            br_dec_id[br_dec_cnt] = cur_border_edge_id;
+            br_dec_dist_id[br_dec_cnt] = br_dist_edge_id;
+            br_dec_cnt++;
+          }
+
+          if (first_time_dec || cur_subgrad < subgrad_dec[cur_border_edge_id]) {
+            (*mutant_ref_cnt)++;
+            br_dec[br_dist_edge_id] = br_diff;
+            br_dec_winner[br_dist_edge_id] = cur_mutant_id;
+            subgrad_dec[cur_border_edge_id] = cur_subgrad;
+          }
+        }
+      }
+    }
+  }
+
+  afl->fsrv.winning_cnt = winning_cnt;
+  afl->fsrv.br_inc_cnt = br_inc_cnt;
+  afl->fsrv.br_dec_cnt = br_dec_cnt;
+  afl->fsrv.handler_cand_cnt = handler_cand_cnt;
+}
+
+inline void increment_hit_bits_timeout(afl_state_t *afl) {
+
+  u64 *cur_trace_bit_batch = (u64 *)afl->fsrv.trace_bits;
+  u32 map_size_batched = (afl->fsrv.real_map_size + 7) >> 3;
+  u64 this_exec_us = afl->queue_cur ? afl->queue_cur->exec_us : 1;
+
+  // AS: Check a sparse array faster by batching eight u8 ptrs as one u64 ptr.
+  for (u32 i = 0; i < map_size_batched; i++) {
+    if (likely(!cur_trace_bit_batch[i]))
+      continue;
+
+    u8 *cur_trace_bit = (u8 *)(cur_trace_bit_batch + i);
+
+    for (u32 j = 0; j < 8; j++) {
+      if (!cur_trace_bit[j])
+        continue;
+
+      u32 parent = i * 8 + j;
+      afl->fsrv.spent_time_us[parent] += this_exec_us;
+    }
+  }
+}
+
 /* Import coverage processing routines. */
 
 #ifdef WORD_SIZE_64
@@ -248,6 +639,7 @@ inline u8 has_new_bits(afl_state_t *afl, u8 *virgin_map) {
  * return has_new_bits(). */
 
 inline u8 has_new_bits_unclassified(afl_state_t *afl, u8 *virgin_map) {
+  afl->fsrv.skip_classify_count = 1;
 
   /* Handle the hot path first: no new coverage */
   u8 *end = afl->fsrv.trace_bits + afl->fsrv.map_size;
@@ -264,6 +656,7 @@ inline u8 has_new_bits_unclassified(afl_state_t *afl, u8 *virgin_map) {
 
 #endif                                                     /* ^WORD_SIZE_64 */
   classify_counts(&afl->fsrv);
+  afl->fsrv.skip_classify_count = 0;
   return has_new_bits(afl, virgin_map);
 
 }
@@ -456,6 +849,7 @@ u8 __attribute__((hot))
 save_if_interesting(afl_state_t *afl, void *mem, u32 len, u8 fault) {
 
   if (unlikely(len == 0)) { return 0; }
+  afl->mut_len = len;
 
   if (unlikely(fault == FSRV_RUN_TMOUT && afl->afl_env.afl_ignore_timeouts)) {
 
@@ -489,6 +883,8 @@ save_if_interesting(afl_state_t *afl, void *mem, u32 len, u8 fault) {
   }
 
   if (likely(fault == afl->crash_mode)) {
+    if (afl->schedule == WD_SCHEDULER)
+      increment_hit_bits(afl);
 
     /* Keep only if there are new bits in the map, add to queue for
        future fuzzing, etc. */
@@ -500,6 +896,17 @@ save_if_interesting(afl_state_t *afl, void *mem, u32 len, u8 fault) {
     } else {
 
       new_bits = has_new_bits_unclassified(afl, afl->virgin_bits);
+
+    if (afl->schedule == WD_SCHEDULER) {
+      if (!new_bits && afl->fsrv.winning_cnt) {
+        if (afl->fsrv.skip_classify_count) {
+          classify_counts(&afl->fsrv);
+          has_new_bits(afl, afl->virgin_bits);
+        }
+        new_bits = 1;
+        afl->queued_val_items++;
+      }
+    }
 
       if (unlikely(new_bits)) { classified = 1; }
 
@@ -513,6 +920,8 @@ save_if_interesting(afl_state_t *afl, void *mem, u32 len, u8 fault) {
     }
 
   save_to_queue:
+    if (new_bits == 2)
+      afl->queued_new_items++;
 
 #ifndef SIMPLE_FILES
 
@@ -628,6 +1037,9 @@ save_if_interesting(afl_state_t *afl, void *mem, u32 len, u8 fault) {
     }
   }
 
+  if (afl->schedule == WD_SCHEDULER && fault)
+    has_new_bits(afl, afl->virgin_bits);
+
   switch (fault) {
 
     case FSRV_RUN_TMOUT:
@@ -638,6 +1050,8 @@ save_if_interesting(afl_state_t *afl, void *mem, u32 len, u8 fault) {
          mode, we just keep everything. */
 
       ++afl->total_tmouts;
+      if (afl->schedule == WD_SCHEDULER)
+        increment_hit_bits_timeout(afl);
 
       if (afl->saved_hangs >= KEEP_UNIQUE_HANG) { return keeping; }
 
@@ -767,6 +1181,9 @@ save_if_interesting(afl_state_t *afl, void *mem, u32 len, u8 fault) {
       if (afl->saved_crashes >= KEEP_UNIQUE_CRASH) { return keeping; }
 
       if (likely(!afl->non_instrumented_mode)) {
+
+        if (afl->schedule == WD_SCHEDULER)
+          increment_hit_bits_timeout(afl);
 
         if (unlikely(!classified)) {
 
