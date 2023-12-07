@@ -201,6 +201,8 @@ static inline s64 icmp_single_br_dist_le(s16 *br_dist_buf, s16 sw_len, bool *has
     }
     order <<= 8;
   }
+  return total;
+}
 
  void increment_hit_bits(afl_state_t *afl) {
 

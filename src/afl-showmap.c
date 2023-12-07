@@ -257,7 +257,8 @@ static void analyze_results(afl_forkserver_t *fsrv) {
 
 static u32 write_results_to_file(afl_forkserver_t *fsrv, u8 *outfile) {
 
-  s32 fd, cov_fd;
+  s32 fd;
+  s32 cov_fd = 0;
   u32 i, ret = 0;
 
   u8 cco = !!getenv("AFL_CMIN_CRASHES_ONLY"),
@@ -318,7 +319,7 @@ static u32 write_results_to_file(afl_forkserver_t *fsrv, u8 *outfile) {
     close(fd);
 
     ck_write(cov_fd, fsrv->br_bits, map_size*8, "/dev/shm/afl_showmap_br_map");
-    close(fd);
+    close(cov_fd);
 
   } else {
 

@@ -1197,8 +1197,8 @@ u8 *describe_op(afl_state_t *, u8, size_t);
 u8 save_if_interesting(afl_state_t *, void *, u32, u8);
 u8 has_new_bits(afl_state_t *, u8 *);
 u8 has_new_bits_unclassified(afl_state_t *, u8 *);
-u8 increment_hit_bits(afl_state_t *);
-u8 increment_hit_bits_timeout(afl_state_t *);
+void increment_hit_bits(afl_state_t *);
+void increment_hit_bits_timeout(afl_state_t *);
 #ifndef AFL_SHOWMAP
 void classify_counts(afl_forkserver_t *);
 #endif
