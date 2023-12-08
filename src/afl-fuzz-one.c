@@ -4149,8 +4149,7 @@ handler_fuzz_failure:
 
 retry_splicing:
 
-  u32 splice_cycles = afl->schedule == WD_SCHEDULER ? SPLICE_CYCLES_WD_SCHEDULER : SPLICE_CYCLES;
-  if (afl->use_splicing && splice_cycle++ < splice_cycles &&
+  if (afl->use_splicing && splice_cycle++ < (afl->schedule == WD_SCHEDULER ? SPLICE_CYCLES_WD_SCHEDULER : SPLICE_CYCLES) &&
       afl->ready_for_splicing_count > 1 && afl->queue_cur->len >= 4) {
 
     struct queue_entry *target;

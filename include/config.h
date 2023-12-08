@@ -245,7 +245,7 @@
    and afl-fuzz-state.c have to be changed as well! */
 
 #define MAX_FILE (1 * 1024 * 1024L)
-#define MAX_STEP_FILE (10000.0d)
+#define MAX_STEP_FILE (10000.0f)
 
 /* The same, for the test case minimizer: */
 
