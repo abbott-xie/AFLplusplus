@@ -1064,7 +1064,7 @@ void show_stats_normal(afl_state_t *afl) {
 
   SAYF(bV bSTOP "                   steps : " cRST "%-10s " bSTG bV bSTOP
                 "                  steps : " cRST "%-11s" bSTG bV "\n",
-      u_stringify_int(IB(0), afl->line_stats.step), u_stringify_int(IB(1), (afl->stage_max + 1) % (LINE_SEARCH_MIN_MUTANTS + 1)));
+      u_stringify_int(IB(0), afl->line_stats.step), u_stringify_int(IB(1), (afl->stage_cur + 1) % (LINE_SEARCH_MIN_MUTANTS + 1)));
 
   /* Provide some CPU utilization stats. */
 
