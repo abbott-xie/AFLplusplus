@@ -381,7 +381,7 @@ void update_bitmap_score_wd_scheduler(afl_state_t *afl, struct queue_entry* q) {
   u8 *virgin_bits = afl->virgin_bits;
   u8 *cmp_type = afl->fsrv.cmp_type;
 
-  // AS: Check a sparse array faster by batching eight u8 ptrs as one u64 ptr.
+  // Check a sparse array faster by batching eight u8 ptrs as one u64 ptr.
   for (u32 i = 0; i < map_size_batched; i++) {
     if (likely(!cur_trace_bit_batch[i]))
       continue;
@@ -396,21 +396,15 @@ void update_bitmap_score_wd_scheduler(afl_state_t *afl, struct queue_entry* q) {
 
       u32 cur_num_of_children = num_of_children[parent];
 
-      // AS: only check conditional branches
-      if (cur_num_of_children < 2)
+      if (cur_num_of_children < 2 || cmp_type[parent] != NOT_INSTRUMENTED)
         continue;
 
-      u32 cmp_type_parent = cmp_type[parent];
       u32 base_border_edge_id = border_edge_parent_first_id[parent];
       for (u32 cur_border_edge_id = base_border_edge_id; cur_border_edge_id < base_border_edge_id + cur_num_of_children; cur_border_edge_id++) {
         u32 child_node = border_edge_child[cur_border_edge_id];
         if (was_reached(child_node, virgin_bits))
           continue;
-
-        if (cmp_type_parent == NOT_INSTRUMENTED) {
-          add_to_seed_list(afl, cur_border_edge_id, q);
-          continue;
-        }
+        add_to_seed_list(afl, cur_border_edge_id, q);
       }
     }
   }
