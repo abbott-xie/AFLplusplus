@@ -2235,8 +2235,10 @@ int main(int argc, char **argv_orig, char **envp) {
     afl->fsrv.border_edge_seed_list_capacity = (u32 *) ck_alloc(sizeof(u32) * afl->fox_total_border_edge_cnt);
     afl->wd_scheduler_top_rated = (struct queue_entry **) ck_alloc(sizeof(struct queue_entry *) * afl->fox_total_border_edge_cnt);
 
-    afl->fsrv.fox_br_candidate_capacity = 5120;
-    afl->fsrv.fox_mutant_buf_capacity = 10240;
+    afl->fsrv.winning_capacity = WINNING_CAPACITY;
+    afl->fsrv.fox_br_candidate_capacity = FOX_BR_CANDIDATE_CAPACITY;
+    afl->fsrv.fox_mutant_buf_capacity = FOX_MUTANT_BUF_CAPACITY;
+    afl->fsrv.winning_list = (u32 *) ck_alloc(sizeof(u32) * afl->fsrv.winning_capacity);
     afl->fsrv.handler_candidate_id = (u32 *) ck_alloc(sizeof(u32) * afl->fsrv.fox_br_candidate_capacity);
     afl->fsrv.handler_candidate_dist_id = (u32 *) ck_alloc(sizeof(u32) * afl->fsrv.fox_br_candidate_capacity);
     afl->fsrv.br_inc_id = (u32 *) ck_alloc(sizeof(u32) * afl->fsrv.fox_br_candidate_capacity);
@@ -2778,8 +2780,6 @@ int main(int argc, char **argv_orig, char **envp) {
 
       if (likely(!afl->old_seed_selection)) {
         if (afl->schedule == WD_SCHEDULER) {
-          // reinit_table: after compute_math_cache(), hit cnt change
-          // new queued_items: number of border edges change
           create_alias_table_wd_scheduler(afl);
           afl->current_entry = select_next_queue_entry_wd_scheduler(afl);
         } else {
@@ -2797,10 +2797,9 @@ int main(int argc, char **argv_orig, char **envp) {
             afl->current_entry = select_next_queue_entry(afl);
 
           } while (unlikely(afl->current_entry >= afl->queued_items));
-
+        }
           afl->queue_cur = afl->queue_buf[afl->current_entry];
 
-        }
       }
 
       skipped_fuzz = fuzz_one(afl);

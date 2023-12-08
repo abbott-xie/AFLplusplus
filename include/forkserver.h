@@ -108,6 +108,8 @@ typedef struct afl_forkserver {
   u8 *trace_bits;                       /* SHM with instrumentation bitmap  */
   u32 *winning_list;                    /* List of line search winners      */
   u32 winning_cnt;                      /* Count of line search winners     */
+  u32 winner_cnt;                       /* Count of line search winners for display stats */
+  u32 winning_capacity;                 /* Capacity of line search winners  */
   u8 skip_classify_count;               /* Skip classify count              */
   u8 br_trace_setting;                  /* Branch trace setting             */
   u32 *br_inc_winner;                   /* Branch increment winner array    */

@@ -252,7 +252,8 @@ static inline s64 icmp_single_br_dist_le(s16 *br_dist_buf, s16 sw_len, bool *has
   struct queue_entry *queue_cur = afl->queue_cur;
   u64 this_exec_us = queue_cur ? queue_cur->exec_us : 1;
   u32 fox_br_candidate_capacity = afl->fsrv.fox_br_candidate_capacity;
-  u8 handler_ok = cur_num_diff * this_exec_us < MAX_HANDLER_TIME_US && cur_num_diff < MAX_HANDLER_NUM_DIFF;
+  u32 winning_capacity = afl->fsrv.winning_capacity;
+  u8 handler_candidate_ok = cur_num_diff * this_exec_us < MAX_HANDLER_TIME_US && cur_num_diff < MAX_HANDLER_NUM_DIFF;
   u8 not_dry_run = !afl->wd_scheduler_dry_run;
 
   // Flag to check if the existing mutant decrease the global branch
@@ -289,9 +290,6 @@ static inline s64 icmp_single_br_dist_le(s16 *br_dist_buf, s16 sw_len, bool *has
       u8 default_line_search_fallthrough = 0;
 
       u8 handler = is_handler(cmp_type_parent);
-
-      if (handler && handler_ok)
-        continue;
 
       if (handler) {
         for (u32 cur_border_edge_id = base_border_edge_id; cur_border_edge_id < base_border_edge_id + cur_num_of_children; cur_border_edge_id++) {
@@ -342,6 +340,7 @@ static inline s64 icmp_single_br_dist_le(s16 *br_dist_buf, s16 sw_len, bool *has
             productive_time_us[cur_border_edge_id] += this_exec_us;
             added_seeds[cur_border_edge_id]++;
             global_br_bits[base_br_dist_edge_id] = total_br_dist_abs;
+            if (winning_cnt >= winning_capacity) { PFATAL("BUG: number of winners exceeds capacity"); }
             winning_list[winning_cnt] = cur_border_edge_id;
             winning_cnt++;
             has_decreased_global_br = true;
@@ -354,6 +353,7 @@ static inline s64 icmp_single_br_dist_le(s16 *br_dist_buf, s16 sw_len, bool *has
               added_seeds[cur_border_edge_id]++;
             productive_time_us[cur_border_edge_id] += this_exec_us;
             global_br_bits[base_br_dist_edge_id] = total_br_dist_abs;
+            if (winning_cnt >= winning_capacity) { PFATAL("BUG: number of winners exceeds capacity"); }
             winning_list[winning_cnt] = cur_border_edge_id;
             winning_cnt++;
             has_decreased_global_br = true;
@@ -372,7 +372,7 @@ static inline s64 icmp_single_br_dist_le(s16 *br_dist_buf, s16 sw_len, bool *has
           }
 
           // AS: only compute when tracing local search mutations and when the mutant hits the same horizon branch as the seed and when the mutant differs from the seed
-          if (br_trace_setting != BR_TRACE_LOCAL_SEARCH || !local_bits[cur_border_edge_id] || !cur_num_diff)
+          if (br_trace_setting != BR_TRACE_LOCAL_SEARCH || !local_bits[cur_border_edge_id] || !cur_num_diff || !handler_candidate_ok)
             continue;
 
           s16 seed_var_len = has_var_len ? this_local_br_bits[const_len] : (s16) const_len;
@@ -436,6 +436,7 @@ static inline s64 icmp_single_br_dist_le(s16 *br_dist_buf, s16 sw_len, bool *has
           productive_time_us[cur_border_edge_id] += this_exec_us;
           added_seeds[cur_border_edge_id]++;
           global_br_bits[br_dist_edge_id] = br_dist_abs;
+          if (winning_cnt >= winning_capacity) { PFATAL("BUG: number of winners exceeds capacity"); }
           winning_list[winning_cnt] = cur_border_edge_id;
           winning_cnt++;
           has_decreased_global_br = true;
@@ -486,6 +487,7 @@ static inline s64 icmp_single_br_dist_le(s16 *br_dist_buf, s16 sw_len, bool *has
           if (not_dry_run)
             added_seeds[cur_border_edge_id]++;
           global_br_bits[br_dist_edge_id] = br_dist_abs;
+          if (winning_cnt >= winning_capacity) { PFATAL("BUG: number of winners exceeds capacity"); }
           winning_list[winning_cnt] = cur_border_edge_id;
           winning_cnt++;
         }
@@ -551,6 +553,7 @@ static inline s64 icmp_single_br_dist_le(s16 *br_dist_buf, s16 sw_len, bool *has
   }
 
   afl->fsrv.winning_cnt = winning_cnt;
+  afl->fsrv.winner_cnt += winning_cnt;
   afl->fsrv.br_inc_cnt = br_inc_cnt;
   afl->fsrv.br_dec_cnt = br_dec_cnt;
   afl->fsrv.handler_candidate_cnt = handler_candidate_cnt;

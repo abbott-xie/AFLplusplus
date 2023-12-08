@@ -501,6 +501,7 @@ u8 fuzz_one_original(afl_state_t *afl) {
   memset(mutant_buf, 0, sizeof(u8 *) * fox_mutant_buf_capacity);
   memset(mutant_len, 0, sizeof(u32) * fox_mutant_buf_capacity);
 
+  afl->fsrv.winner_cnt = 0;
   afl->fsrv.br_inc_cnt = 0;
   afl->fsrv.br_dec_cnt = 0;
   afl->fsrv.handler_candidate_cnt = 0;
@@ -2203,6 +2204,7 @@ havoc_stage:
       memset(mutant_buf, 0, sizeof(u8 *) * fox_mutant_buf_capacity);
       memset(mutant_len, 0, sizeof(u32) * fox_mutant_buf_capacity);
 
+      afl->fsrv.winner_cnt = 0;
       afl->fsrv.br_inc_cnt = 0;
       afl->fsrv.br_dec_cnt = 0;
       afl->fsrv.br_trace_setting = BR_TRACE_SEED_INPUT;
@@ -4088,6 +4090,7 @@ handler_fuzz_failure:
       memset(br_inc_dist_id, 0, sizeof(u32) * fox_br_candidate_capacity);
       memset(br_dec_id, 0, sizeof(u32) * fox_br_candidate_capacity);
       memset(br_dec_dist_id, 0, sizeof(u32) * fox_br_candidate_capacity);
+      afl->fsrv.winner_cnt = 0;
       afl->fsrv.br_inc_cnt = 0;
       afl->fsrv.br_dec_cnt = 0;
     }
@@ -4104,6 +4107,7 @@ handler_fuzz_failure:
     memset(br_inc_dist_id, 0, sizeof(u32) * fox_br_candidate_capacity);
     memset(br_dec_id, 0, sizeof(u32) * fox_br_candidate_capacity);
     memset(br_dec_dist_id, 0, sizeof(u32) * fox_br_candidate_capacity);
+    afl->fsrv.winner_cnt = 0;
     afl->fsrv.br_inc_cnt = 0;
     afl->fsrv.br_dec_cnt = 0;
   }

@@ -1050,18 +1050,21 @@ void show_stats_normal(afl_state_t *afl) {
        " local search stats " bSTG bH10 bH5 bH                  bVL "\n",
        u_stringify_int(IB(0), afl->line_search_count));
 
-  SAYF(bV bSTOP "        flipped : " cRST "%-19s " bSTG bV bSTOP
-                "total iter : " cRST "%-24s" bSTG bV "\n",
-       u_stringify_int(IB(0), afl->line_stats.success), u_stringify_int(IB(1), afl->stage_max));
+  SAYF(bV bSTOP "                 flipped : " cRST "%-10s " bSTG bV bSTOP
+                "                winners : " cRST "%-11s" bSTG bV "\n",
+       u_stringify_int(IB(0), afl->line_stats.success), u_stringify_int(IB(1), afl->fsrv.winner_cnt));
 
-  SAYF(bV bSTOP "global br dist decrease : " cRST "%-19s " bSTG bVR bH20 bH10 bH5 bH2 bRB "\n",
-      u_stringify_int(IB(0), afl->line_stats.true_progress));
+  SAYF(bV bSTOP " global br dist decrease : " cRST "%-10s " bSTG bV bSTOP
+                " br dist dec directions : " cRST "%-11s" bSTG bV "\n",
+      u_stringify_int(IB(0), afl->line_stats.true_progress), u_stringify_int(IB(1), afl->fsrv.br_dec_cnt));
 
-  SAYF(bV bSTOP "       br dist decrease : " cRST "%-19s " bSTG bV "\n",
-      u_stringify_int(IB(0), afl->line_stats.progress));
+  SAYF(bV bSTOP "        br dist decrease : " cRST "%-10s " bSTG bV bSTOP
+                " br dist inc directions : " cRST "%-11s" bSTG bV "\n",
+      u_stringify_int(IB(0), afl->line_stats.progress), u_stringify_int(IB(1), afl->fsrv.br_inc_cnt));
 
-  SAYF(bV bSTOP "           Newton steps : " cRST "%-19s " bSTG bV "\n",
-      u_stringify_int(IB(0), afl->line_stats.step));
+  SAYF(bV bSTOP "                   steps : " cRST "%-10s " bSTG bV bSTOP
+                "                  steps : " cRST "%-11s" bSTG bV "\n",
+      u_stringify_int(IB(0), afl->line_stats.step), u_stringify_int(IB(1), (afl->stage_max + 1) % (LINE_SEARCH_MIN_MUTANTS + 1)));
 
   /* Provide some CPU utilization stats. */
 
