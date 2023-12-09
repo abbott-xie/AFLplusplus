@@ -233,6 +233,26 @@ typedef struct line_search_stats {
 
 } line_search_stats_t;
 
+typedef struct handler_stats {
+
+  u32 success,
+      steps,
+      diffs_investigated,
+      attempted,
+      reached;
+
+} handler_stats_t;
+
+typedef struct wd_scheduler_stats {
+
+  u32 frontier_size,
+      frontier_skipped,
+      frontier_instrumented,
+      frontier_handled,
+      frontier_discovery_time_min;
+
+} wd_scheduler_stats_t;
+
 /* Comparison types */
 
 enum {
@@ -264,7 +284,7 @@ enum {
 #define MAX_HANDLER_NUM_DIFF 1000
 #define LINE_SEARCH_MIN_MUTANTS 1024
 #define SHARED_MODE_LINE_SEARCH_MIN 512
-#define MAX_TOTAL_FRONTIER_DISCOVERY_TIME_US 3600000000 /* 1 hour */
+#define MAX_total_frontier_discovery_time_us_US 3600000000 /* 1 hour */
 #define WD_SCHED_BREAK_TIE_FASTER_SEED
 #define SHOW_STATS_INTERVAL_LINE_SEARCH 10
 
@@ -616,6 +636,8 @@ typedef struct afl_state {
       wd_scheduler_avg_us;
   s64 diff_l1_norm;
   line_search_stats_t line_stats;
+  handler_stats_t     handler_stats;
+  wd_scheduler_stats_t wd_scheduler_stats;
   struct queue_entry **wd_scheduler_top_rated;
 
   u8 *virgin_bits,                      /* Regions yet untouched by fuzzing */

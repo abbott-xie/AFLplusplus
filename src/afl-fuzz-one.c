@@ -3589,6 +3589,7 @@ havoc_stage:
 
       if (num_diff < MAX_HANDLER_NUM_DIFF) {
         for (u32 handler_cand_idx = 0; handler_cand_idx < afl->fsrv.handler_candidate_cnt; handler_cand_idx++) {
+          afl->handler_stats.reached++;
           u32 cur_edge_id = handler_candidate_id[handler_cand_idx];
           u32 br_dist_edge_id = handler_candidate_dist_id[handler_cand_idx];
           u32 parent = border_edge_parent[cur_edge_id];
@@ -3611,6 +3612,8 @@ havoc_stage:
           if (!seed_var_len || !mutant_var_len)
             continue;
 
+          afl->handler_stats.attempted++;
+
           // step 1: find single input byte - single output byte mapping
           u32 x_loc = 0;
           u32 y_loc = 0;
@@ -3623,6 +3626,7 @@ havoc_stage:
             out_buf[x_loc] = mutant_x[x_loc];
 
             // fuzz to get br dist
+            afl->handler_stats.diffs_investigated++;
             if (common_fuzz_stuff(afl, out_buf, temp_len)) { goto handler_fuzz_failure; }
 
             // skip non-reach case
@@ -3684,16 +3688,21 @@ havoc_stage:
             if (seed_var_len < const_len)
               range_apply_newton_method_remaining(out_buf, seed_y, seed_var_len, x_loc_end_seed_var, x_loc_end_const);
 
+            afl->handler_stats.steps++;
             if (common_fuzz_stuff(afl, out_buf, temp_len)) { goto handler_fuzz_failure; }
 
             if (cur_mutant_reached(child, trace_bits)) {
+              afl->handler_stats.success++;
               goto handler_cleanup;
             }
 
             // try little endian order
             if (cmp_type_parent == SWITCH || cmp_type_parent == ICMP_EQ || cmp_type_parent == ICMP_NE) {
               range_apply_newton_method_reverse(out_buf, seed_x, seed_y, x_loc_start, x_loc_end, slope, flip_boundary);
+              afl->handler_stats.steps++;
               if (common_fuzz_stuff(afl, out_buf, temp_len)) { goto handler_fuzz_failure; }
+              if (cur_mutant_reached(child, trace_bits))
+                afl->handler_stats.success++;
               goto handler_cleanup; // skip insert mode for SWITCH, ICMP_EQ, ICMP_NE
             }
 
@@ -3727,10 +3736,11 @@ havoc_stage:
             if (seed_var_len < const_len)
               range_apply_newton_method_remaining(out_buf, seed_y, seed_var_len, x_loc_end_seed_var, x_loc_end_const);
 
+            afl->handler_stats.steps++;
             if (common_fuzz_stuff(afl, out_buf, temp_len)) { goto handler_fuzz_failure; }
 
             if (cur_mutant_reached(child, trace_bits)) {
-              goto handler_cleanup;
+              afl->handler_stats.success++;
             }
           }
 

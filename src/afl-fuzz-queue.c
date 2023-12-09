@@ -199,7 +199,7 @@ void create_alias_table_wd_scheduler(afl_state_t *afl) {
   double max_weight_nar = -DBL_MAX;
   double total_weight = 0.0;
   double nar_total_weight = 0.0;
-  u64 total_frontier_discovery_time = 0;
+  u64 total_frontier_discovery_time_us = 0;
 #ifdef WD_SCHED_BREAK_TIE_FASTER_SEED
   u32 min_exec_us_border_edge_id = 0;
   u64 min_exec_us = UINT64_MAX;
@@ -209,7 +209,8 @@ void create_alias_table_wd_scheduler(afl_state_t *afl) {
   u32 *border_edge_2_br_dist = afl->fsrv.border_edge_2_br_dist;
   u8 *size_gradient_checked = afl->fsrv.size_gradient_checked;
   u8 *br_cov = afl->fsrv.br_cov;
-  u32 strcmp_cnt = 0;
+  u32 skipped_edge_cnt = 0;
+  u32 handler_edge_cnt = 0;
 
   for (u32 i = 0; i < map_size_batched; i++) {
     if (likely(cur_virgin_bit_batch[i] == 0xffffffffffffffff))
@@ -230,6 +231,7 @@ void create_alias_table_wd_scheduler(afl_state_t *afl) {
 
       u32 base_border_edge_id = border_edge_parent_first_id[parent];
       u8 cmp_type_parent = cmp_type[parent];
+      u8 handler = is_handler(cmp_type_parent);
       for (u32 cur_border_edge_id = base_border_edge_id; cur_border_edge_id < base_border_edge_id + cur_num_of_children; cur_border_edge_id++) {
         u32 child_node = border_edge_child[cur_border_edge_id];
 
@@ -275,13 +277,16 @@ void create_alias_table_wd_scheduler(afl_state_t *afl) {
               max_weight_border_edge_id = cur_border_edge_id;
               max_weight = border_edge_weight;
             }
+          } else {
+            skipped_edge_cnt++;
           }
+        } else {
+          skipped_edge_cnt++;
         }
         border_edge_cnt++;
-        if (cmp_type_parent<=STRSTR && cmp_type_parent>=STRCMP)
-          strcmp_cnt++;
+        handler_edge_cnt += handler;
         total_weight += border_edge_weight;
-        total_frontier_discovery_time += LINE_SEARCH_MIN_MUTANTS * top_seed->exec_us;
+        total_frontier_discovery_time_us += LINE_SEARCH_MIN_MUTANTS * top_seed->exec_us;
       }
     }
   }
@@ -289,7 +294,7 @@ void create_alias_table_wd_scheduler(afl_state_t *afl) {
   if (!border_edge_cnt)
     PFATAL("BUG: no horizon branches traversed.");
 
-  afl->wd_scheduler_shared_mode = total_frontier_discovery_time > MAX_TOTAL_FRONTIER_DISCOVERY_TIME_US;
+  afl->wd_scheduler_shared_mode = total_frontier_discovery_time_us > MAX_total_frontier_discovery_time_us_US;
 
 #ifdef WD_SCHED_BREAK_TIE_FASTER_SEED
   if (min_exec_us < UINT64_MAX)
@@ -322,7 +327,14 @@ void create_alias_table_wd_scheduler(afl_state_t *afl) {
 #endif
   }
 
-  fprintf(afl->fsrv.wd_scheduler_log_file, "%llu %u %u %f %f %u %f %u %f %u %u %u %llu\n",
+  afl->wd_scheduler_stats.frontier_size = border_edge_cnt;
+  afl->wd_scheduler_stats.frontier_instrumented = border_edge_cnt - nar_border_edge_cnt;
+  afl->wd_scheduler_stats.frontier_skipped = skipped_edge_cnt;
+  afl->wd_scheduler_stats.frontier_handled = handler_edge_cnt;
+  afl->wd_scheduler_stats.frontier_discovery_time_min = total_frontier_discovery_time_us / 60000000;
+
+
+  fprintf(afl->fsrv.wd_scheduler_log_file, "%llu %u %u %f %f %u %f %u %f %u %u %u %u %llu\n",
       ((afl->prev_run_time + get_cur_time() - afl->start_time) / 1000),
       afl->wd_scheduler_selected_border_edge_idx,
       wd_scheduler_top_rated[afl->wd_scheduler_selected_border_edge_idx]->id,
@@ -333,9 +345,10 @@ void create_alias_table_wd_scheduler(afl_state_t *afl) {
       nar_border_edge_cnt,
       total_weight,
       border_edge_cnt,
-      strcmp_cnt,
+      handler_edge_cnt,
+      skipped_edge_cnt,
       shared_mode,
-      total_frontier_discovery_time);
+      total_frontier_discovery_time_us);
   fflush(afl->fsrv.wd_scheduler_log_file);
 
   if (!wd_scheduler_top_rated[afl->wd_scheduler_selected_border_edge_idx])

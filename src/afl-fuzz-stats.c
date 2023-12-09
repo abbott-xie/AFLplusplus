@@ -1066,6 +1066,30 @@ void show_stats_normal(afl_state_t *afl) {
                 "                  steps : " cRST "%-11s" bSTG bV "\n",
       u_stringify_int(IB(0), afl->line_stats.step), u_stringify_int(IB(1), (afl->stage_cur + 1) % (LINE_SEARCH_MIN_MUTANTS + 1)));
 
+  SAYF(bVR bH bSTOP                                             cCYA
+       " wd scheduler stats " bSTG bH10 bH5 bH2 bX bH bSTOP cCYA
+       " handler stats " bSTG bH20 bH                  bVL "\n");
+
+  SAYF(bV bSTOP "        frontier size : " cRST "%-13s " bSTG bV bSTOP
+                "            success : " cRST "%-15s" bSTG bV "\n",
+       u_stringify_int(IB(0), afl->wd_scheduler_stats.frontier_size), u_stringify_int(IB(1), afl->handler_stats.success));
+
+  SAYF(bV bSTOP "         instrumented : " cRST "%-13s " bSTG bV bSTOP
+                "              steps : " cRST "%-15s" bSTG bV "\n",
+      u_stringify_int(IB(0), afl->wd_scheduler_stats.frontier_instrumented), u_stringify_int(IB(1), afl->handler_stats.steps));
+
+  SAYF(bV bSTOP "              handled : " cRST "%-13s " bSTG bV bSTOP
+                " diffs investigated : " cRST "%-15s" bSTG bV "\n",
+      u_stringify_int(IB(0), afl->wd_scheduler_stats.frontier_handled), u_stringify_int(IB(1), afl->handler_stats.diffs_investigated));
+
+  SAYF(bV bSTOP "              skipped : " cRST "%-13s " bSTG bV bSTOP
+                "          attempted : " cRST "%-15s" bSTG bV "\n",
+      u_stringify_int(IB(0), afl->wd_scheduler_stats.frontier_skipped), u_stringify_int(IB(1), afl->handler_stats.attempted));
+
+  SAYF(bV bSTOP " discovery time (min) : " cRST "%-13s " bSTG bV bSTOP
+                "            reached : " cRST "%-15s" bSTG bV "\n",
+      u_stringify_int(IB(0), afl->wd_scheduler_stats.frontier_discovery_time_min), u_stringify_int(IB(1), afl->handler_stats.reached));
+
   /* Provide some CPU utilization stats. */
 
   if (afl->cpu_core_count) {
