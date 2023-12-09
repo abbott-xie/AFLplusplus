@@ -224,7 +224,7 @@ void create_alias_table_wd_scheduler(afl_state_t *afl) {
 
       u32 cur_num_of_children = num_of_children[parent];
 
-      // AS: only check conditional branches
+      // only check conditional branches
       if (cur_num_of_children < 2)
         continue;
 
@@ -233,7 +233,7 @@ void create_alias_table_wd_scheduler(afl_state_t *afl) {
       for (u32 cur_border_edge_id = base_border_edge_id; cur_border_edge_id < base_border_edge_id + cur_num_of_children; cur_border_edge_id++) {
         u32 child_node = border_edge_child[cur_border_edge_id];
 
-        // AS: Release resources for non-horizon branch seed lists
+        // release resources for non-horizon branch seed lists
         if (was_reached(child_node, virgin_bits)) {
           if (border_edge_seed_list[cur_border_edge_id]) {
             ck_free(border_edge_seed_list[cur_border_edge_id]);
@@ -317,7 +317,7 @@ void create_alias_table_wd_scheduler(afl_state_t *afl) {
     }
 #ifdef FOX_INTROSPECTION
     else {
-      printf("BUG: NAR edge has no associated seed list, defaulting to max weight edge.");
+      fprintf(afl->fsrv.fox_debug_log_file, "BUG: NAR edge has no associated seed list, defaulting to max weight edge.\n");
     }
 #endif
   }

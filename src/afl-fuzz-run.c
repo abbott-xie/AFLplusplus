@@ -1124,7 +1124,9 @@ common_fuzz_stuff(afl_state_t *afl, u8 *out_buf, u32 len) {
   afl->queued_discovered += save_if_interesting(afl, out_buf, len, fault);
 
   if (!(afl->stage_cur % afl->stats_update_freq) ||
-      afl->stage_cur + 1 == afl->stage_max) {
+      (afl->stage_cur + 1 == afl->stage_max) ||
+      (afl->line_search && afl->fsrv.br_trace_setting == BR_TRACE_LINE_SEARCH
+        && afl->line_stats.step % SHOW_STATS_INTERVAL_LINE_SEARCH == 0)) {
 
     show_stats(afl);
 

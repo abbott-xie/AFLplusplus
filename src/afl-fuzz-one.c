@@ -413,37 +413,39 @@ u8 fuzz_one_original(afl_state_t *afl) {
 
   }
 
-  if (afl->schedule != WD_SCHEDULER && likely(afl->pending_favored)) {
+  if (afl->schedule != WD_SCHEDULER) {
+    if likely(afl->pending_favored) {
 
-    /* If we have any favored, non-fuzzed new arrivals in the queue,
-       possibly skip to them at the expense of already-fuzzed or non-favored
-       cases. */
+      /* If we have any favored, non-fuzzed new arrivals in the queue,
+        possibly skip to them at the expense of already-fuzzed or non-favored
+        cases. */
 
-    if ((afl->queue_cur->fuzz_level || !afl->queue_cur->favored) &&
-        likely(rand_below(afl, 100) < SKIP_TO_NEW_PROB)) {
+      if ((afl->queue_cur->fuzz_level || !afl->queue_cur->favored) &&
+          likely(rand_below(afl, 100) < SKIP_TO_NEW_PROB)) {
 
-      return 1;
+        return 1;
+
+      }
+
+    } else if (!afl->non_instrumented_mode && !afl->queue_cur->favored &&
+
+              afl->queued_items > 10) {
+
+      /* Otherwise, still possibly skip non-favored cases, albeit less often.
+        The odds of skipping stuff are higher for already-fuzzed inputs and
+        lower for never-fuzzed entries. */
+
+      if (afl->queue_cycle > 1 && !afl->queue_cur->fuzz_level) {
+
+        if (likely(rand_below(afl, 100) < SKIP_NFAV_NEW_PROB)) { return 1; }
+
+      } else {
+
+        if (likely(rand_below(afl, 100) < SKIP_NFAV_OLD_PROB)) { return 1; }
+
+      }
 
     }
-
-  } else if (!afl->non_instrumented_mode && !afl->queue_cur->favored &&
-
-             afl->queued_items > 10) {
-
-    /* Otherwise, still possibly skip non-favored cases, albeit less often.
-       The odds of skipping stuff are higher for already-fuzzed inputs and
-       lower for never-fuzzed entries. */
-
-    if (afl->queue_cycle > 1 && !afl->queue_cur->fuzz_level) {
-
-      if (likely(rand_below(afl, 100) < SKIP_NFAV_NEW_PROB)) { return 1; }
-
-    } else {
-
-      if (likely(rand_below(afl, 100) < SKIP_NFAV_OLD_PROB)) { return 1; }
-
-    }
-
   }
 
 #endif                                                     /* ^IGNORE_FINDS */
@@ -531,6 +533,7 @@ u8 fuzz_one_original(afl_state_t *afl) {
   u32 *border_edge_child = afl->fsrv.border_edge_child;
   u32 *border_edge_parent_first_id = afl->fsrv.border_edge_parent_first_id;
   u32 *border_edge_2_str_len = afl->fsrv.border_edge_2_str_len;
+  u32 *num_of_children = afl->fsrv.num_of_children;
 
   out_buf = afl_realloc(AFL_BUF_PARAM(out), len);
   if (unlikely(!out_buf)) { PFATAL("alloc"); }
@@ -2147,7 +2150,7 @@ havoc_stage:
 
   u32 base_stage_max = HAVOC_LINE_SEARCH_BASE_MAX;
   u32 base_stage_max_splice = SPLICE_HAVOC_LINE_SEARCH_BASE_MAX;
-  u32 cur_selected_br = afl->fsrv.border_edge_parent[afl->wd_scheduler_selected_border_edge_idx];
+  u32 parent = border_edge_parent[afl->wd_scheduler_selected_border_edge_idx];
   u32 switch_case_num = 1;
 
   if (!splice_cycle) {
@@ -2156,10 +2159,12 @@ havoc_stage:
     afl->stage_short = "havoc";
 
     if (afl->schedule == WD_SCHEDULER) {
-      if (afl->fsrv.cmp_type[cur_selected_br] == SWITCH) {
-        u32 base_border_edge_id = border_edge_parent_first_id[cur_selected_br];
+      u32 cmp_type_parent = cmp_type[parent];
+      if (cmp_type_parent == SWITCH) {
+        u32 base_border_edge_id = border_edge_parent_first_id[parent];
         u32 non_flip_children_cnt = 0;
-        for (u32 cur_border_edge_id = base_border_edge_id; cur_border_edge_id < base_border_edge_id + afl->fsrv.num_of_children[cur_selected_br]; cur_border_edge_id++) {
+        u32 cur_num_of_children = num_of_children[parent];
+        for (u32 cur_border_edge_id = base_border_edge_id; cur_border_edge_id < base_border_edge_id + cur_num_of_children; cur_border_edge_id++) {
           u32 child_node = border_edge_child[base_border_edge_id];
           if (!was_reached(child_node, virgin_bits))
             non_flip_children_cnt++;
@@ -3474,8 +3479,8 @@ havoc_stage:
     }
 
     // only do line search on fixed length mutation
-    afl->fsrv.br_trace_setting = BR_TRACE_LOCAL_SEARCH;                                                                                                                                       
-    u32 cur_mutant_id = afl->stage_cur;                                                                                                                                                       
+    afl->fsrv.br_trace_setting = BR_TRACE_LOCAL_SEARCH;
+    u32 cur_mutant_id = afl->stage_cur;
 
     u32 min_len = temp_len < len ? temp_len : len;
     u32 cur_num_diff = 0;
@@ -3577,12 +3582,12 @@ havoc_stage:
 
       if (num_diff != cur_num_diff) {
 #ifdef FOX_INTROSPECTION
-        fprintf(afl->fox_debug_file, "BUG: in STRCMP handler: num_diff != cur_num_diff\n");
+        fprintf(afl->fsrv.fox_debug_log_file, "BUG: in STRCMP handler: num_diff != cur_num_diff\n");
 #endif
         continue;
       }
 
-      if (num_diff * afl->queue_cur->exec_us < MAX_HANDLER_TIME_US && num_diff < MAX_HANDLER_NUM_DIFF) {
+      if (num_diff < MAX_HANDLER_NUM_DIFF) {
         for (u32 handler_cand_idx = 0; handler_cand_idx < afl->fsrv.handler_candidate_cnt; handler_cand_idx++) {
           u32 cur_edge_id = handler_candidate_id[handler_cand_idx];
           u32 br_dist_edge_id = handler_candidate_dist_id[handler_cand_idx];
@@ -3765,6 +3770,7 @@ handler_fuzz_failure:
     u32 last_mutant_id = afl->stage_max - 1;
     if (afl->line_search && ((cur_mutant_id && cur_mutant_id % LINE_SEARCH_MIN_MUTANTS == 0) || (cur_mutant_id == last_mutant_id && (!shared_mode || cur_mutant_id % LINE_SEARCH_MIN_MUTANTS > SHARED_MODE_LINE_SEARCH_MIN)))) {
       afl->line_search_count++;
+      afl->fsrv.br_trace_setting = BR_TRACE_LINE_SEARCH;
       reset_line_stats(afl);
 
       for (u32 br_inc_idx = 0; br_inc_idx < afl->fsrv.br_inc_cnt; br_inc_idx++) {
@@ -3778,7 +3784,7 @@ handler_fuzz_failure:
         // skip non-instrumented branches
         if (cmp_type_parent == NOT_INSTRUMENTED) {
 #ifdef FOX_INTROSPECTION
-          fprintf(afl->fox_debug_file, "BUG: attempting line search on a non-instrumented branch for cmp_type %u, parent %u, child %u, edge %u\n", cmp_type_parent, parent, child, cur_edge_id);
+          fprintf(afl->fsrv.fox_debug_log_file, "BUG: attempting line search on a non-instrumented branch for cmp_type %u, parent %u, child %u, edge %u\n", cmp_type_parent, parent, child, cur_edge_id);
 #endif
           continue;
         }
@@ -3797,7 +3803,7 @@ handler_fuzz_failure:
 
         if (unlikely(!x_prime)) {
 #ifdef FOX_INTROSPECTION
-          fprintf(afl->fox_debug_file, "BUG: current mutant is not in mutant buffer");
+          fprintf(afl->fsrv.fox_debug_log_file, "BUG: current mutant is not in mutant buffer");
 #endif
           continue;
         }
@@ -3805,19 +3811,19 @@ handler_fuzz_failure:
         if (cmp_type_parent < STRCMP && cmp_type_parent != ICMP_EQ && cmp_type_parent != ICMP_NE) {
             if (!afl->fsrv.size_gradient_checked[br_dist_edge_id] && unlikely(llabs(y) < llabs(global_br_bits[br_dist_edge_id]))) {
 #ifdef FOX_INTROSPECTION
-              fprintf(afl->fox_debug_file, "BUG: local min distance lower than global min distance for cmp_type %u, parent %u, child %u, edge %u, br_dist_edge_id %u, global_br_bits %ld, local_br_bits %ld\n", cmp_type_parent, parent, child, cur_edge_id, br_dist_edge_id, y, global_br_bits[br_dist_edge_id], llabs(y));
+              fprintf(afl->fsrv.fox_debug_log_file, "BUG: local min distance lower than global min distance for cmp_type %u, parent %u, child %u, edge %u, br_dist_edge_id %u, global_br_bits %ld, local_br_bits %lld\n", cmp_type_parent, parent, child, cur_edge_id, br_dist_edge_id, global_br_bits[br_dist_edge_id], llabs(y));
 #endif
               continue;
             }
             if (unlikely(diff < 0)) {
 #ifdef FOX_INTROSPECTION
-              fprintf(afl->fox_debug_file, "BUG: branch distance increment is negative for cmp_type %u, parent %u, child %u, edge %u, br_dist_edge_id %u, diff %ld\n", cmp_type_parent, parent, child, cur_edge_id, br_dist_edge_id, diff);
+              fprintf(afl->fsrv.fox_debug_log_file, "BUG: branch distance increment is negative for cmp_type %u, parent %u, child %u, edge %u, br_dist_edge_id %u, diff %ld\n", cmp_type_parent, parent, child, cur_edge_id, br_dist_edge_id, diff);
 #endif
               continue;
             }
             if (unlikely(diff == 0)) {
 #ifdef FOX_INTROSPECTION
-              printf(afl->fox_debug_file, "BUG: branch distance difference is 0 which might lead to division by zero for cmp_type %u, parent %u, child %u, edge %u, br_dist_edge_id %u, diff %ld\n", cmp_type_parent, parent, child, cur_edge_id, br_dist_edge_id, diff);
+              fprintf(afl->fsrv.fox_debug_log_file, "BUG: branch distance difference is 0 which might lead to division by zero for cmp_type %u, parent %u, child %u, edge %u, br_dist_edge_id %u, diff %ld\n", cmp_type_parent, parent, child, cur_edge_id, br_dist_edge_id, diff);
 #endif
               continue;
             }
@@ -3838,7 +3844,7 @@ handler_fuzz_failure:
           case ICMP_SLE:
             if (unlikely(y <= 0 && y_prime > 0)) {
 #ifdef FOX_INTROSPECTION
-              printf(afl->fox_debug_file, "BUG: branch appears flipped for cmp_type %u, parent %u, child %u, edge %u, br_dist_edge_id %u, y %ld, y_prime %ld\n", cmp_type_parent, parent, child, cur_edge_id, br_dist_edge_id, y, y_prime);
+              fprintf(afl->fsrv.fox_debug_log_file, "BUG: branch appears flipped for cmp_type %u, parent %u, child %u, edge %u, br_dist_edge_id %u, y %ld, y_prime %ld\n", cmp_type_parent, parent, child, cur_edge_id, br_dist_edge_id, y, y_prime);
 #endif
               continue;
             }
@@ -3851,7 +3857,7 @@ handler_fuzz_failure:
           case ICMP_SLT:
             if (unlikely(y < 0 && y_prime >= 0)) {
 #ifdef FOX_INTROSPECTION
-              printf(afl->fox_debug_file, "BUG: branch appears flipped for cmp_type %u, parent %u, child %u, edge %u, br_dist_edge_id %u, y %ld, y_prime %ld\n", cmp_type_parent, parent, child, cur_edge_id, br_dist_edge_id, y, y_prime);
+              fprintf(afl->fsrv.fox_debug_log_file, "BUG: branch appears flipped for cmp_type %u, parent %u, child %u, edge %u, br_dist_edge_id %u, y %ld, y_prime %ld\n", cmp_type_parent, parent, child, cur_edge_id, br_dist_edge_id, y, y_prime);
 #endif
               continue;
             }
@@ -3937,7 +3943,7 @@ handler_fuzz_failure:
         // skip non-instrumented branches
         if (cmp_type_parent == NOT_INSTRUMENTED) {
 #ifdef FOX_INTROSPECTION
-          fprintf(afl->fox_debug_file, "BUG: attempting line search on a non-instrumented branch for cmp_type %u, parent %u, child %u, edge %u\n", cmp_type_parent, parent, child, cur_edge_id);
+          fprintf(afl->fsrv.fox_debug_log_file, "BUG: attempting line search on a non-instrumented branch for cmp_type %u, parent %u, child %u, edge %u\n", cmp_type_parent, parent, child, cur_edge_id);
 #endif
           continue;
         }
@@ -3956,7 +3962,7 @@ handler_fuzz_failure:
 
         if (unlikely(!x_prime)) {
 #ifdef FOX_INTROSPECTION
-          printf("BUG: current mutant is not in mutant buffer");
+          fprintf(afl->fsrv.fox_debug_log_file, "BUG: current mutant is not in mutant buffer");
 #endif
           continue;
         }
@@ -3964,19 +3970,19 @@ handler_fuzz_failure:
         if (cmp_type_parent < STRCMP && cmp_type_parent != ICMP_EQ && cmp_type_parent != ICMP_NE) {
             if (!afl->fsrv.size_gradient_checked[br_dist_edge_id] && unlikely(llabs(y) < llabs(global_br_bits[br_dist_edge_id]))) {
 #ifdef FOX_INTROSPECTION
-              fprintf(afl->fox_debug_file, "BUG: local min distance lower than global min distance for cmp_type %u, parent %u, child %u, edge %u, br_dist_edge_id %u, global_br_bits %ld, local_br_bits %ld\n", cmp_type_parent, parent, child, cur_edge_id, br_dist_edge_id, y, global_br_bits[br_dist_edge_id], llabs(y));
+              fprintf(afl->fsrv.fox_debug_log_file, "BUG: local min distance lower than global min distance for cmp_type %u, parent %u, child %u, edge %u, br_dist_edge_id %u, global_br_bits %ld, local_br_bits %lld\n", cmp_type_parent, parent, child, cur_edge_id, br_dist_edge_id, global_br_bits[br_dist_edge_id], llabs(y));
 #endif
               continue;
             }
             if (unlikely(diff > 0)) {
 #ifdef FOX_INTROSPECTION
-              fprintf(afl->fox_debug_file, "BUG: branch distance increment is negative for cmp_type %u, parent %u, child %u, edge %u, br_dist_edge_id %u, diff %ld\n", cmp_type_parent, parent, child, cur_edge_id, br_dist_edge_id, diff);
+              fprintf(afl->fsrv.fox_debug_log_file, "BUG: branch distance increment is negative for cmp_type %u, parent %u, child %u, edge %u, br_dist_edge_id %u, diff %ld\n", cmp_type_parent, parent, child, cur_edge_id, br_dist_edge_id, diff);
 #endif
               continue;
             }
             if (unlikely(diff == 0)) {
 #ifdef FOX_INTROSPECTION
-              printf(afl->fox_debug_file, "BUG: branch distance difference is 0 which might lead to division by zero for cmp_type %u, parent %u, child %u, edge %u, br_dist_edge_id %u, diff %ld\n", cmp_type_parent, parent, child, cur_edge_id, br_dist_edge_id, diff);
+              fprintf(afl->fsrv.fox_debug_log_file, "BUG: branch distance difference is 0 which might lead to division by zero for cmp_type %u, parent %u, child %u, edge %u, br_dist_edge_id %u, diff %ld\n", cmp_type_parent, parent, child, cur_edge_id, br_dist_edge_id, diff);
 #endif
               continue;
             }
@@ -3997,7 +4003,7 @@ handler_fuzz_failure:
           case ICMP_SLE:
             if (unlikely(y > 0 && y_prime <= 0)) {
 #ifdef FOX_INTROSPECTION
-              printf("BUG: branch appears flipped for cmp_type %u, parent %u, child %u, edge %u, br_dist_edge_id %u, y %ld, y_prime %ld\n", cmp_type_parent, parent, child, cur_edge_id, br_dist_edge_id, y, y_prime);
+              fprintf(afl->fsrv.fox_debug_log_file, "BUG: branch appears flipped for cmp_type %u, parent %u, child %u, edge %u, br_dist_edge_id %u, y %ld, y_prime %ld\n", cmp_type_parent, parent, child, cur_edge_id, br_dist_edge_id, y, y_prime);
 #endif
               continue;
             }
@@ -4010,7 +4016,7 @@ handler_fuzz_failure:
           case ICMP_SLT:
             if (unlikely(y >= 0 && y_prime < 0)) {
 #ifdef FOX_INTROSPECTION
-              printf("BUG: branch appears flipped for cmp_type %u, parent %u, child %u, edge %u, br_dist_edge_id %u, y %ld, y_prime %ld\n", cmp_type_parent, parent, child, cur_edge_id, br_dist_edge_id, y, y_prime);
+              fprintf(afl->fsrv.fox_debug_log_file, "BUG: branch appears flipped for cmp_type %u, parent %u, child %u, edge %u, br_dist_edge_id %u, y %ld, y_prime %ld\n", cmp_type_parent, parent, child, cur_edge_id, br_dist_edge_id, y, y_prime);
 #endif
               continue;
             }
@@ -4093,6 +4099,7 @@ handler_fuzz_failure:
       afl->fsrv.winner_cnt = 0;
       afl->fsrv.br_inc_cnt = 0;
       afl->fsrv.br_dec_cnt = 0;
+      afl->fsrv.br_trace_setting = BR_TRACE_DEFAULT;
     }
   }
 
@@ -4110,6 +4117,7 @@ handler_fuzz_failure:
     afl->fsrv.winner_cnt = 0;
     afl->fsrv.br_inc_cnt = 0;
     afl->fsrv.br_dec_cnt = 0;
+    afl->fsrv.br_trace_setting = BR_TRACE_DEFAULT;
   }
 
   for (u32 i=0; i < afl->stage_max; i++) {
@@ -4223,6 +4231,9 @@ retry_splicing:
 abandon_entry:
 
   afl->splicing_with = -1;
+
+  if (afl->fsrv.br_trace_setting == BR_TRACE_LINE_SEARCH)
+    afl->fsrv.br_trace_setting = BR_TRACE_DEFAULT;
 
   /* Update afl->pending_not_fuzzed count if we made it through the calibration
      cycle and have not seen this entry before. */

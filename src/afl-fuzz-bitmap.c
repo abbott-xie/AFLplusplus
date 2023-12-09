@@ -192,12 +192,9 @@ static inline s64 icmp_single_br_dist_le(s16 *br_dist_buf, s16 sw_len, bool *has
   for (s16 i = 0; i < sw_len; i++) {
     // Check for overflow
     // total += br_dist_buf[i] * order;
-    if (__builtin_add_overflow(total, br_dist_buf[i] * order, &total)) {
-#ifdef FOX_INTROSPECTION
-        fprintf(afl->fox_debug_file, "\nOverflow occurred skipping");
-#endif
-        *has_overflown = true;
-        return -1;
+    if (unlikely(__builtin_add_overflow(total, br_dist_buf[i] * order, &total))) {
+      *has_overflown = true;
+      return -1;
     }
     order <<= 8;
   }
@@ -253,7 +250,7 @@ static inline s64 icmp_single_br_dist_le(s16 *br_dist_buf, s16 sw_len, bool *has
   u64 this_exec_us = queue_cur ? queue_cur->exec_us : 1;
   u32 fox_br_candidate_capacity = afl->fsrv.fox_br_candidate_capacity;
   u32 winning_capacity = afl->fsrv.winning_capacity;
-  u8 handler_candidate_ok = cur_num_diff * this_exec_us < MAX_HANDLER_TIME_US && cur_num_diff < MAX_HANDLER_NUM_DIFF;
+  u8 handler_candidate_ok = cur_num_diff < MAX_HANDLER_NUM_DIFF;
   u8 not_dry_run = !afl->wd_scheduler_dry_run;
 
   // Flag to check if the existing mutant decrease the global branch
@@ -349,7 +346,7 @@ static inline s64 icmp_single_br_dist_le(s16 *br_dist_buf, s16 sw_len, bool *has
 
           // a large number is better
           if (total_br_dist_abs > global_br_bits[base_br_dist_edge_id] && added_seeds[cur_border_edge_id] < MAX_ADDED_SEEDS) {
-            if (not_dry_run)
+            if (likely(not_dry_run))
               added_seeds[cur_border_edge_id]++;
             productive_time_us[cur_border_edge_id] += this_exec_us;
             global_br_bits[base_br_dist_edge_id] = total_br_dist_abs;
@@ -466,25 +463,14 @@ static inline s64 icmp_single_br_dist_le(s16 *br_dist_buf, s16 sw_len, bool *has
             if (expected_size > MAX_STEP_FILE) {
                 size_gradient_checked[br_dist_edge_id] = 1;
 #ifdef FOX_INTROSPECTION
-	            fprintf(afl->fsrv.fox_debug_file, "\nSkipping Cmp type:%d Num:%ld Size mut:%d Size seed:%d Grad:%f Intercept:%f Step_needed:%f Br_new:%ld Br_old:%ld", cmp_type_parent, num, size_mut, size_seed, grad_size, intercept, expected_size, br_dist_abs, global_br_dist_abs);
+	            fprintf(afl->fsrv.fox_debug_log_file, "Skipping Cmp type:%d Num:%ld Size mut:%d Size seed:%d Grad:%f Intercept:%f Step_needed:%f Br_new:%ld Br_old:%ld\n", cmp_type_parent, num, size_mut, size_seed, grad_size, intercept, expected_size, br_dist_abs, global_br_dist_abs);
 #endif
 	            continue;
             }
-#ifdef FOX_INTROSPECTION
-            else {
-	            fprintf(afl->fsrv.fox_debug_file,
-                        "\nPreserving Cmp type:%d Border edge:%u Parent:%d "
-                        "Num:%ld Size mut:%d Size seed:%d "
-                        "Grad:%f Intercept:%f Step_needed:%f Br_new:%ld Br_old:%ld",
-                        cmp_type_parent, cur_border_edge_id, parent,
-                        num, size_mut, size_seed,
-                        grad_size, intercept, expected_size, br_dist_abs, global_br_dist_abs);
-            }
-#endif
           }
           has_decreased_global_br = true;
           productive_time_us[cur_border_edge_id] += this_exec_us;
-          if (not_dry_run)
+          if (likely(not_dry_run))
             added_seeds[cur_border_edge_id]++;
           global_br_bits[br_dist_edge_id] = br_dist_abs;
           if (winning_cnt >= winning_capacity) { PFATAL("BUG: number of winners exceeds capacity"); }
@@ -497,10 +483,6 @@ static inline s64 icmp_single_br_dist_le(s16 *br_dist_buf, s16 sw_len, bool *has
           continue;
 
         if (unlikely(local_bits[cur_border_edge_id] == 2)) { // fallthrough need update local bits
-#ifdef FOX_INTROSPECTION
-          if (unlikely(cmp_type_parent != ICMP_EQ && cmp_type_parent != ICMP_NE))
-            printf("BUG: local_bits == 2 but cmp_type not ICMP_EQ or ICMP_NE\n");
-#endif
           u32 sw_len = border_edge_2_str_len[cur_border_edge_id];
           has_overflown = false;
           local_br_bits[br_dist_edge_id] = icmp_single_br_dist_le((s16 *)(local_br_bits + br_dist_edge_id), sw_len, &has_overflown);

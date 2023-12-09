@@ -2331,13 +2331,13 @@ void setup_dirs_fds(afl_state_t *afl) {
   if (!afl->fsrv.wd_scheduler_log_file) PFATAL("fdopen() failed");
 
 #ifdef FOX_INTROSPECTION
-  tmp = alloc_printf("%s/sched_debug_log", afl->out_dir);
+  tmp = alloc_printf("%s/fox_debug_log_file", afl->out_dir);
   fd = open(tmp, O_WRONLY | O_CREAT | O_EXCL, 0600);
   if (fd < 0) PFATAL("Unable to create '%s'", tmp);
   ck_free(tmp);
 
-  afl->fsrv.sched_debug_file = fdopen(fd, "w");
-  if (!afl->fsrv.sched_debug_file) PFATAL("fdopen() failed");
+  afl->fsrv.fox_debug_log_file = fdopen(fd, "w");
+  if (!afl->fsrv.fox_debug_log_file) PFATAL("fdopen() failed");
 #endif
 
   /* ignore errors */
