@@ -294,7 +294,7 @@ void create_alias_table_wd_scheduler(afl_state_t *afl) {
   if (!border_edge_cnt)
     PFATAL("BUG: no horizon branches traversed.");
 
-  afl->wd_scheduler_shared_mode = total_frontier_discovery_time_us > MAX_total_frontier_discovery_time_us_US;
+  afl->wd_scheduler_shared_mode = total_frontier_discovery_time_us > MAX_TOTAL_FRONTIER_DISCOVERY_TIME_US;
 
 #ifdef WD_SCHED_BREAK_TIE_FASTER_SEED
   if (min_exec_us < UINT64_MAX)
