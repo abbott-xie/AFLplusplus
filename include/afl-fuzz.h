@@ -280,7 +280,8 @@ enum {
 /* FOX-related definitions */
 
 #define WD_SCHEDULER_STACK_MAX 3
-#define MAX_ADDED_SEEDS 15
+#define MAX_ADDED_SEEDS_SHARED 15
+#define MAX_ADDED_SEEDS 100
 #define MAX_HANDLER_NUM_DIFF 1000
 #define MAX_HANDLER_EXEC_TIME_US 50000 /* 50ms */
 #define LINE_SEARCH_MIN_MUTANTS 1024
@@ -630,7 +631,8 @@ typedef struct afl_state {
       queued_val_items,
       queued_new_items,
       num_diff,
-      mut_len;
+      mut_len,
+      max_added_seeds;
   u64 line_search_count,
       wd_scheduler_total_cal_us,
       wd_scheduler_total_cal_cycles,

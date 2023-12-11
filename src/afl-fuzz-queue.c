@@ -189,6 +189,7 @@ void create_alias_table_wd_scheduler(afl_state_t *afl) {
   u32 *border_edge_seed_list_capacity = afl->fsrv.border_edge_seed_list_capacity;
   struct queue_entry **wd_scheduler_top_rated = afl->wd_scheduler_top_rated;
   u8 shared_mode = afl->wd_scheduler_shared_mode;
+  u32 max_added_seeds = afl->max_added_seeds;
   u64 *spent_time_us = afl->fsrv.spent_time_us;
   u64 *productive_time_us = afl->fsrv.productive_time_us;
   u32 border_edge_cnt = 0;
@@ -261,7 +262,7 @@ void create_alias_table_wd_scheduler(afl_state_t *afl) {
             max_weight_nar = border_edge_weight;
           }
           nar_border_edge_cnt++;
-        } else if (added_seeds[cur_border_edge_id] < MAX_ADDED_SEEDS) {
+        } else if (added_seeds[cur_border_edge_id] < max_added_seeds) {
           u32 br_dist_edge_id = border_edge_2_br_dist[cur_border_edge_id];
           if (!br_cov[br_dist_edge_id] && !size_gradient_checked[br_dist_edge_id]) {
 #ifdef WD_SCHED_BREAK_TIE_FASTER_SEED
@@ -295,6 +296,7 @@ void create_alias_table_wd_scheduler(afl_state_t *afl) {
     PFATAL("BUG: no horizon branches traversed.");
 
   afl->wd_scheduler_shared_mode = total_frontier_discovery_time_us > MAX_TOTAL_FRONTIER_DISCOVERY_TIME_US;
+  afl->max_added_seeds = afl->wd_scheduler_shared_mode ? MAX_ADDED_SEEDS_SHARED : MAX_ADDED_SEEDS;
 
 #ifdef WD_SCHED_BREAK_TIE_FASTER_SEED
   if (min_exec_us < UINT64_MAX)

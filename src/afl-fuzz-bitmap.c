@@ -250,6 +250,7 @@ static inline s64 icmp_single_br_dist_le(s16 *br_dist_buf, s16 sw_len, bool *has
   u64 this_exec_us = queue_cur ? queue_cur->exec_us : 1;
   u32 fox_br_candidate_capacity = afl->fsrv.fox_br_candidate_capacity;
   u32 winning_capacity = afl->fsrv.winning_capacity;
+  u32 max_added_seeds = afl->max_added_seeds;
   u8 handler_candidate_ok = cur_num_diff < MAX_HANDLER_NUM_DIFF;
   u8 handler_candidate_icmp_ok = queue_cur && afl->wd_scheduler_shared_mode ? this_exec_us * cur_num_diff < MAX_HANDLER_EXEC_TIME_US : 1;
   u8 not_dry_run = !afl->wd_scheduler_dry_run;
@@ -351,7 +352,7 @@ static inline s64 icmp_single_br_dist_le(s16 *br_dist_buf, s16 sw_len, bool *has
           }
 
           // a large number is better
-          if (total_br_dist_abs > global_br_bits[base_br_dist_edge_id] && added_seeds[cur_border_edge_id] < MAX_ADDED_SEEDS) {
+          if (total_br_dist_abs > global_br_bits[base_br_dist_edge_id] && added_seeds[cur_border_edge_id] < max_added_seeds) {
             if (likely(not_dry_run))
               added_seeds[cur_border_edge_id]++;
             productive_time_us[cur_border_edge_id] += this_exec_us;
@@ -451,7 +452,7 @@ static inline s64 icmp_single_br_dist_le(s16 *br_dist_buf, s16 sw_len, bool *has
         if (handler && global_br_dist_abs == 0)
           continue;
 
-        if (br_dist_abs < global_br_dist_abs && added_seeds[cur_border_edge_id] < MAX_ADDED_SEEDS) {
+        if (br_dist_abs < global_br_dist_abs && added_seeds[cur_border_edge_id] < max_added_seeds) {
 
           // Calculate gradient with respect to size
           u32 size_seed = wd_scheduler_top_rated[cur_border_edge_id]->len;

@@ -92,6 +92,8 @@ void afl_state_init(afl_state_t *afl, uint32_t map_size) {
   afl->schedule = FAST;                 /* Power schedule (default: FAST)   */
   afl->havoc_max_mult = HAVOC_MAX_MULT;
 
+  afl->max_added_seeds = MAX_ADDED_SEEDS;
+
   afl->clear_screen = 1;                /* Window resized?                  */
   afl->havoc_div = 1;                   /* Cycle count divisor for havoc    */
   afl->stage_name = "init";             /* Name of the current fuzz stage   */
