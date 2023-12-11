@@ -414,7 +414,7 @@ u8 fuzz_one_original(afl_state_t *afl) {
   }
 
   if (afl->schedule != WD_SCHEDULER) {
-    if likely(afl->pending_favored) {
+    if (likely(afl->pending_favored)) {
 
       /* If we have any favored, non-fuzzed new arrivals in the queue,
         possibly skip to them at the expense of already-fuzzed or non-favored
