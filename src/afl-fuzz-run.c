@@ -611,7 +611,7 @@ u8 calibrate_case(afl_state_t *afl, struct queue_entry *q, u8 *use_mem,
 
   q->exec_us = diff_us / afl->stage_max;
 
-  if (afl->schedule == WD_SCHEDULER && (afl->wd_scheduler_avg_us == 0 || q->exec_us <= 2 * afl->wd_scheduler_avg_us)) {
+  if (likely(afl->schedule == WD_SCHEDULER) && (afl->wd_scheduler_avg_us == 0 || q->exec_us <= 2 * afl->wd_scheduler_avg_us)) {
     afl->wd_scheduler_total_cal_us += q->exec_us;
     afl->wd_scheduler_total_cal_cycles++;
     afl->wd_scheduler_avg_us = afl->wd_scheduler_total_cal_us / afl->wd_scheduler_total_cal_cycles;
@@ -624,7 +624,7 @@ u8 calibrate_case(afl_state_t *afl, struct queue_entry *q, u8 *use_mem,
   afl->total_bitmap_size += q->bitmap_size;
   ++afl->total_bitmap_entries;
 
-  if (afl->schedule == WD_SCHEDULER)
+  if (likely(afl->schedule == WD_SCHEDULER))
     update_bitmap_score_wd_scheduler(afl, q);
   else
     update_bitmap_score(afl, q);
@@ -1058,7 +1058,7 @@ u8 trim_case(afl_state_t *afl, struct queue_entry *q, u8 *in_buf) {
     queue_testcase_retake_mem(afl, q, in_buf, q->len, orig_len);
 
     memcpy(afl->fsrv.trace_bits, afl->clean_trace, afl->fsrv.map_size);
-    if (afl->schedule != WD_SCHEDULER)
+    if (unlikely(afl->schedule != WD_SCHEDULER))
       update_bitmap_score(afl, q);
     else if (new_exec_us && old_exec_us > new_exec_us) {
       q->exec_us = new_exec_us;
@@ -1125,7 +1125,7 @@ common_fuzz_stuff(afl_state_t *afl, u8 *out_buf, u32 len) {
 
   if (!(afl->stage_cur % afl->stats_update_freq) ||
       (afl->stage_cur + 1 == afl->stage_max) ||
-      (afl->line_search && afl->fsrv.br_trace_setting == BR_TRACE_LINE_SEARCH
+      (likely(afl->line_search) && afl->fsrv.br_trace_setting == BR_TRACE_LINE_SEARCH
         && afl->line_stats.step % SHOW_STATS_INTERVAL_LINE_SEARCH == 0)) {
 
     show_stats(afl);
