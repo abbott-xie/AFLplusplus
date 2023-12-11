@@ -413,8 +413,8 @@ u8 fuzz_one_original(afl_state_t *afl) {
 
   }
 
-  if (afl->schedule != WD_SCHEDULER) {
-    if likely(afl->pending_favored) {
+  if (unlikely(afl->schedule != WD_SCHEDULER)) {
+    if (likely(afl->pending_favored)) {
 
       /* If we have any favored, non-fuzzed new arrivals in the queue,
         possibly skip to them at the expense of already-fuzzed or non-favored
@@ -620,7 +620,7 @@ u8 fuzz_one_original(afl_state_t *afl) {
    * PERFORMANCE SCORE *
    *********************/
 
-  if (afl->schedule == WD_SCHEDULER || likely(!afl->old_seed_selection))
+  if (likely(afl->schedule == WD_SCHEDULER || !afl->old_seed_selection))
     orig_perf = perf_score = afl->queue_cur->perf_score;
   else
     afl->queue_cur->perf_score = orig_perf = perf_score =
@@ -2158,7 +2158,7 @@ havoc_stage:
     afl->stage_name = "havoc";
     afl->stage_short = "havoc";
 
-    if (afl->schedule == WD_SCHEDULER) {
+    if (likely(afl->schedule == WD_SCHEDULER)) {
       u32 cmp_type_parent = cmp_type[parent];
       if (cmp_type_parent == SWITCH) {
         u32 base_border_edge_id = border_edge_parent_first_id[parent];
@@ -2193,7 +2193,7 @@ havoc_stage:
     afl->stage_name = afl->stage_name_buf;
     afl->stage_short = "splice";
 
-    if (afl->schedule == WD_SCHEDULER) {
+    if (likely(afl->schedule == WD_SCHEDULER)) {
       memset(local_br_bits, 0, sizeof(s64) * fox_total_border_edge_cnt);
       memset(local_bits, 0, sizeof(u8) * fox_total_border_edge_cnt);
       memset(br_inc, 0, sizeof(s64) * fox_total_border_edge_cnt);
@@ -2231,7 +2231,7 @@ havoc_stage:
 
   havoc_queued_new = afl->queued_new_items;
   havoc_queued_val = afl->queued_val_items;
-  if (afl->schedule != WD_SCHEDULER)
+  if (unlikely(afl->schedule != WD_SCHEDULER))
     havoc_queued = afl->queued_items;
 
   if (afl->custom_mutators_count) {
@@ -2338,7 +2338,7 @@ havoc_stage:
 
   */
 
-  if (afl->schedule == WD_SCHEDULER && !afl->wd_scheduler_shared_mode)
+  if (likely(afl->schedule == WD_SCHEDULER) && !afl->wd_scheduler_shared_mode)
     stack_max = WD_SCHEDULER_STACK_MAX;
   else
     stack_max = 1 << (1 + rand_below(afl, afl->havoc_stack_pow2));
@@ -3499,7 +3499,7 @@ havoc_stage:
 
     afl->fsrv.br_trace_setting = BR_TRACE_DEFAULT;
 
-    if (afl->line_search && afl->fsrv.mutant_ref_cnt) {
+    if (likely(afl->line_search) && afl->fsrv.mutant_ref_cnt) {
       u8 *cur_seed_buf = ck_alloc(temp_len);
       if (unlikely(!cur_seed_buf)) { PFATAL("alloc"); }
       memcpy(cur_seed_buf, out_buf, temp_len);
@@ -3520,7 +3520,7 @@ havoc_stage:
     /* If we're finding new stuff, let's run for a bit longer, limits
        permitting. */
 
-    if (afl->schedule != WD_SCHEDULER && afl->queued_items != havoc_queued) {
+    if (unlikely(afl->schedule != WD_SCHEDULER) && afl->queued_items != havoc_queued) {
 
       if (perf_score <= afl->havoc_max_mult * 100) {
 
@@ -3778,7 +3778,7 @@ handler_fuzz_failure:
     bool has_overflown = false;
     // run line search once a batch on the most promising mutants for each branch in the batch
     u32 last_mutant_id = afl->stage_max - 1;
-    if (afl->line_search && ((cur_mutant_id && cur_mutant_id % LINE_SEARCH_MIN_MUTANTS == 0) || (cur_mutant_id == last_mutant_id && (!shared_mode || cur_mutant_id % LINE_SEARCH_MIN_MUTANTS > SHARED_MODE_LINE_SEARCH_MIN)))) {
+    if (likely(afl->line_search) && ((cur_mutant_id && cur_mutant_id % LINE_SEARCH_MIN_MUTANTS == 0) || (cur_mutant_id == last_mutant_id && (!shared_mode || cur_mutant_id % LINE_SEARCH_MIN_MUTANTS > SHARED_MODE_LINE_SEARCH_MIN)))) {
       afl->line_search_count++;
       afl->fsrv.br_trace_setting = BR_TRACE_LINE_SEARCH;
       reset_line_stats(afl);
@@ -4113,7 +4113,7 @@ handler_fuzz_failure:
     }
   }
 
-  if (afl->line_search && afl->schedule == WD_SCHEDULER && shared_mode) {
+  if (likely(afl->line_search && afl->schedule == WD_SCHEDULER) && shared_mode) {
     memset(br_inc, 0, sizeof(s64) * fox_total_border_edge_cnt);
     memset(br_dec, 0, sizeof(s64) * fox_total_border_edge_cnt);
     memset(subgrad_inc, 0, sizeof(float)* fox_total_border_edge_cnt);
@@ -4130,7 +4130,7 @@ handler_fuzz_failure:
     afl->fsrv.br_trace_setting = BR_TRACE_DEFAULT;
   }
 
-  if (afl->line_search) {
+  if (likely(afl->line_search)) {
     for (u32 i=0; i < afl->stage_max; i++) {
       if (mutant_buf[i]) {
         ck_free(mutant_buf[i]);
@@ -4173,7 +4173,7 @@ handler_fuzz_failure:
 
 retry_splicing:
 
-  if (afl->use_splicing && splice_cycle++ < (afl->schedule == WD_SCHEDULER ? SPLICE_CYCLES_WD_SCHEDULER : SPLICE_CYCLES) &&
+  if (afl->use_splicing && splice_cycle++ < (likely(afl->schedule == WD_SCHEDULER) ? SPLICE_CYCLES_WD_SCHEDULER : SPLICE_CYCLES) &&
       afl->ready_for_splicing_count > 1 && afl->queue_cur->len >= 4) {
 
     struct queue_entry *target;
@@ -4255,7 +4255,7 @@ abandon_entry:
 
     --afl->pending_not_fuzzed;
     afl->queue_cur->was_fuzzed = 1;
-    if (afl->schedule != WD_SCHEDULER)
+    if (unlikely(afl->schedule != WD_SCHEDULER))
       afl->reinit_table = 1;
     if (afl->queue_cur->favored) { --afl->pending_favored; }
 

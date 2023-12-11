@@ -2431,7 +2431,7 @@ int main(int argc, char **argv_orig, char **envp) {
   memset(afl->virgin_tmout, 255, map_size);
   memset(afl->virgin_crash, 255, map_size);
 
-  if (afl->schedule == WD_SCHEDULER) {
+  if (likely(afl->schedule == WD_SCHEDULER)) {
     load_fox_metadata(afl);
     afl->wd_scheduler_havoc_max_mult = HAVOC_MAX_MULT_WD_SCHEDULER;
   }
@@ -2779,7 +2779,7 @@ int main(int argc, char **argv_orig, char **envp) {
     do {
 
       if (likely(!afl->old_seed_selection)) {
-        if (afl->schedule == WD_SCHEDULER) {
+        if (likely(afl->schedule == WD_SCHEDULER)) {
           create_alias_table_wd_scheduler(afl);
           afl->current_entry = select_next_queue_entry_wd_scheduler(afl);
         } else {

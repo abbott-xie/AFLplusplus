@@ -1144,7 +1144,7 @@ void update_bitmap_score(afl_state_t *afl, struct queue_entry *q) {
 
 void cull_queue(afl_state_t *afl) {
 
-  if (afl->schedule == WD_SCHEDULER) return;
+  if (likely(afl->schedule == WD_SCHEDULER)) return;
   if (likely(!afl->score_changed || afl->non_instrumented_mode)) { return; }
 
   u32 len = (afl->fsrv.map_size >> 3);

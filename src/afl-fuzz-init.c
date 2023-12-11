@@ -982,7 +982,7 @@ void perform_dry_run(afl_state_t *afl) {
 
     close(fd);
 
-    if (afl->schedule == WD_SCHEDULER) {
+    if (likely(afl->schedule == WD_SCHEDULER)) {
       afl->wd_scheduler_dry_run = 1;
       res = calibrate_case(afl, q, use_mem, 0, 1);
       afl->wd_scheduler_dry_run = 0;

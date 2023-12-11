@@ -818,7 +818,8 @@ bool OptfuzzIsInterestingCmp(ICmpInst *CMP, const DominatorTree *DT,
 
   Value *A0 = CMP->getOperand(0);
   if (!A0->getType()->isIntegerTy()) return false;
-  uint64_t TypeSize = DL->getTypeStoreSizeInBits(A0->getType());
+  //uint64_t TypeSize = DL->getTypeStoreSizeInBits(A0->getType());
+  unsigned TypeSize = (cast<IntegerType>(A0->getType()))->getBitWidth();
   if ((TypeSize != 8) && (TypeSize != 16)&& (TypeSize != 32) && (TypeSize != 64)) return false;
 
   return true;
@@ -1158,7 +1159,8 @@ void ModuleSanitizerCoverageAFL::instrumentFunction(
       if (SwitchInst* SI = dyn_cast<SwitchInst>(&Inst)){
         Value* op1 = SI->getCondition();
         if (!op1->getType()->isIntegerTy()) continue;
-        uint64_t TypeSize = DL->getTypeStoreSizeInBits(op1->getType());
+        //uint64_t TypeSize = DL->getTypeStoreSizeInBits(op1->getType());
+        unsigned TypeSize = (cast<IntegerType>(op1->getType()))->getBitWidth();
         int      CallbackIdx = TypeSize == 8    ? 0
                                : TypeSize == 16 ? 1
                                : TypeSize == 32 ? 2
@@ -1280,15 +1282,15 @@ void ModuleSanitizerCoverageAFL::instrumentFunction(
       } 
     }
   }
+  
+  // handle select instruction FIRST!!!! 
+  OptfuzzInjectTraceForCmpNonTerminator(F, CmpTraceTargetsNonTerminator, SancovForCmpNonTerminator,  SelectInstArray,  InstrumentCntPtr, datalog);
 
   //cmp
   OptfuzzInjectTraceForCmp(F, CmpTraceTargets, SancovForCmp, InstrumentCntPtr, datalog);
   //strcmp
   OptfuzzInjectTraceForStrcmp(F, StrcmpTraceTargets, SancovForStrcmp, InstrumentCntPtr, errlog, datalog);
-  // handle select instruction 
-  OptfuzzInjectTraceForCmpNonTerminator(F, CmpTraceTargetsNonTerminator, SancovForCmpNonTerminator,  SelectInstArray,  InstrumentCntPtr, datalog);
   
-  //OptfuzzInjectTraceForStrcmpNonTerminator(F, StrcmpTraceTargetsNonTerminator, BlocksToInstrumentWithNoCMP);
   //switch
   OptfuzzInjectTraceForSwitch(F, SwitchTraceTargets, SancovForSwitch, case_target_list, case_val_list, int_val_list, InstrumentCntPtr, datalog);
 
@@ -1725,7 +1727,8 @@ void ModuleSanitizerCoverageAFL::OptfuzzInjectTraceForSwitch(Function &F, ArrayR
     if (SwitchInst *SI = dyn_cast<SwitchInst>(I)) {
 
       Value* op1 = SI->getCondition();
-      uint64_t TypeSize = DL->getTypeStoreSizeInBits(op1->getType());
+      //uint64_t TypeSize = DL->getTypeStoreSizeInBits(op1->getType());
+      unsigned TypeSize = (cast<IntegerType>(op1->getType()))->getBitWidth();
       int      CallbackIdx = TypeSize == 8    ? 0
                              : TypeSize == 16 ? 1
                              : TypeSize == 32 ? 2
@@ -2017,7 +2020,8 @@ void ModuleSanitizerCoverageAFL::OptfuzzInjectTraceForCmp(
       Value      *A1 = ICMP->getOperand(1);
       // TODO: add support to pointer operand.
       if (!A0->getType()->isIntegerTy()) continue;
-      uint64_t TypeSize = DL->getTypeStoreSizeInBits(A0->getType());
+      //uint64_t TypeSize = DL->getTypeStoreSizeInBits(A0->getType());
+      unsigned TypeSize = (cast<IntegerType>(A0->getType()))->getBitWidth();
       int      CallbackIdx = TypeSize == 8    ? 0
                              : TypeSize == 16 ? 1
                              : TypeSize == 32 ? 2
@@ -2167,7 +2171,8 @@ void ModuleSanitizerCoverageAFL::OptfuzzInjectTraceForCmpNonTerminator(
       
       // TODO: add support to pointer operand.
       if (!A0->getType()->isIntegerTy()) continue;
-      uint64_t TypeSize = DL->getTypeStoreSizeInBits(A0->getType());
+      //uint64_t TypeSize = DL->getTypeStoreSizeInBits(A0->getType());
+      unsigned TypeSize = (cast<IntegerType>(A0->getType()))->getBitWidth();
       
       int      CallbackIdx = TypeSize == 8    ? 0
                              : TypeSize == 16 ? 1
@@ -2225,19 +2230,17 @@ void ModuleSanitizerCoverageAFL::OptfuzzInjectTraceForCmpNonTerminator(
       
       IRBuilder<> IRB(ICMP);
       Value* br_id =  ConstantInt::get(Int32Ty, instrument_id);
-      IRB.CreateCall(CallbackFunc, {br_id, A0, A1 });
+      auto *LoadBrCovMap = IRB.CreateLoad(PointerType::get(Int8Ty, 0), BrCovMapPtr);
+      auto *BrCovPtr = IRB.CreateGEP(Int8Ty, LoadBrCovMap, br_id);
+      auto Load = IRB.CreateLoad(Int8Ty, BrCovPtr);
+      MDNode* N = MDNode::get(ICMP->getContext(), MDString::get(ICMP->getContext(), "Optfuzz"));
+      Load->setMetadata("NoGraph", N);
+      SetNoSanitizeMetadata(Load);
+      SetNoSanitizeMetadata(LoadBrCovMap);
       
-      //auto *LoadBrCovMap = IRB.CreateLoad(PointerType::get(Int8Ty, 0), BrCovMapPtr);
-      //auto *BrCovPtr = IRB.CreateGEP(Int8Ty, LoadBrCovMap, br_id);
-      //auto Load = IRB.CreateLoad(Int8Ty, BrCovPtr);
-      //MDNode* N = MDNode::get(ICMP->getContext(), MDString::get(ICMP->getContext(), "Optfuzz"));
-      //Load->setMetadata("NoGraph", N);
-      //SetNoSanitizeMetadata(Load);
-      //SetNoSanitizeMetadata(LoadBrCovMap);
-      
-      //auto ThenTerm =  SplitBlockAndInsertIfThen(IRB.CreateIsNull(Load), ICMP, false);
-      //IRBuilder<> ThenIRB(ThenTerm);
-      //ThenIRB.CreateCall(CallbackFunc, {br_id, A0, A1 });
+      auto ThenTerm =  SplitBlockAndInsertIfThen(IRB.CreateIsNull(Load), ICMP, false);
+      IRBuilder<> ThenIRB(ThenTerm);
+      ThenIRB.CreateCall(CallbackFunc, {br_id, A0, A1 });
       if (!duplicated){
         id_assigned[key] = instrument_id;
         if (TypeSize == 64)
@@ -2466,7 +2469,8 @@ void ModuleSanitizerCoverageAFL::InjectTraceForCmp(
       Value      *A0 = ICMP->getOperand(0);
       Value      *A1 = ICMP->getOperand(1);
       if (!A0->getType()->isIntegerTy()) continue;
-      uint64_t TypeSize = DL->getTypeStoreSizeInBits(A0->getType());
+     //uint64_t TypeSize = DL->getTypeStoreSizeInBits(A0->getType());
+      unsigned TypeSize = (cast<IntegerType>(A0->getType()))->getBitWidth();
       int      CallbackIdx = TypeSize == 8    ? 0
                              : TypeSize == 16 ? 1
                              : TypeSize == 32 ? 2

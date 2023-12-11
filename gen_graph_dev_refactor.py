@@ -177,7 +177,7 @@ def get_fun_to_local_table (dot_file, inline_table, fun_list, node_2_callee, fun
                             if "load" in inst and "inttoptr" not in inst:
                                 found_the_first_node = 1
                                 first_node = inst
-                            elif ' = select i1 ' not in inst:
+                            elif ' = select' not in inst:
                                 found_the_second_node = 1
                                 second_node = inst
                             else:
@@ -267,7 +267,7 @@ def construct_graph_init(dot_file, inline_table, fun_list, node_2_callee, func_n
                                 first_node = inst
                             # case2 : second and the following sancov node in a function
                             # load i32, i32* inttoptr ... @__sancov_gen_
-                            elif ' = select i1 ' not in inst:
+                            elif ' = select' not in inst:
                                 found_the_second_node = 1
                                 second_node = inst
                             # case3: select instruction with sancov node
@@ -352,8 +352,8 @@ def construct_graph_init(dot_file, inline_table, fun_list, node_2_callee, func_n
                                     print("BUG: parse local table error!")
                                 else:
                                     dummy_id_2_local_table[dummy_id] = local_table
-                                    
-                                    
+
+
                 graph[dot_node_id] = []
                 if dot_node_id not in reverse_graph:
                     reverse_graph[dot_node_id] = []
@@ -530,7 +530,7 @@ def parse_local_edge_from_normal_sancov_instrument(instrument):
     else:
         local_edge = instrument.split()[15][:-1]
     return local_edge
- 
+
 def cal_sancov_id_from_local_edge_and_dummy_id(local_edge, dummy_id):
     return int(int(local_edge)/4) + inline_table[dummy_id_2_local_table[dummy_id]]
 
@@ -542,19 +542,19 @@ def recognize_strcmp_subtype(instruction):
     for func in isStrcmp:
         if func in instruction:
             return 'strcmp'
-    
+
     for func in isMemcmp:
         if func in instruction:
             return 'memcmp'
-    
+
     for func in isStrncmp:
         if func in instruction:
             return 'strncmp'
-    
+
     for func in isStrstr:
         if func in instruction:
-            return 'strstr'    
-        
+            return 'strstr'
+
     return 'error'
 
 if __name__ == '__main__':
@@ -590,8 +590,8 @@ if __name__ == '__main__':
                 sancov_instrument = tokens[2]
                 local_edge = parse_local_edge_from_normal_sancov_instrument(sancov_instrument)
                 sancov_id = cal_sancov_id_from_local_edge_and_dummy_id(local_edge, dummy_id)
-                
-                if tokens[0] == '1':  
+
+                if tokens[0] == '1':
                     cmp_inst = tokens[3]
                     cmp_type = cmp_inst.split()[3]
                 elif tokens[0] == '2':
@@ -599,9 +599,9 @@ if __name__ == '__main__':
                     cmp_type = recognize_strcmp_subtype(cmp_inst)
                     if cmp_type == 'error':
                         print("BUG: error strcmp type")
-                        
+
                 id_2_cmp_type[sancov_id] = (cmp_typ_dic[cmp_type], dummy_id, str_len)
-            
+
             # for switch case
             elif tokens[0] == '3':
                 cmp_type = 'switch'
@@ -609,13 +609,13 @@ if __name__ == '__main__':
                 sancov_src_instrument = tokens[2]
                 local_src_edge = parse_local_edge_from_normal_sancov_instrument(sancov_src_instrument)
                 sancov_src_id = cal_sancov_id_from_local_edge_and_dummy_id(local_src_edge, dummy_id)
-                
+
                 sancov_dst_instrument = tokens[5]
                 local_dst_edge = sancov_dst_instrument.split()[16][:-1]
                 sancov_dst_id = cal_sancov_id_from_local_edge_and_dummy_id(local_dst_edge, dummy_id)
                 id_2_cmp_type[sancov_src_id] = (cmp_typ_dic[cmp_type], -1, str_len)
                 sw_border_edge_2_br_dist[(sancov_src_id, sancov_dst_id)] = dummy_id
-                
+
             # for select:2 edges
             # (src sancov id, 1st element of select instruction sancov id)
             elif tokens[0] == '4':
@@ -625,19 +625,19 @@ if __name__ == '__main__':
                 sancov_src_instrument = tokens[2]
                 local_src_edge = parse_local_edge_from_normal_sancov_instrument(sancov_src_instrument)
                 sancov_src_id = cal_sancov_id_from_local_edge_and_dummy_id(local_src_edge, dummy_id)
-                
+
                 sancov_dst_instrument = tokens[4]
                 # we choose the fist element
                 local_dst_edge = sancov_dst_instrument.split()[16][:-1]
                 sancov_dst_id = cal_sancov_id_from_local_edge_and_dummy_id(local_dst_edge, dummy_id)
-                
+
                 select_edge_2_cmp_type[(sancov_src_id, sancov_dst_id)] = (cmp_typ_dic[cmp_type], dummy_id, str_len)
-                
+
                 # then choose the second element
                 second_sancov_dst_id = sancov_dst_id + 1
                 select_edge_2_cmp_type[(sancov_src_id, second_sancov_dst_id)] = (cmp_typ_dic[cmp_type], dummy_id, str_len)
-                
-                          
+
+
     # cmp_type[node_id] = cmp_type
     # sancov node_id, cmp_type
     with open("br_node_id_2_cmp_type", "w") as f:
@@ -713,7 +713,7 @@ if __name__ == '__main__':
     parent_node_id_map = defaultdict(list)
     for key, val in enumerate(border_edges):
         parent_node_id_map[val[0]].append(key)
-        
+
     # border_edge_parent, first_border_edge_idx, num_of_border_edges_starting_from_this_parent
     with open("border_edges_cache", "w") as f:
         for parent, id_list in parent_node_id_map.items():
@@ -730,7 +730,7 @@ if __name__ == '__main__':
     select_parent_node_id_map = defaultdict(list)
     for key, val in enumerate(select_border_edges):
         select_parent_node_id_map[val[0]].append(key)
-        
+
     # border_edge_parent, first_border_edge_idx, num_of_border_edges_starting_from_this_parent
     with open("select_border_edges_cache", "w") as f:
         for parent, id_list in select_parent_node_id_map.items():

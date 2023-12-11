@@ -877,7 +877,7 @@ save_if_interesting(afl_state_t *afl, void *mem, u32 len, u8 fault) {
   }
 
   if (likely(fault == afl->crash_mode)) {
-    if (afl->schedule == WD_SCHEDULER)
+    if (likely(afl->schedule == WD_SCHEDULER))
       increment_hit_bits(afl);
 
     /* Keep only if there are new bits in the map, add to queue for
@@ -891,7 +891,7 @@ save_if_interesting(afl_state_t *afl, void *mem, u32 len, u8 fault) {
 
       new_bits = has_new_bits_unclassified(afl, afl->virgin_bits);
 
-    if (afl->schedule == WD_SCHEDULER) {
+    if (likely(afl->schedule == WD_SCHEDULER)) {
       if (!new_bits && afl->fsrv.winning_cnt) {
         if (afl->fsrv.skip_classify_count) {
           classify_counts(&afl->fsrv);
@@ -1020,7 +1020,7 @@ save_if_interesting(afl_state_t *afl, void *mem, u32 len, u8 fault) {
 
     keeping = 1;
 
-    if (afl->schedule == WD_SCHEDULER) {
+    if (likely(afl->schedule == WD_SCHEDULER)) {
       u32 winning_cnt = afl->fsrv.winning_cnt;
       u32 *winning_list = afl->fsrv.winning_list;
       struct queue_entry *q = afl->queue_top;
@@ -1032,7 +1032,7 @@ save_if_interesting(afl_state_t *afl, void *mem, u32 len, u8 fault) {
     }
   }
 
-  if (afl->schedule == WD_SCHEDULER && fault)
+  if (likely(afl->schedule == WD_SCHEDULER) && fault)
     has_new_bits(afl, afl->virgin_bits);
 
   switch (fault) {
@@ -1045,7 +1045,7 @@ save_if_interesting(afl_state_t *afl, void *mem, u32 len, u8 fault) {
          mode, we just keep everything. */
 
       ++afl->total_tmouts;
-      if (afl->schedule == WD_SCHEDULER)
+      if (likely(afl->schedule == WD_SCHEDULER))
         increment_hit_bits_timeout(afl);
 
       if (afl->saved_hangs >= KEEP_UNIQUE_HANG) { return keeping; }
@@ -1177,7 +1177,7 @@ save_if_interesting(afl_state_t *afl, void *mem, u32 len, u8 fault) {
 
       if (likely(!afl->non_instrumented_mode)) {
 
-        if (afl->schedule == WD_SCHEDULER)
+        if (likely(afl->schedule == WD_SCHEDULER))
           increment_hit_bits_timeout(afl);
 
         if (unlikely(!classified)) {
