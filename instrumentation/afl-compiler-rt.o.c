@@ -96,6 +96,13 @@ static u8  __afl_area_initial[MAP_INITIAL_SIZE];
 static u8 *__afl_area_ptr_dummy = __afl_area_initial;
 static u8 *__afl_area_ptr_backup = __afl_area_initial;
 
+static s64  __afl_br_dist_initial[MAP_INITIAL_SIZE];                                      
+static u8  __afl_br_hit_initial[MAP_INITIAL_SIZE];                                      
+static u8  __br_cov_initial[MAP_INITIAL_SIZE]; 
+s64 *__afl_br_dist = __afl_br_dist_initial;                                        
+u8 *__afl_br_hit = __afl_br_hit_initial;                                        
+u8 *__br_cov_ptr = __br_cov_initial;
+
 u8        *__afl_area_ptr = __afl_area_initial;
 u8        *__afl_dictionary;
 u8        *__afl_fuzz_ptr;
@@ -656,6 +663,39 @@ static void __afl_map_shm(void) {
 
   }
 
+  id_str = getenv("AFL_BR_DIST");                                                         
+  if (id_str) {                                                                           
+                                                                                          
+     u32 shm_id = atoi(id_str);                                                           
+                                                                                          
+     __afl_br_dist = shmat(shm_id, NULL, 0);                                              
+                                                                                          
+                                                                                          
+     if (__afl_br_dist == (void *)-1) _exit(1);                                           
+   }                                                                                      
+                                                                                          
+  id_str = getenv("AFL_BR_COV");                                                          
+  if (id_str) {                                                                           
+                                                                                          
+     u32 shm_id = atoi(id_str);                                                           
+                                                                                          
+     __br_cov_ptr = shmat(shm_id, NULL, 0);                                               
+                                                                                          
+                                                                                          
+     if (__br_cov_ptr == (void *)-1) _exit(1);                                            
+   }
+
+  id_str = getenv("AFL_BR_HIT");                                                          
+  if (id_str) {                                                                           
+                                                                                          
+     u32 shm_id = atoi(id_str);                                                           
+                                                                                          
+     __afl_br_hit = shmat(shm_id, NULL, 0);                                               
+                                                                                          
+                                                                                          
+     if (__afl_br_hit == (void *)-1) _exit(1);                                            
+   }  
+
   id_str = getenv(CMPLOG_SHM_ENV_VAR);
 
   if (__afl_debug) {
@@ -834,6 +874,26 @@ void write_error_with_location(char *text, char *filename, int linenumber) {
   fprintf(stderr, "File %s, line %d: Error(%s): %s\n", filename, linenumber,
           text, e);
 
+}
+
+void write_overflow_log(int addr, char *type) {
+
+  u8   *o = getenv("__AFL_OUT_DIR");
+
+  if (o) {
+
+    char buf[4096];
+    snprintf(buf, sizeof(buf), "%s/overflow_log", o);
+    FILE *f = fopen(buf, "a");
+
+    if (f) {
+
+      fprintf(f, "Addr:%d Type:%s\n", addr, type);
+      fclose(f);
+
+    }
+
+  }
 }
 
 #ifdef __linux__
@@ -2658,4 +2718,345 @@ void __afl_set_persistent_mode(u8 mode) {
 }
 
 #undef write_error
+
+void log_br8(int addr, s8 op1, s8 op2) {
+    if (__afl_br_hit[addr]) return;
+    __afl_br_hit[addr] = 1;
+    s8 result = 0;
+    if (__builtin_sub_overflow(op1, op2 , &result)) { 
+        // write_overflow_log(addr, "br8");
+        return;
+    }
+    __afl_br_dist[addr] = result;
+    return;
+}
+void log_br16(int addr, s16 op1, s16 op2) {
+    if (__afl_br_hit[addr]) return;
+    __afl_br_hit[addr] = 1;
+    s16 result = 0;
+    if (__builtin_sub_overflow(op1, op2 , &result)) { 
+        // write_overflow_log(addr, "br16");
+        return;
+    }
+    __afl_br_dist[addr] = result;
+    return;
+}
+void log_br32(int addr, s32 op1, s32 op2) {
+    if (__afl_br_hit[addr]) return;
+    __afl_br_hit[addr] = 1;
+    s32 result = 0;
+    if (__builtin_sub_overflow(op1, op2 , &result)) { 
+        // write_overflow_log(addr, "br32");
+        return;
+    }
+    __afl_br_dist[addr] = result; 
+    return;
+}
+void log_br64(int addr, s64 op1, s64 op2) {
+    if (__afl_br_hit[addr]) return;
+    __afl_br_hit[addr] = 1;
+    s64 result = 0;
+    if (__builtin_sub_overflow(op1, op2 , &result)) { 
+        // write_overflow_log(addr, "br64");
+        return;
+    }
+    __afl_br_dist[addr] = result; 
+    return;
+}
+
+void log_br8_unsign(int addr, u8 op1, u8 op2) {
+    if (__afl_br_hit[addr]) return;
+    __afl_br_hit[addr] = 1;
+    s64 result = 0;
+    if (__builtin_sub_overflow(op1, op2 , &result)) { 
+        // write_overflow_log(addr, "br8");
+        return;
+    }
+    __afl_br_dist[addr] = result;
+    // __afl_br_dist[addr] = ((s64)(op1)) - ((s64)(op2));
+    return;
+}
+void log_br16_unsign(int addr, u16 op1, u16 op2) {
+    if (__afl_br_hit[addr]) return;
+    __afl_br_hit[addr] = 1;
+    s64 result = 0;
+    if (__builtin_sub_overflow(op1, op2 , &result)) { 
+        // write_overflow_log(addr, "br8");
+        return;
+    }
+    __afl_br_dist[addr] = result;
+    // __afl_br_dist[addr] = ((s64)(op1)) - ((s64)(op2));
+    return;
+}
+void log_br32_unsign(int addr, u32 op1, u32 op2) {
+    if (__afl_br_hit[addr]) return;
+    __afl_br_hit[addr] = 1;
+    s64 result = 0;
+    if (__builtin_sub_overflow(op1, op2 , &result)) { 
+        // write_overflow_log(addr, "br8");
+        return;
+    }
+    __afl_br_dist[addr] = result;
+    // __afl_br_dist[addr] = ((s64)(op1)) - ((s64)(op2));
+    return;
+}
+void log_br64_unsign(int addr, u64 op1, u64 op2) {
+    if (__afl_br_hit[addr]) return;
+    __afl_br_hit[addr] = 1;
+    s64 result = 0;
+    if (__builtin_sub_overflow(op1, op2 , &result)) { 
+        // write_overflow_log(addr, "br8");
+        return;
+    }
+    __afl_br_dist[addr] = result;
+    // __afl_br_dist[addr] = ((s64)(op1)) - ((s64)(op2));
+    return;
+}
+
+
+void log_br8_r(int addr, s8 op1, s8 op2) {
+    if (__afl_br_hit[addr]) return;
+    __afl_br_hit[addr] = 1;
+    __afl_br_dist[addr] = op1 - op2;
+    return;
+}
+void log_br16_r(int addr, s16 op1, s16 op2) {
+    if (__afl_br_hit[addr]) return;
+    __afl_br_hit[addr] = 1;
+    __afl_br_dist[addr] = op1 - op2;
+    return;
+}
+void log_br32_r(int addr, s32 op1, s32 op2) {
+    if (__afl_br_hit[addr]) return;
+    __afl_br_hit[addr] = 1;
+    __afl_br_dist[addr] = op1 - op2;
+    return;
+}
+void log_br64_r(int addr, s64 op1, s64 op2) {
+    if (__afl_br_hit[addr]) return;
+    __afl_br_hit[addr] = 1;
+    __afl_br_dist[addr] = op1 - op2;
+    return;
+}
+
+void log_br8_unsign_r(int addr, u8 op1, u8 op2) {
+    if (__afl_br_hit[addr]) return;
+    __afl_br_hit[addr] = 1;
+    __afl_br_dist[addr] = ((s64)(op1)) - ((s64)(op2));
+    return;
+}
+void log_br16_unsign_r(int addr, u16 op1, u16 op2) {
+    if (__afl_br_hit[addr]) return;
+    __afl_br_hit[addr] = 1;
+    __afl_br_dist[addr] = ((s64)(op1)) - ((s64)(op2));
+    return;
+}
+void log_br32_unsign_r(int addr, u32 op1, u32 op2) {
+    if (__afl_br_hit[addr]) return;
+    __afl_br_hit[addr] = 1;
+    __afl_br_dist[addr] = ((s64)(op1)) - ((s64)(op2));
+    return;
+}
+void log_br64_unsign_r(int addr, u64 op1, u64 op2) {
+    if (__afl_br_hit[addr]) return;
+    __afl_br_hit[addr] = 1;
+    __afl_br_dist[addr] = ((s64)(op1)) - ((s64)(op2));
+    return;
+}
+
+
+
+void eq_log_br8(int addr, s8 op1, s8 op2) {
+    if (__afl_br_hit[addr]) return;
+    __afl_br_hit[addr] = 1; 
+    s16 *ptr = (s16 *)(__afl_br_dist + addr);
+    ptr[0] = (s16)(op1) - (s16)op2;
+    
+    //__afl_br_dist[addr] = op1 - op2;
+    return;
+}
+void eq_log_br16(int addr, s16 op1, s16 op2) {
+    if (__afl_br_hit[addr]) return;
+    __afl_br_hit[addr] = 1;
+    
+    s16 *ptr = (s16 *)(__afl_br_dist + addr);
+    ptr[1] = (s16)((op1 >> 8) & 0xff) - (s16)((op2 >> 8) & 0xff);
+    ptr[0] = (s16)(op1 & 0xff) - (s16)(op2 & 0xff);
+    
+    //__afl_br_dist[addr] = op1 - op2;
+    return;
+}
+void eq_log_br32(int addr, s32 op1, s32 op2) {
+    if (__afl_br_hit[addr]) return;
+    __afl_br_hit[addr] = 1;
+    s16 *ptr = (s16 *)(__afl_br_dist + addr);
+    ptr[3] = (s16)((op1 >> 24) & 0xff) - (s16)((op2 >> 24) & 0xff);
+    ptr[2] = (s16)((op1 >> 16) & 0xff) - (s16)((op2 >> 16) & 0xff);
+    ptr[1] = (s16)((op1 >> 8) & 0xff) - (s16)((op2 >> 8) & 0xff);
+    ptr[0] = (s16)(op1 & 0xff) - (s16)(op2 & 0xff);
+    //__afl_br_dist[addr] = op1 - op2;
+    return;
+}
+void eq_log_br64(int addr, s64 op1, s64 op2) {
+    if (__afl_br_hit[addr]) return;
+    __afl_br_hit[addr] = 1;
+    s64 result = 0;
+    if (__builtin_sub_overflow(op1, op2 , &result)) {
+	// write_overflow_log(addr, "eqbr64");
+	return;
+    }
+    s16 *ptr = (s16 *)(__afl_br_dist + addr);
+    ptr[7] = (s16)((op1 >> 56) & 0xff) - (s16)((op2 >> 56) & 0xff);
+    ptr[6] = (s16)((op1 >> 48) & 0xff) - (s16)((op2 >> 48) & 0xff);
+    ptr[5] = (s16)((op1 >> 40) & 0xff) - (s16)((op2 >> 40) & 0xff);
+    ptr[4] = (s16)((op1 >> 32) & 0xff) - (s16)((op2 >> 32) & 0xff);
+    ptr[3] = (s16)((op1 >> 24) & 0xff) - (s16)((op2 >> 24) & 0xff);
+    ptr[2] = (s16)((op1 >> 16) & 0xff) - (s16)((op2 >> 16) & 0xff);
+    ptr[1] = (s16)((op1 >> 8) & 0xff) - (s16)((op2 >> 8) & 0xff);
+    ptr[0] = (s16)(op1 & 0xff) - (s16)(op2 & 0xff);
+    //__afl_br_dist[addr] = op1 - op2;
+    return;
+}
+
+void sw_log_br8(int addr, s8 op1, s8 op2) {
+    if (__afl_br_hit[addr]) return;
+    __afl_br_hit[addr] = 1;
+    
+    s16 *ptr = (s16 *)(__afl_br_dist + addr);
+    ptr[0] = (s16)(op1) - (s16)op2;
+    
+    //__afl_br_dist[addr] = op1 - op2;
+    return;
+}
+void sw_log_br16(int addr, s16 op1, s16 op2) {
+    if (__afl_br_hit[addr]) return;
+    __afl_br_hit[addr] = 1;
+    
+    s16 *ptr = (s16 *)(__afl_br_dist + addr);
+    ptr[1] = (s16)((op1 >> 8) & 0xff) - (s16)((op2 >> 8) & 0xff);
+    ptr[0] = (s16)(op1 & 0xff) - (s16)(op2 & 0xff);
+    
+    //__afl_br_dist[addr] = op1 - op2;
+    return;
+}
+void sw_log_br32(int addr, s32 op1, s32 op2) {
+    if (__afl_br_hit[addr]) return;
+    __afl_br_hit[addr] = 1;
+    
+    s16 *ptr = (s16 *)(__afl_br_dist + addr);
+    ptr[3] = (s16)((op1 >> 24) & 0xff) - (s16)((op2 >> 24) & 0xff);
+    ptr[2] = (s16)((op1 >> 16) & 0xff) - (s16)((op2 >> 16) & 0xff);
+    ptr[1] = (s16)((op1 >> 8) & 0xff) - (s16)((op2 >> 8) & 0xff);
+    ptr[0] = (s16)(op1 & 0xff) - (s16)(op2 & 0xff);
+    //__afl_br_dist[addr] = op1 - op2;
+    return;
+}
+void sw_log_br64(int addr, s64 op1, s64 op2) {
+    if (__afl_br_hit[addr]) return;
+    __afl_br_hit[addr] = 1;
+    s16 *ptr = (s16 *)(__afl_br_dist + addr);
+    ptr[7] = (s16)((op1 >> 56) & 0xff) - (s16)((op2 >> 56) & 0xff);
+    ptr[6] = (s16)((op1 >> 48) & 0xff) - (s16)((op2 >> 48) & 0xff);
+    ptr[5] = (s16)((op1 >> 40) & 0xff) - (s16)((op2 >> 40) & 0xff);
+    ptr[4] = (s16)((op1 >> 32) & 0xff) - (s16)((op2 >> 32) & 0xff);
+    ptr[3] = (s16)((op1 >> 24) & 0xff) - (s16)((op2 >> 24) & 0xff);
+    ptr[2] = (s16)((op1 >> 16) & 0xff) - (s16)((op2 >> 16) & 0xff);
+    ptr[1] = (s16)((op1 >> 8) & 0xff) - (s16)((op2 >> 8) & 0xff);
+    ptr[0] = (s16)(op1 & 0xff) - (s16)(op2 & 0xff);
+    //__aafl_br_dist[addr] = op1 - op2;
+    return;
+}
+
+
+// addr_len: number of s64 memory chunks that are used to save the br_diff sequences. Each byte diff (range from -255 to 255) takes two byte locations. For a 8-byte str cmp, it would takes 8 * 2 = 16 bytes locations = 2 * s64 memory chunk
+// str_len: number of bytes in op1 or op2
+// addr layout: [u32 shorter, u32 str_len, s16 br_diff_1, ..., s16 br_diff_n]
+// op1: constant string
+// op2: variable string
+// Concrete example: say we have strcmp("deadbeef", str_var)
+// Then the strcmp_log(br_dist_id, "deadbeef", str_var, 2, 8)
+
+void strcmp_log(int addr, u8* op1, u8* op2, unsigned long str_len) {
+   if(op1 == NULL || op2 == NULL) return;
+    if (__afl_br_hit[addr]) return;
+    __afl_br_hit[addr] = 1;
+  u8 var_str_terminated = 0;
+  s16 *ptr = (s16 *)(__afl_br_dist + addr);
+  for (int i = 0; i < str_len; i++) { // strlen including the null terminator
+    if (!var_str_terminated && !op2[i])
+      var_str_terminated = 1;
+
+    ptr[i] = var_str_terminated ? (s16)op1[i] : (s16)(op1[i]) - op2[i];
+  
+  }
+  
+  s16 var_i = 0;
+  while (op2[var_i]) {
+    var_i++;
+    // Check to stop overflow in case the var length is greater than type max val (happened in sqlite3)
+    if (var_i == SHRT_MAX) break;
+  }
+
+  ptr[str_len] = (s16)var_i;
+}
+
+// str_len is the argument from strncmp()
+void strncmp_log(int addr, u8* op1, u8* op2, unsigned long str_len) {
+   if(op1 == NULL || op2 == NULL) return;
+    if (__afl_br_hit[addr]) return;
+    __afl_br_hit[addr] = 1;
+  u8 var_str_terminated = 0;
+  s16 *ptr = (s16 *)(__afl_br_dist + addr);
+  for (int i = 0; i < str_len; i++) { // strlen including the null terminator
+    if (!var_str_terminated && !op2[i])
+      var_str_terminated = 1;
+
+    ptr[i] = var_str_terminated ? (s16)op1[i] : (s16)(op1[i]) - op2[i];
+  
+  }
+
+  s16 var_i = 0;
+  while (op2[var_i]) {
+    var_i++;
+    // Check to stop overflow in case the var length is greater than type max val (happened in sqlite3)
+    if (var_i == SHRT_MAX) break;
+  }
+
+  ptr[str_len] = (s16)var_i;
+  
+}
+
+// str_len is the constant length of arguement
+void strstr_log(int addr, u8* op1, u8* op2, unsigned long str_len) {
+   if(op1 == NULL || op2 == NULL) return;
+    if (__afl_br_hit[addr]) return;
+    __afl_br_hit[addr] = 1;
+  u8 var_str_terminated = 0;
+  s16 *ptr = (s16 *)(__afl_br_dist + addr);
+  for (int i = 0; i < str_len; i++) { // strlen including the null terminator
+    if (!var_str_terminated && !op2[i])
+      var_str_terminated = 1;
+
+    ptr[i] = var_str_terminated ? (s16)op1[i] : (s16)(op1[i]) - op2[i];
+  
+  }
+  s16 var_i = 0;
+  while (op2[var_i]) {
+    var_i++;
+    // Check to stop overflow in case the var length is greater than type max val (happened in sqlite3)
+    if (var_i == SHRT_MAX) break;
+  }
+
+  ptr[str_len] = (s16)var_i;
+}
+
+void memcmp_log(int addr, u8* op1, u8* op2, unsigned long str_len) {
+   if(op1 == NULL || op2 == NULL) return;
+    if (__afl_br_hit[addr]) return;
+    __afl_br_hit[addr] = 1;
+  s16 *ptr = (s16 *)(__afl_br_dist + addr);
+  for (int i = 0; i < str_len; i++) { // strlen including the null terminator
+    ptr[i] = (s16)(op1[i]) - op2[i];
+  }
+}
 
