@@ -3499,7 +3499,7 @@ havoc_stage:
 
     afl->fsrv.br_trace_setting = BR_TRACE_DEFAULT;
 
-    if (afl->fsrv.mutant_ref_cnt) {
+    if (afl->line_search && afl->fsrv.mutant_ref_cnt) {
       u8 *cur_seed_buf = ck_alloc(temp_len);
       if (unlikely(!cur_seed_buf)) { PFATAL("alloc"); }
       memcpy(cur_seed_buf, out_buf, temp_len);
@@ -4113,7 +4113,7 @@ handler_fuzz_failure:
     }
   }
 
-  if (shared_mode) {
+  if (afl->line_search && afl->schedule == WD_SCHEDULER && shared_mode) {
     memset(br_inc, 0, sizeof(s64) * fox_total_border_edge_cnt);
     memset(br_dec, 0, sizeof(s64) * fox_total_border_edge_cnt);
     memset(subgrad_inc, 0, sizeof(float)* fox_total_border_edge_cnt);
@@ -4130,11 +4130,13 @@ handler_fuzz_failure:
     afl->fsrv.br_trace_setting = BR_TRACE_DEFAULT;
   }
 
-  for (u32 i=0; i < afl->stage_max; i++) {
-    if (mutant_buf[i]) {
-      ck_free(mutant_buf[i]);
-      mutant_len[i] = 0;
-      mutant_buf[i] = 0;
+  if (afl->line_search) {
+    for (u32 i=0; i < afl->stage_max; i++) {
+      if (mutant_buf[i]) {
+        ck_free(mutant_buf[i]);
+        mutant_len[i] = 0;
+        mutant_buf[i] = 0;
+      }
     }
   }
 
