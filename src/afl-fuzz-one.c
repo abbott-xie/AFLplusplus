@@ -484,7 +484,7 @@ u8 fuzz_one_original(afl_state_t *afl) {
   u32 *handler_candidate_id = afl->fsrv.handler_candidate_id;
   u32 *handler_candidate_dist_id = afl->fsrv.handler_candidate_dist_id;
   u8 *br_cov = afl->fsrv.br_cov;
-  u8 *icmp_default_line_search = afl->fsrv.icmp_default_line_search;
+  u8 *fallthrough_line_search = afl->fsrv.fallthrough_line_search;
   u32 fox_total_border_edge_cnt = afl->fox_total_border_edge_cnt;
   u32 fox_br_candidate_capacity = afl->fsrv.fox_br_candidate_capacity;
   u32 fox_mutant_buf_capacity = afl->fsrv.fox_mutant_buf_capacity;
@@ -3595,8 +3595,9 @@ havoc_stage:
           u32 parent = border_edge_parent[cur_edge_id];
           u32 child = border_edge_child[cur_edge_id];
           u8 cmp_type_parent = cmp_type[parent];
+          u8 fallthrough = can_fallthrough_handler(cmp_type_parent);
 
-          if (unlikely(br_cov[br_dist_edge_id] || icmp_default_line_search[br_dist_edge_id]))
+          if (unlikely(br_cov[br_dist_edge_id] || fallthrough_line_search[br_dist_edge_id]))
             continue;
 
           s16 *seed_y = (s16 *)(local_br_bits + br_dist_edge_id);
@@ -3651,8 +3652,8 @@ havoc_stage:
           }
 
           if (!mapping_found || x_loc < y_loc) {
-            if (cmp_type_parent == ICMP_EQ || cmp_type_parent == ICMP_NE)
-              icmp_default_line_search[br_dist_edge_id] = 1;
+            if (fallthrough)
+              fallthrough_line_search[br_dist_edge_id] = 1;
             else
               br_cov[br_dist_edge_id] = 1;
             continue;
@@ -3745,8 +3746,8 @@ havoc_stage:
           }
 
 handler_cleanup:
-          if (!cur_mutant_reached(child, trace_bits) && (cmp_type_parent == ICMP_EQ || cmp_type_parent == ICMP_NE))
-            icmp_default_line_search[br_dist_edge_id] = 1;
+          if (!cur_mutant_reached(child, trace_bits) && fallthrough)
+            fallthrough_line_search[br_dist_edge_id] = 1;
           else
             br_cov[br_dist_edge_id] = 1;
           out_buf = afl_realloc(AFL_BUF_PARAM(out), len);
@@ -3756,8 +3757,8 @@ handler_cleanup:
           continue;
 
 handler_fuzz_failure:
-          if (!cur_mutant_reached(child, trace_bits) && (cmp_type_parent == ICMP_EQ || cmp_type_parent == ICMP_NE))
-            icmp_default_line_search[br_dist_edge_id] = 1;
+          if (!cur_mutant_reached(child, trace_bits) && fallthrough)
+            fallthrough_line_search[br_dist_edge_id] = 1;
           else
             br_cov[br_dist_edge_id] = 1;
           ck_free(diff_idx);

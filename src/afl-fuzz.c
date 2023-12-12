@@ -2219,7 +2219,7 @@ int main(int argc, char **argv_orig, char **envp) {
     afl->fsrv.br_dec = (s64 *) ck_alloc(sizeof(s64) * afl->fox_total_border_edge_cnt);
     afl->fsrv.br_dec_winner = (u32 *) ck_alloc(sizeof(u32) * afl->fox_total_border_edge_cnt);
     afl->fsrv.br_inc_winner = (u32 *) ck_alloc(sizeof(u32) * afl->fox_total_border_edge_cnt);
-    afl->fsrv.icmp_default_line_search = (u8 *) ck_alloc(sizeof(u8) * afl->fox_total_border_edge_cnt);
+    afl->fsrv.fallthrough_line_search = (u8 *) ck_alloc(sizeof(u8) * afl->fox_total_border_edge_cnt);
     afl->fsrv.size_gradient_checked = (u8 *) ck_alloc(sizeof(u8) * afl->fox_total_border_edge_cnt);
 
     // index: border_edge_id, max number <= border_edge_cnt
