@@ -58,6 +58,7 @@ strcmp_log_funcs = ['strcmp_log']
 strncmp_log_funcs = ['strncmp_log']
 memcmp_log_funcs = ['memcmp_log']
 strstr_log_funcs = ['strstr_log']
+sancov_set = set()
 # ipdb.set_trace()
 nm_ret = subprocess.check_output('llvm-nm ' + sys.argv[3], shell=True, encoding='utf-8').splitlines()
 internal_func_list = set()
@@ -79,8 +80,9 @@ def inline_counter_table_init(filename, bin_name):
     ans = {}
     for line in lines:
         data = [ele for ele in line.split(',') if '@__sancov_gen_' in ele][0]
-        ans[data.split()[0]] = int(data.split()[4][1:])
-        ordered_key.append(data.split()[0])
+        if data.split()[0] in sancov_set:
+            ans[data.split()[0]] = int(data.split()[4][1:])
+            ordered_key.append(data.split()[0])
 
     tmp_sum = 0
     for key in ordered_key:
@@ -106,14 +108,14 @@ def inline_counter_table_final(filename, bin_name):
     ordered_key.clear()
     for line in lines:
         data = [ele for ele in line.split(',') if '@__sancov_gen_' in ele][0]
-        ans[data.split()[0]] = int(data.split()[4][1:])
-        ordered_key.append(data.split()[0])
+        if data.split()[0] in sancov_set:
+            ans[data.split()[0]] = int(data.split()[4][1:])
+            ordered_key.append(data.split()[0])
 
     tmp_sum = 0
     for key in ordered_key:
         inline_table[key] = tmp_sum
         tmp_sum += ans[key]
-        # print(key, tmp_sum)
 
     tokens = subprocess.check_output('llvm-nm ' + bin_name + ' |grep sancov_guards', shell=True, encoding='utf-8').split()
     if tmp_sum != ((int('0x'+ tokens[3], 0) - int('0x' + tokens[0], 0))/4):
@@ -122,6 +124,36 @@ def inline_counter_table_final(filename, bin_name):
 
     return inline_table
 
+def build_sancov_set(dot_file):
+    func_str = open(dot_file, 'r').read()
+    if " @__sancov_gen_" not in func_str: return
+    lines = open(dot_file, 'r').readlines()
+    for line in lines:
+        if line.startswith('\t'):
+            if '[' in line:
+                split_idx = line.index('[')
+                dot_node_id = line[:split_idx].strip()
+                code = line.split('label=')[1].strip()[1:-3]
+                # check instrumention basic block only
+                loc = code.find(' @__sancov_gen_')
+
+                # convert dot node id to llvm node id
+                if loc != -1:
+                    code = code.replace("\l...", '')
+                    insts = code.split('\\l  ')
+                    for inst in insts:
+                        if "__sancov_gen_" in inst:
+                            for subinst in inst.split():
+                                if "__sancov_gen_" in subinst:
+                                    if "," not in subinst:
+                                        sancov_set.add(subinst)
+                                    elif subinst.endswith(","):
+                                        sancov_set.add(subinst[:-1])
+                                    return
+        
+    
+    
+    
 def get_fun_to_local_table (dot_file, inline_table, fun_list, node_2_callee, func_name_2_root_exit_dict):
 
     lines = open(dot_file, 'r').readlines()
@@ -557,7 +589,10 @@ def recognize_strcmp_subtype(instruction):
 
     return 'error'
 
+
 if __name__ == '__main__':
+    for dot_file in glob.glob("./" + sys.argv[2] +"/*"):
+        build_sancov_set(dot_file)
     # check if there is discrepency between llvm IR symbol table and binary's symbol table
     inline_table = inline_counter_table_init(sys.argv[1], sys.argv[3])
     fun_list = [dot_file.split('/')[-1].split('.')[0] for dot_file in glob.glob("./" + sys.argv[2] + "/*")]
