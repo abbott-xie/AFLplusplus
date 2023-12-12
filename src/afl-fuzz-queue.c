@@ -184,14 +184,20 @@ void create_alias_table_wd_scheduler(afl_state_t *afl) {
   u32 *border_edge_parent_first_id = afl->fsrv.border_edge_parent_first_id;
   u32 *border_edge_child = afl->fsrv.border_edge_child;
   u8 *virgin_bits = afl->virgin_bits;
+  struct queue_entry **wd_scheduler_top_rated = afl->wd_scheduler_top_rated;
   struct queue_entry ***border_edge_seed_list = afl->fsrv.border_edge_seed_list;
   u32 *border_edge_seed_list_cnt = afl->fsrv.border_edge_seed_list_cnt;
   u32 *border_edge_seed_list_capacity = afl->fsrv.border_edge_seed_list_capacity;
-  struct queue_entry **wd_scheduler_top_rated = afl->wd_scheduler_top_rated;
-  u8 shared_mode = afl->wd_scheduler_shared_mode;
-  u32 max_added_seeds = afl->max_added_seeds;
   u64 *spent_time_us = afl->fsrv.spent_time_us;
   u64 *productive_time_us = afl->fsrv.productive_time_us;
+  u8 *cmp_type = afl->fsrv.cmp_type;
+  u32 *added_seeds = afl->fsrv.added_seeds;
+  u32 *border_edge_2_br_dist = afl->fsrv.border_edge_2_br_dist;
+  u8 *size_gradient_checked = afl->fsrv.size_gradient_checked;
+  u8 *br_cov = afl->fsrv.br_cov;
+  u32 max_added_seeds = afl->max_added_seeds;
+  u8 shared_mode = afl->wd_scheduler_shared_mode;
+
   u32 border_edge_cnt = 0;
   u32 nar_border_edge_cnt = 0;
   u32 max_weight_border_edge_id = 0;
@@ -205,11 +211,6 @@ void create_alias_table_wd_scheduler(afl_state_t *afl) {
   u32 min_exec_us_border_edge_id = 0;
   u64 min_exec_us = UINT64_MAX;
 #endif
-  u8 *cmp_type = afl->fsrv.cmp_type;
-  u32 *added_seeds = afl->fsrv.added_seeds;
-  u32 *border_edge_2_br_dist = afl->fsrv.border_edge_2_br_dist;
-  u8 *size_gradient_checked = afl->fsrv.size_gradient_checked;
-  u8 *br_cov = afl->fsrv.br_cov;
   u32 skipped_edge_cnt = 0;
   u32 handler_edge_cnt = 0;
 
@@ -251,10 +252,12 @@ void create_alias_table_wd_scheduler(afl_state_t *afl) {
         if (!top_seed)
           continue;
 
+        // compute border edge weight
         double border_edge_weight = - log(spent_time_us[parent]) - log1p(top_seed->schedule_cnt);
         if (!shared_mode && cmp_type_parent != NOT_INSTRUMENTED)
           border_edge_weight += log(productive_time_us[cur_border_edge_id]);
 
+        // update max
         if (cmp_type_parent == NOT_INSTRUMENTED) {
           nar_total_weight += border_edge_weight;
           if (isgreaterequal(border_edge_weight, max_weight_nar)) {
@@ -284,6 +287,8 @@ void create_alias_table_wd_scheduler(afl_state_t *afl) {
         } else {
           skipped_edge_cnt++;
         }
+
+        // update counters
         border_edge_cnt++;
         handler_edge_cnt += handler;
         total_weight += border_edge_weight;
@@ -329,13 +334,17 @@ void create_alias_table_wd_scheduler(afl_state_t *afl) {
 #endif
   }
 
+  if (!wd_scheduler_top_rated[afl->wd_scheduler_selected_border_edge_idx])
+    FATAL("BUG: the selected horizon branch does not have an associated seed.");
+
+  // update wd scheduler stats for the UI
   afl->wd_scheduler_stats.frontier_size = border_edge_cnt;
   afl->wd_scheduler_stats.frontier_instrumented = border_edge_cnt - nar_border_edge_cnt;
   afl->wd_scheduler_stats.frontier_skipped = skipped_edge_cnt;
   afl->wd_scheduler_stats.frontier_handled = handler_edge_cnt;
   afl->wd_scheduler_stats.frontier_discovery_time_min = total_frontier_discovery_time_us / 60000000;
 
-
+  // update wd scheduler log
   fprintf(afl->fsrv.wd_scheduler_log_file, "%llu %u %u %f %f %u %f %u %f %u %u %u %u %llu\n",
       ((afl->prev_run_time + get_cur_time() - afl->start_time) / 1000),
       afl->wd_scheduler_selected_border_edge_idx,
@@ -352,9 +361,6 @@ void create_alias_table_wd_scheduler(afl_state_t *afl) {
       shared_mode,
       total_frontier_discovery_time_us);
   fflush(afl->fsrv.wd_scheduler_log_file);
-
-  if (!wd_scheduler_top_rated[afl->wd_scheduler_selected_border_edge_idx])
-    FATAL("BUG: the selected horizon branch does not have an associated seed.");
 }
 
 static inline void add_capacity(struct queue_entry ***seed_list_p, u32 *capacity_p) {
@@ -1144,8 +1150,7 @@ void update_bitmap_score(afl_state_t *afl, struct queue_entry *q) {
 
 void cull_queue(afl_state_t *afl) {
 
-  if (likely(afl->schedule == WD_SCHEDULER)) return;
-  if (likely(!afl->score_changed || afl->non_instrumented_mode)) { return; }
+  if (likely(afl->schedule == WD_SCHEDULER || !afl->score_changed || afl->non_instrumented_mode)) { return; }
 
   u32 len = (afl->fsrv.map_size >> 3);
   u32 i;
