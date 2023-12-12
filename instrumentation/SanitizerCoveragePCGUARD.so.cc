@@ -1186,14 +1186,12 @@ void ModuleSanitizerCoverageAFL::instrumentFunction(
           }
         }
         if (!found_sancov){
-          errs()<< "\n !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! BUG1 switch fails to find sancov\n";
+          errs()<< "\n !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! BUG1 switch fails to find sancov 3\n";
         }
         // find target sancov id for each case
         for (auto i = SI->case_begin(), e = SI->case_end(); i != e;++i) {
           ConstantInt* op2 = dyn_cast<ConstantInt>(i->getCaseValue());
-          int_val_list.push_back(op2->getSExtValue());
           BasicBlock* targetBB = i->getCaseSuccessor();
-          case_val_list.push_back(op2);
           found_sancov = 0; 
           for (auto &J : *targetBB) {
             if (LoadInst *ldInst = dyn_cast<LoadInst>(&J)) {
@@ -1203,6 +1201,8 @@ void ModuleSanitizerCoverageAFL::instrumentFunction(
               ldInst_str.erase(std::remove(ldInst_str.begin(), ldInst_str.end(), '\n'), ldInst_str.cend());
               std::size_t found = ldInst_str.find("@__sancov_gen_");
               if (found != std::string::npos) {
+                int_val_list.push_back(op2->getSExtValue());
+                case_val_list.push_back(op2);
                 case_target_list.push_back(ldInst);
                 found_sancov = 1;
                 break;
@@ -1210,7 +1210,7 @@ void ModuleSanitizerCoverageAFL::instrumentFunction(
             }
           }
           if (!found_sancov){
-            errs()<< "\n !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! BUG1 switch fails to find target BB sancov\n";
+            errs()<< "\n !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! BUG1 switch fails to find target BB sancov 2\n";
           }
         }
 
@@ -1254,7 +1254,13 @@ void ModuleSanitizerCoverageAFL::instrumentFunction(
           }
         }
         if (!found_sancov){
-          errs()<< "\n !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! BUG1 switch fails to find sancov\n";
+          // write dummy value for empty default case
+          case_target_list.push_back(NULL);
+          int_val_list.push_back(0);
+          case_val_list.push_back(NULL);
+          
+          SI->print(errs());
+          errs()<< "\n !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! BUG1 switch fails to find sancov 1\n";
         }
       } 
       
@@ -1718,8 +1724,6 @@ bool ModuleSanitizerCoverageAFL::InjectCoverage(
 }
 
 void ModuleSanitizerCoverageAFL::OptfuzzInjectTraceForSwitch(Function &F, ArrayRef<Instruction *> SwitchTraceTargets, ArrayRef<Instruction *> SancovForSwitch, ArrayRef<Instruction *> case_target_list, ArrayRef<ConstantInt *> case_val_list, std::vector<int> int_val_list, int * InstrumentCntPtr,  ofstream &datalog) {
-//void ModuleSanitizerCoverageAFL::OptfuzzInjectTraceForSwitch(
-//    Function &F, ArrayRef<Instruction *> SwitchTraceTargets, int* InstrumentCntPtr, ofstream &datalog) {
   int iter_cnt = -1;
   int caseCnt = -1;
   for (auto I : SwitchTraceTargets) {
@@ -1830,6 +1834,11 @@ void ModuleSanitizerCoverageAFL::OptfuzzInjectTraceForSwitch(Function &F, ArrayR
       caseCnt+=1;
       Value* op2 = case_val_list[caseCnt]; // default case value   
       
+      if (!op2){
+        errs()<< "\n DBG: skip to instrument an empty default case.\n";
+        continue;
+      }
+
       std::string str, cmp_str, key;
       llvm::raw_string_ostream ss(str);
       SI->print(ss);
