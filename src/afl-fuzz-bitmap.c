@@ -243,7 +243,7 @@ static inline s64 icmp_single_br_dist_le(s16 *br_dist_buf, s16 sw_len, bool *has
   u32 *handler_candidate_id = afl->fsrv.handler_candidate_id;
   u32 *handler_candidate_dist_id = afl->fsrv.handler_candidate_dist_id;
   u32 handler_candidate_cnt = afl->fsrv.handler_candidate_cnt;
-  u8 *icmp_default_line_search = afl->fsrv.icmp_default_line_search;
+  u8 *fallthrough_line_search = afl->fsrv.fallthrough_line_search;
   u8* size_gradient_checked = afl->fsrv.size_gradient_checked;
   u32 *added_seeds = afl->fsrv.added_seeds;
   struct queue_entry *queue_cur = afl->queue_cur;
@@ -289,8 +289,9 @@ static inline s64 icmp_single_br_dist_le(s16 *br_dist_buf, s16 sw_len, bool *has
       u8 default_line_search_fallthrough = 0;
 
       u8 handler = is_handler(cmp_type_parent);
+      u8 fallthrough = can_fallthrough_handler(cmp_type_parent);
 
-      if ((cmp_type_parent == ICMP_EQ || cmp_type_parent == ICMP_NE) && !handler_candidate_icmp_ok) {
+      if (fallthrough && !handler_candidate_icmp_ok) {
         handler = 0;
         default_line_search_fallthrough = 1;
       }
@@ -309,7 +310,7 @@ static inline s64 icmp_single_br_dist_le(s16 *br_dist_buf, s16 sw_len, bool *has
             continue;
           }
 
-          if (icmp_default_line_search[base_br_dist_edge_id]) {
+          if (fallthrough_line_search[base_br_dist_edge_id]) {
             default_line_search_fallthrough = 1;
             continue;
           }
@@ -327,7 +328,7 @@ static inline s64 icmp_single_br_dist_le(s16 *br_dist_buf, s16 sw_len, bool *has
           s16 mutant_var_len = has_var_len ? this_br_bits[const_len]: (s16) const_len;
 
           s64 total_br_dist_abs = 0;
-          if (cmp_type_parent == ICMP_EQ || cmp_type_parent == ICMP_NE) {
+          if (fallthrough) {
             has_overflown = false;
             total_br_dist_abs = llabs(icmp_single_br_dist_le(this_br_bits, const_len, &has_overflown));
             if (has_overflown) {
@@ -365,7 +366,7 @@ static inline s64 icmp_single_br_dist_le(s16 *br_dist_buf, s16 sw_len, bool *has
 
           // if tracing seed input, save seed's (local) branch distance
           if (br_trace_setting == BR_TRACE_SEED_INPUT) {
-            if (cmp_type_parent == ICMP_EQ || cmp_type_parent == ICMP_NE)
+            if (fallthrough)
               local_bits[cur_border_edge_id] = 2; // fallthrough need update local_bits
             else
               local_bits[cur_border_edge_id] = 1;
@@ -416,7 +417,7 @@ static inline s64 icmp_single_br_dist_le(s16 *br_dist_buf, s16 sw_len, bool *has
         }
 
         s64 br_dist = 0;
-        if (cmp_type_parent == ICMP_EQ || cmp_type_parent == ICMP_NE) {
+        if (fallthrough) {
           u32 sw_len = border_edge_2_str_len[cur_border_edge_id];
           s16 *this_br_bits = (s16 *)(br_bits + br_dist_edge_id);
           has_overflown = false;
