@@ -126,7 +126,7 @@ typedef struct afl_forkserver {
   u32 *handler_candidate_id;            /* Handler candidate id array       */
   u32 *handler_candidate_dist_id;       /* Handler candidate distance id array */
   u32 handler_candidate_cnt;            /* Handler candidate array count    */
-  u8 *icmp_default_line_search;         /* ICMP should defaul to line search*/
+  u8 *fallthrough_line_search;          /* Whether this branch should default to line search */
   u8 *size_gradient_checked;            /* Size gradient checked            */
   s64 *br_inc;                          /* Branch increment array           */
   s64 *br_dec;                          /* Branch decrement array           */

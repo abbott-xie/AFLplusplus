@@ -1460,6 +1460,16 @@ static inline u8 is_handler(u8 cmp_type_parent) {
   return 0;
 }
 
+static inline u8 can_fallthrough_handler(u8 cmp_type_parent) {
+  switch (cmp_type_parent) {
+    case ICMP_EQ:
+    case ICMP_NE:
+    case SWITCH:
+      return 1;
+  }
+  return 0;
+}
+
 static inline u32 u32_min2(u32 a, u32 b) {
   return a < b ? a : b;
 }
