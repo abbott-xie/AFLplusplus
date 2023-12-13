@@ -734,7 +734,8 @@ if __name__ == '__main__':
             for select_node in global_select_node[node]:
                 if (node, select_node) in select_edge_2_cmp_type:
                     dummy_id = select_edge_2_cmp_type[(node, select_node)][1]
-                    select_border_edges.append((node, select_node, dummy_id,  0 ))
+                    str_len = select_edge_2_cmp_type[(node, select_node)][2]
+                    select_border_edges.append((node, select_node, dummy_id,  str_len))
                 else:
                     select_border_edges.append((node, select_node, -1, 0))
 
