@@ -965,7 +965,7 @@ void ModuleSanitizerCoverageAFL::instrumentFunction(
                           }
                         }
                         if (!found_sancov){
-                          errs()<< "\n !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! BUG1 strcmp fails to find sancov\n";
+                          errs()<< "\n [BUG] strcmp fails to find sancov\n";
                         }
                       }
                     }    
@@ -997,7 +997,7 @@ void ModuleSanitizerCoverageAFL::instrumentFunction(
                           }
                         }
                         if (!found_sancov){
-                          errs()<< "\n !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! BUG1 strcmp fails to find sancov\n";
+                          errs()<< "\n [BUG] strcmp fails to find sancov\n";
                         }
                       }
                     }    
@@ -1021,7 +1021,7 @@ void ModuleSanitizerCoverageAFL::instrumentFunction(
                       }
                     }
                     if (!found_sancov){
-                      errs()<< "\n !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! BUG1 cmp fails to find sancov\n";
+                      errs()<< "\n [BUG] cmp fails to find sancov\n";
                     }
                   }
                 }
@@ -1062,7 +1062,7 @@ void ModuleSanitizerCoverageAFL::instrumentFunction(
                         }
                       }
                       if (!found_sancov){
-                        errs()<< "\n !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! BUG1 select fails to find sancov\n";
+                        errs()<< "\n [BUG] select fails to find sancov\n";
                       }
                       break;
                     }
@@ -1112,7 +1112,7 @@ void ModuleSanitizerCoverageAFL::instrumentFunction(
                           }
                         }
                         if (!found_sancov){
-                          errs()<< "\n !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! BUG1 strcmp fails to find sancov\n";
+                          errs()<< "\n [BUG] strcmp fails to find sancov\n";
                         }
                       }
                     }    
@@ -1144,7 +1144,7 @@ void ModuleSanitizerCoverageAFL::instrumentFunction(
                           }
                         }
                         if (!found_sancov){
-                          errs()<< "\n !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! BUG1 strcmp fails to find sancov\n";
+                          errs()<< "\n [BUG] strcmp fails to find sancov\n";
                         }
                       }
                     }    
@@ -1186,7 +1186,7 @@ void ModuleSanitizerCoverageAFL::instrumentFunction(
           }
         }
         if (!found_sancov){
-          errs()<< "\n !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! BUG1 switch fails to find sancov 3\n";
+          errs()<< "\n[BUG] switch fails to find sancov 3\n";
         }
         // find target sancov id for each case
         for (auto i = SI->case_begin(), e = SI->case_end(); i != e;++i) {
@@ -1210,7 +1210,7 @@ void ModuleSanitizerCoverageAFL::instrumentFunction(
             }
           }
           if (!found_sancov){
-            errs()<< "\n !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! BUG1 switch fails to find target BB sancov 2\n";
+            errs()<< "\n[BUG] switch fails to find target BB sancov 2\n";
           }
         }
 
@@ -1260,7 +1260,7 @@ void ModuleSanitizerCoverageAFL::instrumentFunction(
           case_val_list.push_back(NULL);
           
           SI->print(errs());
-          errs()<< "\n !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! BUG1 switch fails to find sancov 1\n";
+          errs()<< "\n[LOG] skipped the dead default switch case\n";
         }
       } 
       
@@ -1835,7 +1835,7 @@ void ModuleSanitizerCoverageAFL::OptfuzzInjectTraceForSwitch(Function &F, ArrayR
       Value* op2 = case_val_list[caseCnt]; // default case value   
       
       if (!op2){
-        errs()<< "\n DBG: skip to instrument an empty default case.\n";
+        errs()<< "\n[LOG] skip to instrument an empty default case.\n";
         continue;
       }
 
