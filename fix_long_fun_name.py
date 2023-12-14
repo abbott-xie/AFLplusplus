@@ -1,5 +1,11 @@
 import hashlib
 import sys
+import re
+# remove function attribute
+def remove_hash_number_from_define_lines(ir_content):
+    pattern = r'(define.*?)(#\d+\s+)(.*?\{)'
+    modified_content = re.sub(pattern, r'\1\3', ir_content)
+    return modified_content
 
 # This tool truncate function name with more than 200 characters because llvm opt does not support them when constructing intra-CFGs.
 data = []
@@ -25,6 +31,7 @@ for line in fin:
         #read replace the string and write to output file
         for a,b in replace_table:
             line = line.replace(a, b)
+    line = remove_hash_number_from_define_lines(line) 
     fout.write(line)
 #close input and output files
 fin.close()
