@@ -150,10 +150,10 @@ def build_sancov_set(dot_file):
                                     elif subinst.endswith(","):
                                         sancov_set.add(subinst[:-1])
                                     return
-        
-    
-    
-    
+
+
+
+
 def get_fun_to_local_table (dot_file, inline_table, fun_list, node_2_callee, func_name_2_root_exit_dict):
 
     lines = open(dot_file, 'r').readlines()
@@ -508,34 +508,6 @@ def cmp_to_str_type(cmp_id):
     else:
         raise ValueError("Unknown cmp ID encountered here")
 
-def classify_edges(global_graph):
-    # id_2_cmp_type[sancov_id] = {cmp_type, dummy_id, str_len}
-    branch_type_freq = defaultdict(int)
-    branch_type_ids = defaultdict(list)
-    for node in sorted(global_graph.keys()):
-        # Check if it is a branch node with > 1 children
-        if len(global_graph[node]) > 1:
-            if node in id_2_cmp_type:
-                cmp_type = id_2_cmp_type[node][0]
-                cmp_type_str = cmp_to_str_type(cmp_type)
-                branch_type_freq[cmp_type_str] += 1
-                branch_type_ids[cmp_type_str].append(node + 1)
-            # XXX: Currently the select instrumentation is disabled so all select comparisons
-            # will be mapped to NA and can be treated as being unhandled
-            # elif node in global_select_node:
-            #     for select_node in global_select_node[node]:
-            #         if (node, select_node) in select_edge_2_cmp_type:
-            #             cmp_type = select_edge_2_cmp_type[(node, select_node)][0]
-            #         else:n
-            #             cmp_type = 0
-            #         cmp_type_str = cmp_to_str_type(cmp_type)
-            #         branch_type_ids[cmp_type_str].append(node)
-            #         branch_type_freq[cmp_type_str] += 1
-            else:
-                branch_type_freq["unhandled"] += 1
-                branch_type_ids["unhandled"].append(node + 1)
-    pprint.pprint(branch_type_freq)
-    return branch_type_ids
 
 def collect_children(sancov_br_list, global_graph):
     '''
@@ -603,7 +575,6 @@ if __name__ == '__main__':
     for dot_file in glob.glob("./" + sys.argv[2] +"/*"):
         construct_graph_init(dot_file, inline_table, fun_list, node_2_callee, func_name_2_root_exit_dict)
 
-    br_sancov = defaultdict(lambda: None)
     border_edges = []
     select_border_edges = []
     # 0x00 build a map from br_dist_edge_id to local_edge_table(base number)
@@ -682,10 +653,10 @@ if __name__ == '__main__':
             if len(children) > 1:
                 # branch_NO_instrumentation_info
                 if node not in id_2_cmp_type:
-                    f.write(str(node+1) + " " + str(0) + "\n")
+                    f.write(str(node+6) + " " + str(0) + "\n")
                 else:
                     cmp_type = id_2_cmp_type[node][0]
-                    f.write(str(node+1) + " " + str(cmp_type) + "\n")
+                    f.write(str(node+6) + " " + str(cmp_type) + "\n")
 
     # cmp_type[select_node_id] = cmp_type
     # select_node_id, cmp_type
@@ -697,9 +668,9 @@ if __name__ == '__main__':
                 for select_node in global_select_node[node]:
                     if (node, select_node) in select_edge_2_cmp_type:
                         cmp_type = select_edge_2_cmp_type[(node, select_node)][0]
-                        f.write(str(node+1) + " " + str(cmp_type) + "\n")
+                        f.write(str(node+6) + " " + str(cmp_type) + "\n")
                     else:
-                        f.write(str(node+1) + " " + str(0) + "\n")
+                        f.write(str(node+6) + " " + str(0) + "\n")
 
     # build border edge array
     for node in sorted(global_graph.keys()):
@@ -724,11 +695,6 @@ if __name__ == '__main__':
                     # other normal binary br
                     else:
                         border_edges.append((node, c, dummy_id, str_len))
-                    if dummy_id != -1:
-                        if (br_sancov[dummy_id] == None):
-                            br_sancov[dummy_id] = (node + 1, [c + 1])
-                        else:
-                            br_sancov[dummy_id][1].append(c + 1)
 
         if node in global_select_node:
             for select_node in global_select_node[node]:
@@ -744,7 +710,7 @@ if __name__ == '__main__':
     # DO NOT FORGET to add 1 to the node_id!!!!
     with open("border_edges", "w") as f:
         for parent, child, dummy_id, str_len in border_edges:
-            f.write(str(parent + 1) + " " + str(child + 1) + " " + str(dummy_id) + " " + str(str_len) + "\n")
+            f.write(str(parent+6) + " " + str(child+6) + " " + str(dummy_id) + " " + str(str_len) + "\n")
 
     parent_node_id_map = defaultdict(list)
     for key, val in enumerate(border_edges):
@@ -753,7 +719,7 @@ if __name__ == '__main__':
     # border_edge_parent, first_border_edge_idx, num_of_border_edges_starting_from_this_parent
     with open("border_edges_cache", "w") as f:
         for parent, id_list in parent_node_id_map.items():
-            f.write(str(parent+1) + " " + str(id_list[0]) + " " + str(id_list[-1] - id_list[0] + 1) + "\n")
+            f.write(str(parent+6) + " " + str(id_list[0]) + " " + str(id_list[-1] - id_list[0] + 1) + "\n")
             if (id_list[-1] - id_list[0] + 1) <= 1:
                 print("BUG: bug in 'border_edges_cache'")
 
@@ -761,7 +727,7 @@ if __name__ == '__main__':
     #
     with open("select_border_edges", "w") as f:
         for parent, child, dummy_id, str_len in select_border_edges:
-            f.write(str(parent + 1) + " " + str(child + 1) + " " + str(dummy_id) + " " + str(str_len) + "\n")
+            f.write(str(parent+6) + " " + str(child+6) + " " + str(dummy_id) + " " + str(str_len) + "\n")
 
     select_parent_node_id_map = defaultdict(list)
     for key, val in enumerate(select_border_edges):
@@ -770,7 +736,7 @@ if __name__ == '__main__':
     # border_edge_parent, first_border_edge_idx, num_of_border_edges_starting_from_this_parent
     with open("select_border_edges_cache", "w") as f:
         for parent, id_list in select_parent_node_id_map.items():
-            f.write(str(parent+1) + " " + str(id_list[0]) + " " + str(id_list[-1] - id_list[0] + 1) + "\n")
+            f.write(str(parent+6) + " " + str(id_list[0]) + " " + str(id_list[-1] - id_list[0] + 1) + "\n")
             if (id_list[-1] - id_list[0] + 1) <= 1:
                 print("BUG: bug in 'select_border_edges_cache'")
 
