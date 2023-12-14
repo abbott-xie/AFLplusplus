@@ -21,7 +21,6 @@ import time
 local_table_2_fun_name = {}
 orig_local_table_2_fun_name = {}
 covered_node = []
-node_2_callee, func_name_2_root_exit_dict = {}, {}
 id_map = {}
 global_reverse_graph = defaultdict(list)
 orig_global_reverse_graph = defaultdict(list)
@@ -64,7 +63,14 @@ orig_sancov_br_list = []
 inline_table= {}
 cmp_typ_dic = {'NA': 0, 'ugt': 1, 'sgt': 2, 'eq': 3, 'uge': 4, 'sge': 5, 'ult': 6, 'slt': 7, 'ne': 8, 'ule': 9, 'sle': 10, 'strcmp': 11,  'strncmp':12, 'memcmp':13, 'strstr':14, 'switch': 15}
 cond_typ_dic = {'and': 0, 'or': 1, 'xor': 2}
-# # .set_trace()
+binary_log_funcs = ['log_br8', 'log_br16', 'log_br32', 'log_br64','log_br8_unsign', 'log_br16_unsign', 'log_br32_unsign', 'log_br64_unsign', 'eq_log_br8', 'eq_log_br16', 'eq_log_br32', 'eq_log_br64']
+switch_log_funcs = ['sw_log_br8', 'sw_log_br16', 'sw_log_br32', 'sw_log_br64','sw_log_br8_unsign', 'sw_log_br16_unsign', 'sw_log_br32_unsign', 'sw_log_br64_unsign']
+select_log_funcs = ['log_br8_r', 'log_br16_r', 'log_br32_r', 'log_br64_r', 'log_br8_unsign_r', 'log_br16_unsign_r', 'log_br32_unsign_r', 'log_br64_unsign_r']
+strcmp_log_funcs = ['strcmp_log']
+strncmp_log_funcs = ['strncmp_log']
+memcmp_log_funcs = ['memcmp_log']
+strstr_log_funcs = ['strstr_log']
+# ipdb.set_trace()
 nm_ret = subprocess.check_output('llvm-nm ' + sys.argv[3], shell=True, encoding='utf-8').splitlines()
 internal_func_list = set()
 for ele in nm_ret:
@@ -144,15 +150,13 @@ def inline_counter_table_final(filename, bin_name):
 
     return inline_table
 
-def orig_get_fun_to_local_table (dot_file, inline_table, fun_list, node_2_callee, func_name_2_root_exit_dict):
+def orig_get_fun_to_local_table (dot_file):
 
     lines = open(dot_file, 'r').readlines()
     graph, reverse_graph = {}, {}
 
     my_func_name = dot_file.split('/')[-1].split('.')[0]
     if my_func_name not in internal_func_list:
-        if (my_func_name == "xmlFatalErrMsg.9500"):
-            print("test")
         # print("######## skip a dead function " + my_func_name)
         return
 
@@ -225,7 +229,7 @@ def orig_get_fun_to_local_table (dot_file, inline_table, fun_list, node_2_callee
                             orig_local_table_2_fun_name[local_table] = my_func_name
                             break
 
-def orig_construct_graph_init(dot_file, inline_table, fun_list, node_2_callee, func_name_2_root_exit_dict):
+def orig_construct_graph_init(dot_file, inline_table):
 
     lines = open(dot_file, 'r').readlines()
     graph, reverse_graph = {}, {}
@@ -727,37 +731,20 @@ def orig_construct_graph_init(dot_file, inline_table, fun_list, node_2_callee, f
     return
 
 
-def get_fun_to_local_table (ll_file, inline_table, fun_list, node_2_callee, func_name_2_root_exit_dict):
+def get_fun_to_local_table (ll_file):
 
-    graph, reverse_graph = {}, {}
     global debug_tmp_cnt
     global debug_tmp_cnt2
-    dot_id_2_llvm_id = {}
-    local_id_map = {}
-    local_log_r = {} # llvm brach id : dummy id of log funcion
-    last_global_edge = -1
-    select_case = [0, None, None] # flag, global edge, node_id
-    sancov_dot_node_id = None
 
-    non_sancov_nodes = []
-    sw_caseval_2_dummy_id = {}
-    sw_bb_2_dummy_id = {}
-    sw_case_bb = []
-    total_node = 0
-    local_select_node = []
-
-    func_name=''
+    fun_name=''
     enter_func = 0
     sancov_found = 0
     inst_entered = 0
 
-    found_select = 0
     found_the_first_node = 0
     found_the_second_node = 0
     first_node = None
     second_node = None
-    non_first_second_node_select = 0
-    select_node = []
 
     ll_file_r = open(ll_file).readlines()
 
@@ -791,44 +778,33 @@ def get_fun_to_local_table (ll_file, inline_table, fun_list, node_2_callee, func
                     elif ' = select i1 ' not in inst:
                         found_the_second_node = 1
                         second_node = inst
-                    else:
-                        found_select = 1
-                        select_node.append(inst)
             inst_ind += 1
         
         if inst_entered:
-            local_table, local_edge = None, None
+            local_table = None
 
             if found_the_first_node:
                 local_table = first_node.split('(')[1].split(')')[0].split()[6][:-1]
-                local_edge = 0
             elif found_the_second_node:
                 local_table = second_node.split()[13]
-                local_edge = second_node.split()[17][:-1]
-            else:
-                non_first_second_node_select = 1
 
             if found_the_first_node or found_the_second_node:
                 if local_table not in local_table_2_fun_name:
                     local_table_2_fun_name[local_table] = fun_name
                     enter_func = 0
             inst_entered = 0
-            found_select = 0
             found_the_first_node = 0
             found_the_second_node = 0
             first_node = None
             second_node = None
-            non_first_second_node_select = 0
-            select_node = []
 
-def construct_graph_init(ll_file, inline_table, fun_list, node_2_callee, func_name_2_root_exit_dict):
+def construct_graph_init(ll_file, inline_table):
 
     global debug_tmp_cnt
     global debug_tmp_cnt2
 
     dot_id_2_llvm_id = {}
     last_global_edge = -1
-    sancov_dot_node_id = None
 
     graph, reverse_graph = {}, {}
     non_sancov_nodes = []
@@ -1072,7 +1048,6 @@ def construct_graph_init(ll_file, inline_table, fun_list, node_2_callee, func_na
 
                 global_edge = int(int(local_edge)/4) + inline_table[local_table] # "global edge" is our custom edge id
                 last_global_edge = global_edge
-                sancov_dot_node_id = func_node_id
                 dot_id_2_llvm_id[func_node_id] = global_edge # is "node_id" the actual id that should be mapped to global edge?
 
             # handle select case
@@ -1121,8 +1096,7 @@ def construct_graph_init(ll_file, inline_table, fun_list, node_2_callee, func_na
                 if ('call ' in inst or 'invoke ' in inst) and '@' in inst:
                     br_fun_name = inst[inst.find('@')+1:inst.find('(')]
                     # normal cmp condition (log_br)
-                    if br_fun_name in ['log_br8', 'log_br16', 'log_br32', 'log_br64',
-                            'log_br8_unsign', 'log_br16_unsign', 'log_br32_unsign', 'log_br64_unsign', 'eq_log_br8', 'eq_log_br16', 'eq_log_br32', 'eq_log_br64']:
+                    if br_fun_name in binary_log_funcs:
                         if (last_global_edge == -1):
                             print("BUG: global edge not updated error{}".format(i))
                         dummy_id = int(inst.split()[3][:-1])
@@ -1133,8 +1107,7 @@ def construct_graph_init(ll_file, inline_table, fun_list, node_2_callee, func_na
 
                     # nested condition (log_br*_r)
                     # TODO: log left over log_br*_r
-                    elif br_fun_name in ['log_br8_r', 'log_br16_r', 'log_br32_r', 'log_br64_r',
-                            'log_br8_unsign_r', 'log_br16_unsign_r', 'log_br32_unsign_r', 'log_br64_unsign_r']:
+                    elif br_fun_name in select_log_funcs:
                         if (last_global_edge == -1):
                             print("BUG1: global edge not updated error{}".format(i))
                         dummy_id = int(inst.split()[3][:-1])
@@ -1143,7 +1116,7 @@ def construct_graph_init(ll_file, inline_table, fun_list, node_2_callee, func_na
                         br_nested_found[0] = 1
 
                     # strcmp condition (strcmp_log) need test
-                    elif br_fun_name == 'strcmp_log':
+                    elif br_fun_name in strcmp_log_funcs:
                         dummy_id = int(inst.split()[3][:-1])
                         str_len = int(inst[inst.find('('):inst.rindex(')')].split()[-1])
                         
@@ -1154,7 +1127,7 @@ def construct_graph_init(ll_file, inline_table, fun_list, node_2_callee, func_na
                         sancov_br_list.append((last_global_edge, cmp_typ_dic['strcmp'], dummy_id))
                         strcmp_node.append((last_global_edge, 1, dummy_id))
 
-                    elif br_fun_name == 'strncmp_log':
+                    elif br_fun_name in strncmp_log_funcs:
                         dummy_id = int(inst.split()[3][:-1])
                         str_len = int(inst[inst.find('('):inst.rindex(')')].split()[-1])
                         if last_global_edge in id_2_cmp_type:
@@ -1164,7 +1137,7 @@ def construct_graph_init(ll_file, inline_table, fun_list, node_2_callee, func_na
                         sancov_br_list.append((last_global_edge, cmp_typ_dic['strncmp'], dummy_id))
                         strcmp_node.append((last_global_edge, 2, dummy_id))
 
-                    elif br_fun_name == 'memcmp_log':
+                    elif br_fun_name in memcmp_log_funcs:
                         dummy_id = int(inst.split()[3][:-1])
                         str_len = int(inst[inst.find('('):inst.rindex(')')].split()[-1])
                         if last_global_edge in id_2_cmp_type:
@@ -1174,7 +1147,7 @@ def construct_graph_init(ll_file, inline_table, fun_list, node_2_callee, func_na
                         sancov_br_list.append((last_global_edge, cmp_typ_dic['memcmp'], dummy_id))
                         strcmp_node.append((last_global_edge, 3, dummy_id))
 
-                    elif br_fun_name == 'strstr_log':
+                    elif br_fun_name in strstr_log_funcs:
                         dummy_id = int(inst.split()[3][:-1])
                         str_len = int(inst[inst.find('('):inst.rindex(')')].split()[-1])
                         if last_global_edge in id_2_cmp_type:
@@ -1185,8 +1158,7 @@ def construct_graph_init(ll_file, inline_table, fun_list, node_2_callee, func_na
                         strcmp_node.append((last_global_edge, 4, dummy_id))
                     
                     # the sancov Edge id is resolved later, cannot use last_global_edge
-                    elif br_fun_name in ['sw_log_br8', 'sw_log_br16', 'sw_log_br32', 'sw_log_br64',
-                            'sw_log_br8_unsign', 'sw_log_br16_unsign', 'sw_log_br32_unsign', 'sw_log_br64_unsign']:
+                    elif br_fun_name in switch_log_funcs:
                         sub_inst = inst[inst.find('('):inst.rindex(')')].split()
                         dummy_id = int(sub_inst[1][:-1])
                         case_value = int(sub_inst[-1])
@@ -1352,7 +1324,6 @@ def construct_graph_init(ll_file, inline_table, fun_list, node_2_callee, func_na
 
             dot_id_2_llvm_id = {}
             last_global_edge = -1
-            sancov_dot_node_id = None
 
     return
 
@@ -1418,142 +1389,57 @@ def collect_children(sancov_br_list, global_graph):
         sancov_mapping[cmp_type_str].append(tmp_list)
     return sancov_mapping
 
-def get_unique_callgraph(file):
-	lines = open(file, 'r').readlines()
-	func_name=[]
-
-	for line in lines:
-		b_index = line.find("\"{")
-		if b_index < 0:
-			continue
-		e_index = line.find("}\"")
-		func_name.append(line[b_index+2:e_index])
-
-	sorted(func_name, key=len)
-
-	orig_len = len(func_name)
-	print(orig_len)
-	i = 0
-
-	while i < orig_len:
-		new_func_name = []
-		for name in func_name:
-			if name.startswith(func_name[i]) and name != func_name[i]:
-				i += 1
-				continue
-			new_func_name.append(name)
-		func_name = new_func_name
-		orig_len = len(new_func_name)
-		i += 1
-
-	# print(orig_len)
-	# with open('dot_function_names', 'w') as f:
-	# 	for func in func_name:
-	# 		f.write(f"{func}\n")]
-	return func_name
-
 if __name__ == '__main__':
     start_time = time.time()
     inline_table = inline_counter_table_init(sys.argv[1], sys.argv[3])
-    target_callgraph = sys.argv[1] + ".callgraph.dot"
-    fun_list = get_unique_callgraph(target_callgraph) # Never used
-
-    get_fun_to_local_table(sys.argv[1], inline_table, fun_list, node_2_callee, func_name_2_root_exit_dict)
+    get_fun_to_local_table(sys.argv[1])
 
     inline_table = inline_counter_table_final(sys.argv[1], sys.argv[3])
-    construct_graph_init(sys.argv[1], inline_table, fun_list, node_2_callee, func_name_2_root_exit_dict)
+    construct_graph_init(sys.argv[1], inline_table)
     for dot_file in glob.glob("./" + sys.argv[2] +"/*"):
-        orig_construct_graph_init(dot_file, inline_table, fun_list, node_2_callee, func_name_2_root_exit_dict)
-
+        orig_construct_graph_init(dot_file, inline_table)
 
     elapsed_time = time.time() - start_time
     print(elapsed_time)
 
     if global_graph == orig_global_graph:
         print("global_graph success")
-    # Perform branch categorization and print the corresponding stats along with returning the actual sancov ids
-    # corresponding to each branch as well
-    branch_type_ids = classify_edges(global_graph)
-    pickle.dump(branch_type_ids, open("branch_type_ids", "wb"))
-
+    
     sancov_br_list.sort()
     orig_sancov_br_list.sort()
     if sancov_br_list == orig_sancov_br_list:
         print("sancov_br_list success")
-    # Create pickled structure containing all the handled branches and their corresponding sancov IDs
-    br_nodes_2_children = collect_children(sancov_br_list, global_graph)
-    # pprint.pprint(br_nodes_2_children)
-    pickle.dump(br_nodes_2_children, open("br_nodes_2_children", "wb"))
-
-    # .set_trace()
-    #for key in ordered_key:
-    #    tmp_sum = inline_table[key]
-    #    print(key, local_table_2_fun_name[key], hex(tmp_sum*4 + 0x0afda88))
 
     strcmp_node.sort()
     orig_strcmp_node.sort()
     if strcmp_node == orig_strcmp_node:
         print("strcmp_node success")
-    strcmp_node_2_children = {}
-    for node, cmp_type, dummy_id in strcmp_node:
-        strcmp_node_2_children[node] = (global_graph[node].copy(), cmp_type, dummy_id)
-
-    # add offset 1 to align node id to fuzzer sancov id
-    new_strcmp_node_2_children = {}
-    for key, value in strcmp_node_2_children.items():
-        new_strcmp_node_2_children[key+1] = ([int(ele)+1 for ele in value[0]], value[1], value[2])
-    import pickle
-    pickle.dump(new_strcmp_node_2_children, open("strcmp_node_2_children", "wb"))
 
     sw_node.sort()
     orig_sw_node.sort()
     if sw_node == orig_sw_node:
         print("sw_node success")
-    sw_node_2_children = {}
-    for node, cmp_type, dummy_id in sw_node:
-        sw_node_2_children[node] = (global_graph[node].copy(), cmp_type, dummy_id)
-
-    # add offset 1 to align node id to fuzzer sancov id
-    new_sw_node_2_children = {}
-    for key, value in sw_node_2_children.items():
-        new_sw_node_2_children[key+1] = ([int(ele)+1 for ele in value[0]], value[1], value[2])
-    pickle.dump(new_sw_node_2_children, open("sw_node_2_children", "wb"))
 
     int_cmp_node.sort()
     orig_int_cmp_node.sort()
     if int_cmp_node == orig_int_cmp_node:
         print("int_cmp_node success")
-    int_cmp_node_2_children = {}
-    for node, cmp_type, dummy_id in int_cmp_node:
-        int_cmp_node_2_children[node] = (global_graph[node].copy(), cmp_type, dummy_id)
-
-    # add offset 1 to align node id to fuzzer sancov id
-    new_int_cmp_node_2_children = {}
-    for key, value in int_cmp_node_2_children.items():
-        new_int_cmp_node_2_children[key+1] = ([int(ele)+1 for ele in value[0]], value[1], value[2])
-    pickle.dump(new_int_cmp_node_2_children, open("int_cmp_node_2_children", "wb"))
 
     eq_cmp_node.sort()
     orig_eq_cmp_node.sort()
     if eq_cmp_node == orig_eq_cmp_node:
         print("eq_cmp_node success")
-    eq_cmp_node_2_children = {}
-    for node, cmp_type, dummy_id in eq_cmp_node:
-        eq_cmp_node_2_children[node] = (global_graph[node].copy(), cmp_type, dummy_id)
-
-    # add offset 1 to align node id to fuzzer sancov id
-    new_eq_cmp_node_2_children = {}
-    for key, value in eq_cmp_node_2_children.items():
-        new_eq_cmp_node_2_children[key+1] = ([int(ele)+1 for ele in value[0]], value[1], value[2])
-    pickle.dump(new_eq_cmp_node_2_children, open("eq_cmp_node_2_children", "wb"))
 
     if (id_2_cmp_type == orig_id_2_cmp_type):
         print("id_2_cmp_type success")
-    br_sancov = defaultdict(lambda: None)
-    border_edges = []
-    select_border_edges = []
-    # cmp_type[node_id] = cmp_type
-    # node_id, cmp_type
+
+    if (global_select_node == orig_global_select_node):
+        print("global_select_node success")
+
+    if (len(id_2_fun.keys()) == len(orig_id_2_fun.keys())):
+        print("id_2_fun success")
+
+
     with open("br_node_id_2_cmp_type", "w") as f:
         for node in sorted(global_graph.keys()):
             children = global_graph[node]
@@ -1565,11 +1451,7 @@ if __name__ == '__main__':
                 else:
                     cmp_type = id_2_cmp_type[node][0]
                     f.write(str(node+1) + " " + str(cmp_type) + "\n")
-
-    if (global_select_node == orig_global_select_node):
-        print("global_select_node success")
-    # cmp_type[select_node_id] = cmp_type
-    # select_node_id, cmp_type
+    
     with open("select_node_id_2_cmp_type", "w") as f:
         for node in sorted(global_graph.keys()):
             children = global_graph[node]
@@ -1582,14 +1464,14 @@ if __name__ == '__main__':
                     else:
                         f.write(str(node+1) + " " + str(0) + "\n")
 
+    br_sancov = defaultdict(lambda: None)
+    border_edges = []
+    select_border_edges = []
+    # build border edge array
     for node in sorted(global_graph.keys()):
         children = global_graph[node]
         children.sort()
         if len(children) > 1:
-            #if len(children) >2:
-            #   if id_2_cmp_type[node][0] != 15:
-            #        print("BUG", node, children, len(children))
-            #        .set_trace()
             for c in children:
                 # no instrumentation info
                 if node not in id_2_cmp_type:
@@ -1618,17 +1500,17 @@ if __name__ == '__main__':
             for select_node in global_select_node[node]:
                 if (node, select_node) in select_edge_2_cmp_type:
                     dummy_id = select_edge_2_cmp_type[(node, select_node)][1]
-                    select_border_edges.append((node, select_node, dummy_id,  0 ))
+                    str_len = select_edge_2_cmp_type[(node, select_node)][2]
+                    select_border_edges.append((node, select_node, dummy_id,  str_len))
                 else:
                     select_border_edges.append((node, select_node, -1, 0))
 
-    # border_edge_parent, boder_edge_child, border_edge_br_dist_id(i.e., dummy id), str_len
+
+    # border_edge_parent sancov id, boder_edge_child sancov id, border_edge_br_dist_id(i.e., dummy id), str_len
     # DO NOT FORGET to add 1 to the node_id!!!!
     with open("border_edges", "w") as f:
         for parent, child, dummy_id, str_len in border_edges:
             f.write(str(parent + 1) + " " + str(child + 1) + " " + str(dummy_id) + " " + str(str_len) + "\n")
-
-    dill.dump(br_sancov, open("br_sancov_map", "wb"))
 
     parent_node_id_map = defaultdict(list)
     for key, val in enumerate(border_edges):
@@ -1640,7 +1522,6 @@ if __name__ == '__main__':
             f.write(str(parent+1) + " " + str(id_list[0]) + " " + str(id_list[-1] - id_list[0] + 1) + "\n")
             if (id_list[-1] - id_list[0] + 1) <= 1:
                 print("BUG: bug in 'border_edges_cache'")
-
 
     # border_edge_parent, boder_edge_child, border_edge_br_dist_id(i.e., dummy id), str_len
     #
@@ -1658,14 +1539,3 @@ if __name__ == '__main__':
             f.write(str(parent+1) + " " + str(id_list[0]) + " " + str(id_list[-1] - id_list[0] + 1) + "\n")
             if (id_list[-1] - id_list[0] + 1) <= 1:
                 print("BUG: bug in 'select_border_edges_cache'")
-
-    # save global graph for debugging
-    with open("global_graph", "wb") as f:
-        pickle.dump(global_graph, f)
-    print(len(global_graph.keys()))
-
-    if (len(id_2_fun.keys()) == len(orig_id_2_fun.keys())):
-        print("id_2_fun success")
-
-    with open("id_2_fun", "wb") as f:
-        pickle.dump(id_2_fun, f)
