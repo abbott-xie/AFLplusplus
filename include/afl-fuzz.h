@@ -1460,12 +1460,13 @@ static inline u8 is_handler(u8 cmp_type_parent) {
   return 0;
 }
 
-static inline u8 can_fallthrough_handler(u8 cmp_type_parent) {
+static inline u8 can_fallthrough_handler(u8 cmp_type_parent, u8 shared_mode) {
   switch (cmp_type_parent) {
     case ICMP_EQ:
     case ICMP_NE:
-    case SWITCH:
       return 1;
+    case SWITCH:
+      return !shared_mode;
   }
   return 0;
 }

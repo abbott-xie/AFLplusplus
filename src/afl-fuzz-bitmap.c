@@ -251,8 +251,9 @@ static inline s64 icmp_single_br_dist_le(s16 *br_dist_buf, s16 sw_len, bool *has
   u32 fox_br_candidate_capacity = afl->fsrv.fox_br_candidate_capacity;
   u32 winning_capacity = afl->fsrv.winning_capacity;
   u32 max_added_seeds = afl->max_added_seeds;
+  u8 shared_mode = afl->wd_scheduler_shared_mode;
   u8 handler_candidate_ok = cur_num_diff < MAX_HANDLER_NUM_DIFF;
-  u8 handler_candidate_icmp_ok = queue_cur && afl->wd_scheduler_shared_mode ? this_exec_us * cur_num_diff < MAX_HANDLER_EXEC_TIME_US : 1;
+  u8 handler_candidate_icmp_ok = queue_cur && shared_mode ? this_exec_us * cur_num_diff < MAX_HANDLER_EXEC_TIME_US : 1;
   u8 not_dry_run = !afl->wd_scheduler_dry_run;
 
   // Flag to check if the existing mutant decrease the global branch
@@ -289,7 +290,7 @@ static inline s64 icmp_single_br_dist_le(s16 *br_dist_buf, s16 sw_len, bool *has
       u8 default_line_search_fallthrough = 0;
 
       u8 handler = is_handler(cmp_type_parent);
-      u8 fallthrough = can_fallthrough_handler(cmp_type_parent);
+      u8 fallthrough = can_fallthrough_handler(cmp_type_parent, shared_mode);
 
       if (fallthrough && !handler_candidate_icmp_ok) {
         handler = 0;

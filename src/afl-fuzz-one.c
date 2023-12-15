@@ -3595,7 +3595,7 @@ havoc_stage:
           u32 parent = border_edge_parent[cur_edge_id];
           u32 child = border_edge_child[cur_edge_id];
           u8 cmp_type_parent = cmp_type[parent];
-          u8 fallthrough = can_fallthrough_handler(cmp_type_parent);
+          u8 fallthrough = can_fallthrough_handler(cmp_type_parent, shared_mode);
 
           if (unlikely(br_cov[br_dist_edge_id] || fallthrough_line_search[br_dist_edge_id]))
             continue;
@@ -3651,13 +3651,8 @@ havoc_stage:
             mapping_found = total_br_dist_diff_l0_norm == 1;
           }
 
-          if (!mapping_found || x_loc < y_loc) {
-            if (fallthrough)
-              fallthrough_line_search[br_dist_edge_id] = 1;
-            else
-              br_cov[br_dist_edge_id] = 1;
-            continue;
-          }
+          if (!mapping_found || x_loc < y_loc)
+            goto handler_bookkeeping;
 
           // step 2: try to solve
 
@@ -3746,14 +3741,16 @@ havoc_stage:
           }
 
 handler_cleanup:
-          if (!cur_mutant_reached(child, trace_bits) && fallthrough)
-            fallthrough_line_search[br_dist_edge_id] = 1;
-          else
-            br_cov[br_dist_edge_id] = 1;
           out_buf = afl_realloc(AFL_BUF_PARAM(out), len);
           if (unlikely(!out_buf)) { PFATAL("alloc"); }
           temp_len = len;
           memcpy(out_buf, in_buf, len);
+
+handler_bookkeeping:
+          if (!cur_mutant_reached(child, trace_bits) && fallthrough)
+            fallthrough_line_search[br_dist_edge_id] = 1;
+          else
+            br_cov[br_dist_edge_id] = 1;
           continue;
 
 handler_fuzz_failure:
