@@ -1290,7 +1290,7 @@ void ModuleSanitizerCoverageAFL::instrumentFunction(
   }
   
   // handle select instruction FIRST!!!! 
-  OptfuzzInjectTraceForCmpNonTerminator(F, CmpTraceTargetsNonTerminator, SancovForCmpNonTerminator,  SelectInstArray,  InstrumentCntPtr, datalog);
+  //OptfuzzInjectTraceForCmpNonTerminator(F, CmpTraceTargetsNonTerminator, SancovForCmpNonTerminator,  SelectInstArray,  InstrumentCntPtr, datalog);
 
   //cmp
   OptfuzzInjectTraceForCmp(F, CmpTraceTargets, SancovForCmp, InstrumentCntPtr, datalog);
