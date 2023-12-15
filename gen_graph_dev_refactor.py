@@ -1,23 +1,13 @@
 #python ./gen_graph_dev_refactor.py LLVM_IR_FILE CFG_OUT_DIR BINARY_PATH META_FILE
 #
 import hashlib
-import ipdb
 import sys
 import glob
-import time
-import re
-import os
-import pickle
-import dill
-import pprint
 import sys
-from os import path
 import subprocess
-import networkit as nk
 from collections import defaultdict
 
 dummy_id_2_local_table = {}
-local_table_2_fun_name = {}
 covered_node = []
 node_2_callee, func_name_2_root_exit_dict = {}, {}
 id_map = {}
@@ -60,7 +50,6 @@ memcmp_log_funcs = ['memcmp_log']
 strstr_log_funcs = ['strstr_log']
 sancov_set = set()
 sancov_2_func = {}
-# ipdb.set_trace()
 nm_ret = subprocess.check_output('llvm-nm ' + sys.argv[3], shell=True, encoding='utf-8').splitlines()
 internal_func_list = set()
 for ele in nm_ret:
@@ -71,11 +60,6 @@ for ele in nm_ret:
 
 # ir file + bin file
 def inline_counter_table_init(filename, bin_name):
-
-    bin_text = ''
-    with open(filename, "r") as f:
-        bin_text = f.read()
-
     output = subprocess.check_output('grep "section \\\"__sancov_guards\\\"" ' + filename, shell=True, encoding='utf-8')[:-1]
     lines = [line for line in output.split('\n')]
     ans = {}
@@ -90,39 +74,10 @@ def inline_counter_table_init(filename, bin_name):
         inline_table[key] = tmp_sum
 #        print(sancov_2_func[key], tmp_sum)
         tmp_sum += ans[key]
-        # print(key, tmp_sum)
 
     tokens = subprocess.check_output('llvm-nm ' + bin_name + ' |grep sancov_guards', shell=True, encoding='utf-8').split()
     if tmp_sum != ((int('0x'+ tokens[3], 0) - int('0x' + tokens[0], 0))/4):
         print("BUGG: inline table wrong, try to fix...")
-
-    return inline_table
-
-def inline_counter_table_final(filename, bin_name):
-
-    bin_text = ''
-    with open(filename, "r") as f:
-        bin_text = f.read()
-
-    output = subprocess.check_output('grep "section \\\"__sancov_guards\\\"" ' + filename, shell=True, encoding='utf-8')[:-1]
-    lines = [line for line in output.split('\n')]
-    ans = {}
-    ordered_key.clear()
-    for line in lines:
-        data = [ele for ele in line.split(',') if '@__sancov_gen_' in ele][0]
-        if data.split()[0] in sancov_set:
-            ans[data.split()[0]] = int(data.split()[4][1:])
-            ordered_key.append(data.split()[0])
-
-    tmp_sum = 0
-    for key in ordered_key:
-        inline_table[key] = tmp_sum
-        tmp_sum += ans[key]
-
-    tokens = subprocess.check_output('llvm-nm ' + bin_name + ' |grep sancov_guards', shell=True, encoding='utf-8').split()
-    if tmp_sum != ((int('0x'+ tokens[3], 0) - int('0x' + tokens[0], 0))/4):
-        print("BUGG: inline table wrong, please manual checking sancov mapping")
-        sys.exit("ERR")
 
     return inline_table
 
@@ -134,8 +89,6 @@ def build_sancov_set(dot_file):
     for line in lines:
         if line.startswith('\t'):
             if '[' in line:
-                split_idx = line.index('[')
-                dot_node_id = line[:split_idx].strip()
                 code = line.split('label=')[1].strip()[1:-3]
                 # check instrumention basic block only
                 loc = code.find(' @__sancov_gen_')
@@ -156,89 +109,7 @@ def build_sancov_set(dot_file):
                                         sancov_2_func[subinst[:-1]] = my_func_name
                                     return
 
-
-
-
-def get_fun_to_local_table (dot_file, inline_table, fun_list, node_2_callee, func_name_2_root_exit_dict):
-
-    lines = open(dot_file, 'r').readlines()
-    graph, reverse_graph = {}, {}
-
-    my_func_name = dot_file.split('/')[-1].split('.')[0]
-    if my_func_name not in internal_func_list:
-        # print("######## skip a dead function " + my_func_name)
-        return
-
-    global debug_tmp_cnt
-    global debug_tmp_cnt2
-    dot_id_2_llvm_id = {}
-    local_id_map = {}
-    local_log_r = {} # llvm brach id : dummy id of log funcion
-    last_global_edge = -1
-    select_case = [0, None, None] # flag, global edge, node_id
-    sancov_dot_node_id = None
-
-    non_sancov_nodes = []
-    sw_caseval_2_dummy_id = {}
-    sw_bb_2_dummy_id = {}
-    sw_case_bb = []
-    total_node = 0
-
-    func_str = open(dot_file, 'r').read()
-    if " @__sancov_gen_" not in func_str: return
-
-    for i in range(len(lines)):
-        line = lines[i]
-        if line.startswith('\t'):
-            if '[' in line:
-                split_idx = line.index('[')
-                dot_node_id = line[:split_idx].strip()
-                code = line.split('label=')[1].strip()[1:-3]
-                # check instrumention basic block only
-                loc = code.find(' @__sancov_gen_')
-
-                # convert dot node id to llvm node id
-                if loc != -1:
-
-                    code = code.replace("\l...", '')
-                    insts = code.split('\\l  ')
-                    found_select = 0
-                    found_the_first_node = 0
-                    found_the_second_node = 0
-                    first_node = None
-                    second_node = None
-                    non_first_second_node_select = 0
-                    select_node = []
-                    for inst in insts:
-                        if "__sancov_gen_" in inst:
-                            if "load" in inst and "inttoptr" not in inst:
-                                found_the_first_node = 1
-                                first_node = inst
-                            elif ' = select' not in inst:
-                                found_the_second_node = 1
-                                second_node = inst
-                            else:
-                                found_select = 1
-                                select_node.append(inst)
-
-                    local_table, local_edge = None, None
-
-                    if found_the_first_node:
-                        local_table = first_node.split()[5][:-1]
-                        local_edge = 0
-                    elif found_the_second_node:
-                        local_table = second_node.split()[11]
-                        local_edge = second_node.split()[15][:-1]
-                    else:
-                        non_first_second_node_select = 1
-
-                    if found_the_first_node or found_the_second_node:
-                        if local_table not in local_table_2_fun_name:
-                            local_table_2_fun_name[local_table] = my_func_name
-                            break
-
-def construct_graph_init(dot_file, inline_table, fun_list, node_2_callee, func_name_2_root_exit_dict):
-
+def construct_graph_init(dot_file, inline_table):
     lines = open(dot_file, 'r').readlines()
     graph, reverse_graph = {}, {}
 
@@ -250,16 +121,9 @@ def construct_graph_init(dot_file, inline_table, fun_list, node_2_callee, func_n
     global debug_tmp_cnt
     global debug_tmp_cnt2
     dot_id_2_llvm_id = {}
-    local_id_map = {}
-    local_log_r = {} # llvm brach id : dummy id of log funcion
     last_global_edge = -1
-    select_case = [0, None, None] # flag, global edge, node_id
-    sancov_dot_node_id = None
 
     non_sancov_nodes = []
-    sw_caseval_2_dummy_id = {}
-    sw_bb_2_dummy_id = {}
-    sw_case_bb = []
     total_node = 0
     local_select_node = []
     local_table = None
@@ -334,12 +198,9 @@ def construct_graph_init(dot_file, inline_table, fun_list, node_2_callee, func_n
                         non_first_second_node_select = 1
 
                     if found_the_first_node or found_the_second_node:
-                        if local_table not in local_table_2_fun_name:
-                            local_table_2_fun_name[local_table] = my_func_name
                         global_edge = int(int(local_edge)/4) + inline_table[local_table] # "global edge" is the final sancov node id used in AFL++ to trace edge coverage
 
                         last_global_edge = global_edge
-                        sancov_dot_node_id = dot_node_id
                         dot_id_2_llvm_id[dot_node_id] = global_edge # dot_node_id is the node ID in the raw dot graph
 
                     # handle select case
@@ -513,7 +374,6 @@ def cmp_to_str_type(cmp_id):
     else:
         raise ValueError("Unknown cmp ID encountered here")
 
-
 def collect_children(sancov_br_list, global_graph):
     '''
     Given a list of branch sancov ID's creates a list of it's children keyed at
@@ -574,11 +434,7 @@ if __name__ == '__main__':
     inline_table = inline_counter_table_init(sys.argv[1], sys.argv[3])
     fun_list = [dot_file.split('/')[-1].split('.')[0] for dot_file in glob.glob("./" + sys.argv[2] + "/*")]
     for dot_file in glob.glob("./" + sys.argv[2] +"/*"):
-        get_fun_to_local_table(dot_file, inline_table, fun_list, node_2_callee, func_name_2_root_exit_dict)
-    # re-build inline_table with functions that only exist in binary's symbol table
-    inline_table = inline_counter_table_final(sys.argv[1], sys.argv[3])
-    for dot_file in glob.glob("./" + sys.argv[2] +"/*"):
-        construct_graph_init(dot_file, inline_table, fun_list, node_2_callee, func_name_2_root_exit_dict)
+        construct_graph_init(dot_file, inline_table)
 
     border_edges = []
     select_border_edges = []
