@@ -3598,7 +3598,7 @@ havoc_stage:
           u32 parent = border_edge_parent[cur_edge_id];
           u32 child = border_edge_child[cur_edge_id];
           u8 cmp_type_parent = cmp_type[parent];
-          u8 fallthrough = can_fallthrough_handler(cmp_type_parent);
+          u8 fallthrough = can_fallthrough_handler(cmp_type_parent, shared_mode);
 
           if (unlikely(br_cov[br_dist_edge_id] || fallthrough_line_search[br_dist_edge_id]))
             continue;
