@@ -59,6 +59,7 @@ strncmp_log_funcs = ['strncmp_log']
 memcmp_log_funcs = ['memcmp_log']
 strstr_log_funcs = ['strstr_log']
 sancov_set = set()
+sancov_2_func = {}
 # ipdb.set_trace()
 nm_ret = subprocess.check_output('llvm-nm ' + sys.argv[3], shell=True, encoding='utf-8').splitlines()
 internal_func_list = set()
@@ -87,6 +88,7 @@ def inline_counter_table_init(filename, bin_name):
     tmp_sum = 0
     for key in ordered_key:
         inline_table[key] = tmp_sum
+#        print(sancov_2_func[key], tmp_sum)
         tmp_sum += ans[key]
         # print(key, tmp_sum)
 
@@ -127,6 +129,7 @@ def inline_counter_table_final(filename, bin_name):
 def build_sancov_set(dot_file):
     func_str = open(dot_file, 'r').read()
     if " @__sancov_gen_" not in func_str: return
+    my_func_name = dot_file.split('/')[-1].split('.')[0]
     lines = open(dot_file, 'r').readlines()
     for line in lines:
         if line.startswith('\t'):
@@ -147,8 +150,10 @@ def build_sancov_set(dot_file):
                                 if "__sancov_gen_" in subinst:
                                     if "," not in subinst:
                                         sancov_set.add(subinst)
+                                        sancov_2_func[subinst] = my_func_name
                                     elif subinst.endswith(","):
                                         sancov_set.add(subinst[:-1])
+                                        sancov_2_func[subinst[:-1]] = my_func_name
                                     return
 
 
