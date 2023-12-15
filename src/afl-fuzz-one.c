@@ -3588,10 +3588,7 @@ havoc_stage:
       }
 
       if (num_diff < MAX_HANDLER_NUM_DIFF) {
-        // u8 handler_timeout = 0;
-        // for (u32 handler_cand_idx = 0; handler_cand_idx < afl->fsrv.handler_candidate_cnt && !handler_timeout; handler_cand_idx++) {
         for (u32 handler_cand_idx = 0; handler_cand_idx < afl->fsrv.handler_candidate_cnt; handler_cand_idx++) {
-          // u64 handler_time_start = get_cur_time_us();
           afl->handler_stats.reached++;
           u32 cur_edge_id = handler_candidate_id[handler_cand_idx];
           u32 br_dist_edge_id = handler_candidate_dist_id[handler_cand_idx];
@@ -3750,7 +3747,6 @@ handler_cleanup:
           memcpy(out_buf, in_buf, len);
 
 handler_bookkeeping:
-          // handler_timeout = get_cur_time_us() - handler_time_start >= MAX_HANDLER_EXEC_TIME_US;
           if (!cur_mutant_reached(child, trace_bits) && fallthrough)
             fallthrough_line_search[br_dist_edge_id] = 1;
           else
