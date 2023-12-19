@@ -356,39 +356,6 @@ def construct_graph_init(dot_file, inline_table):
 
     return
 
-def cmp_to_str_type(cmp_id):
-    '''
-    Given a cmp_id, returns it natural language description
-    Type descriptions: switch, strcmp, unhandled
-    '''
-    if (cmp_id == 15):
-        return "switch"
-    elif (cmp_id == 13):
-        return "memcmp"
-    elif (cmp_id == 11 or cmp_id == 12 or cmp_id == 14):
-        return "strcmp"
-    elif (cmp_id >= 1 and cmp_id < 11):
-        return "intcmp"
-    elif (cmp_id == 0):
-        return "NA"
-    else:
-        raise ValueError("Unknown cmp ID encountered here")
-
-def collect_children(sancov_br_list, global_graph):
-    '''
-    Given a list of branch sancov ID's creates a list of it's children keyed at
-    the branch types as listed in cmp_to_str_type
-    '''
-    for item in sancov_br_list:
-        sancov_id, cmp_type_id, dummy_id = item[0], item[1], item[2]
-        tmp_list = [sancov_id + 1]
-        cmp_type_str = cmp_to_str_type(cmp_type_id)
-        child_nodes = global_graph[sancov_id]
-        assert len(child_nodes) >= 2, "Non-branch node was selected for stat collection, please check"
-        tmp_list.extend([int(child) + 1 for child in child_nodes])
-        sancov_mapping[cmp_type_str].append(tmp_list)
-    return sancov_mapping
-
 # only for normal sancov instrument
 # for example:
 # getelementptr inbounds ([12 x i32], [12 x i32]* @__sancov_gen_.5, i32 0, i32 0)
