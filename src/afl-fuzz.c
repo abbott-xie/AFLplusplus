@@ -519,7 +519,7 @@ int main(int argc, char **argv_orig, char **envp) {
 
   // still available: HjJkKqruvwz
   while ((opt = getopt(argc, argv,
-                       "+a:Ab:B:c:CdDke:E:f:F:g:G:hi:I:l:L:m:M:nNo:Op:P:QRs:S:t:"
+                       "+a:Ab:B:c:CdDke:K:E:f:F:g:G:hi:I:l:L:m:M:nNo:Op:P:QRs:S:t:"
                        "T:UV:WXx:YZ")) > 0) {
 
     switch (opt) {
@@ -629,6 +629,10 @@ int main(int argc, char **argv_orig, char **envp) {
 
         break;
 
+      }
+
+      case 'K': {
+        afl->fox_metadata_resume_dir = ck_strdup(optarg);
       }
 
       case 's': {
@@ -3003,6 +3007,10 @@ stop_fuzzing:
   if (frida_afl_preload) { ck_free(frida_afl_preload); }
 
   fclose(afl->fsrv.plot_file);
+  fclose(afl->fsrv.wd_scheduler_log_file);
+#ifdef FOX_INTROSPECTION
+  fclose(afl->fsrv.fox_debug_log_file);
+#endif
   destroy_queue(afl);
   destroy_extras(afl);
   destroy_custom_mutators(afl);

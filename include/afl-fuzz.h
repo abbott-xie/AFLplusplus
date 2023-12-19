@@ -289,6 +289,8 @@ enum {
 #define MAX_TOTAL_FRONTIER_DISCOVERY_TIME_US 3600000000 /* 1 hour */
 #define WD_SCHED_BREAK_TIE_FASTER_SEED
 #define SHOW_STATS_INTERVAL_LINE_SEARCH 10
+#define MAX_NO_NEW_COV_TIME_US 3600000000 /* 1 hour */
+// #define MAX_NO_NEW_COV_TIME_US 5000000 /* 5 seconds */ // for testing
 
 /* Branch distance trace setting */
 
@@ -636,7 +638,9 @@ typedef struct afl_state {
   u64 line_search_count,
       wd_scheduler_total_cal_us,
       wd_scheduler_total_cal_cycles,
-      wd_scheduler_avg_us;
+      wd_scheduler_avg_us,
+      last_cov_time_us;
+  char *fox_metadata_resume_dir;
   s64 diff_l1_norm;
   line_search_stats_t line_stats;
   handler_stats_t     handler_stats;
@@ -1303,6 +1307,7 @@ void   check_cpu_governor(afl_state_t *);
 void   get_core_count(afl_state_t *);
 void   fix_up_sync(afl_state_t *);
 void   load_fox_metadata(afl_state_t *);
+void   save_fox_metadata(afl_state_t *);
 void   check_asan_opts(afl_state_t *);
 void   check_binary(afl_state_t *, u8 *);
 void   check_if_tty(afl_state_t *);
