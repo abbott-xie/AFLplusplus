@@ -362,8 +362,12 @@ void create_alias_table_wd_scheduler(afl_state_t *afl) {
       total_frontier_discovery_time_us);
   fflush(afl->fsrv.wd_scheduler_log_file);
 
-  if ((afl->stop_soon = get_cur_time_us() - afl->last_cov_time_us > MAX_NO_NEW_COV_TIME_US))
+  if ((afl->stop_soon = get_cur_time_us() - afl->last_cov_time_us > MAX_NO_NEW_COV_TIME_US)) {
+#ifdef FOX_INTROSPECTION
+    fprintf(afl->fsrv.fox_debug_log_file, "WD_SCHEDULER: no new coverage for in the past %llu us, stopping.\n", MAX_NO_NEW_COV_TIME_US);
+#endif
     save_fox_metadata(afl);
+  }
 }
 
 static inline void add_capacity(struct queue_entry ***seed_list_p, u32 *capacity_p) {
