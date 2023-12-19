@@ -1220,6 +1220,9 @@ void ModuleSanitizerCoverageAFL::instrumentFunction(
           ConstantInt* op2 = dyn_cast<ConstantInt>(i->getCaseValue());
           tmp_val_list.push_back(op2->getSExtValue());
         }
+	if (tmp_val_list.empty()) {
+            continue;
+        }
         int max_int = *max_element(tmp_val_list.begin(), tmp_val_list.end());
         int min_int = *min_element(tmp_val_list.begin(), tmp_val_list.end());
         Value * de_val;
