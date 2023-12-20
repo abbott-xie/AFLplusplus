@@ -118,12 +118,14 @@ def construct_graph_init_from_func(func_str, inline_table):
     
     fun_name = func_str.split("\n")[1].split("@")[1].split("(")[0]
     func_str = '\n'.join(func_str.split("\n")[2:])
-    func_str = func_str.split("}")[0]
+    # %84 = extractvalue { ptr, i32 } %75, 0, !dbg !227022
+    # %75 = landingpad { ptr, i32 }
+    func_str = '}'.join(func_str.split("}")[:-1])
     blocks = func_str.split("\n\n")
     for block in blocks:
         # parse node
         dot_node_id = fun_name + "_" + block.split(":")[0]
-        code = block.split(":")[1]
+        code = ':'.join(block.split(":")[1:])
         loc = code.find(' @__sancov_gen_')
         # convert dot node id to llvm node id
         if loc != -1:
@@ -194,7 +196,7 @@ def construct_graph_init_from_func(func_str, inline_table):
     for block in blocks:
         # construct a graph with dot node id
         dot_node_id = fun_name + "_" + block.split(":")[0]
-        code = block.split(":")[1]
+        code = ':'.join(block.split(":")[1:])
         insts = code.split('\n')
         for inst_ind, inst in enumerate(insts):
             if re.match(r'\s*br ', inst):
@@ -205,12 +207,13 @@ def construct_graph_init_from_func(func_str, inline_table):
                     if loc_strt < 0:
                             break
                     loc_end = inst.find(",", loc_strt)
+                    
                     if loc_end < 0:
                         dst_node = fun_name + "_" + inst[loc_strt+7:]
                     else:
                         dst_node = fun_name + "_" + inst[loc_strt+7:loc_end]
-                        
                     loc_strt = loc_end
+                    
                     if dst_node not in graph[src_node]:
                         graph[src_node].append(dst_node)
                     if dst_node not in reverse_graph:
@@ -240,7 +243,44 @@ def construct_graph_init_from_func(func_str, inline_table):
                     else:
                         if src_node not in reverse_graph[dst_node]:
                             reverse_graph[dst_node].append(src_node)
-
+            
+            # first situation:
+            # %call = invoke noundef nonnull align 8 dereferenceable(56) ptr @_ZN6google8protobuf8internal10LogMessagelsEPKc(ptr noundef nonnull align 8 dereferenceable(56) %12, ptr noundef nonnull @.str. 10)
+            # to label %invoke.cont unwind label %lpad, !dbg !226885
+            # second situation:
+            # invoke void %77(ptr noundef nonnull align 8 dereferenceable(8) %60, i32 noundef %sub)
+            # third situation:
+            # normal invoke: invoke void @_ZN6google8protobuf8internal10LogMessagelsEPKc(ptr noundef nonnull align 8 dereferenceable(56) %12, ptr noundef nonnull @.str)
+            # direct find the label  
+            if re.match(r'\s*to\s+label\s+%[^ ]+\s+unwind\s+label\s+%[^ ]+', inst):
+                src_node = dot_node_id
+                loc_strt = 0
+                select_inst = inst
+                # first label
+                loc_strt = select_inst.find("label %", loc_strt)
+                loc_end = select_inst.find(" ", loc_strt + 7)
+                dst_node = fun_name + "_" + select_inst[loc_strt+7:loc_end]
+                if dst_node not in graph[src_node]:
+                    graph[src_node].append(dst_node)
+                if dst_node not in reverse_graph:
+                    reverse_graph[dst_node] = [src_node]
+                else:
+                    if src_node not in reverse_graph[dst_node]:
+                        reverse_graph[dst_node].append(src_node)
+                # second label
+                loc_strt = select_inst.find("label %", loc_end)
+                loc_end = select_inst.find(",", loc_strt + 7)
+                dst_node = fun_name + "_" + select_inst[loc_strt+7:loc_end]
+                if dst_node not in graph[src_node]:
+                    graph[src_node].append(dst_node)
+                if dst_node not in reverse_graph:
+                    reverse_graph[dst_node] = [src_node]
+                else:
+                    if src_node not in reverse_graph[dst_node]:
+                        reverse_graph[dst_node].append(src_node)
+                
+                        
+                        
     # TODO: group sancov node (delete ASAN-nodes as well) DONE
     for node in non_sancov_nodes:
         children, parents = graph[node], reverse_graph[node]
