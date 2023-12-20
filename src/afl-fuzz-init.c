@@ -952,9 +952,9 @@ void load_fox_metadata(afl_state_t *afl) {
   fread(afl->fsrv.spent_time_us, sizeof(u64), afl->fox_map_size, fp);
   fclose(fp);
 
-  tmp = alloc_printf("%s/time_productive_us", afl->fox_metadata_resume_dir);
+  tmp = alloc_printf("%s/productive_time_us", afl->fox_metadata_resume_dir);
   fp = fopen(tmp, "r");
-  if (!fp) { FATAL("time_productive_us open failed"); }
+  if (!fp) { FATAL("productive_time_us open failed"); }
   ck_free(tmp);
 
   fread(afl->fsrv.productive_time_us, sizeof(u64), afl->fox_map_size, fp);
@@ -1009,7 +1009,7 @@ void save_fox_metadata(afl_state_t *afl) {
   fwrite(afl->fsrv.spent_time_us, sizeof(u64), afl->fox_map_size, f);
   fclose(f);
 
-  tmp = alloc_printf("%s/time_productive_us", afl->out_dir);
+  tmp = alloc_printf("%s/productive_time_us", afl->out_dir);
   fd = open(tmp, O_WRONLY | O_CREAT | O_TRUNC, 0600);
   if (fd < 0) { PFATAL("Unable to create '%s'", tmp); }
   ck_free(tmp);
