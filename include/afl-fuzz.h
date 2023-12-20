@@ -289,8 +289,7 @@ enum {
 #define MAX_TOTAL_FRONTIER_DISCOVERY_TIME_US 3600000000 /* 1 hour */
 #define WD_SCHED_BREAK_TIE_FASTER_SEED
 #define SHOW_STATS_INTERVAL_LINE_SEARCH 10
-// #define MAX_NO_NEW_COV_TIME_US 3600000000 /* 1 hour */
-#define MAX_NO_NEW_COV_TIME_US 5000000 /* 5 seconds */ // for testing
+#define MAX_NO_NEW_COV_TIME_US 3600000000 /* 1 hour */
 
 /* Branch distance trace setting */
 

@@ -176,6 +176,74 @@ static inline struct queue_entry *top_rated_seed(afl_state_t *afl, u32 cur_borde
   return afl->wd_scheduler_top_rated[cur_border_edge_id];
 }
 
+void save_top_rated_seed_ids(afl_state_t *afl) {
+  u64 *cur_virgin_bit_batch = (u64 *)afl->virgin_bits;
+  u32 map_size_batched = (afl->fsrv.real_map_size + 7) >> 3;
+  u32 *num_of_children = afl->fsrv.num_of_children;
+  u32 *border_edge_parent_first_id = afl->fsrv.border_edge_parent_first_id;
+  u32 *border_edge_child = afl->fsrv.border_edge_child;
+  u8 *virgin_bits = afl->virgin_bits;
+  u8 *cmp_type = afl->fsrv.cmp_type;
+  u32 *added_seeds = afl->fsrv.added_seeds;
+  u32 *border_edge_2_br_dist = afl->fsrv.border_edge_2_br_dist;
+  u8 *size_gradient_checked = afl->fsrv.size_gradient_checked;
+  u8 *br_cov = afl->fsrv.br_cov;
+  u32 max_added_seeds = afl->max_added_seeds;
+
+  u8 *tmp = alloc_printf("%s/top_rated_seed_ids", afl->out_dir);
+  int fd = open(tmp, O_WRONLY | O_CREAT | O_TRUNC, 0600);
+  if (fd < 0) { PFATAL("Unable to create '%s'", tmp); }
+  ck_free(tmp);
+
+  FILE *f = fdopen(fd, "w");
+  if (!f) { PFATAL("fdopen() failed"); }
+
+  for (u32 i = 0; i < map_size_batched; i++) {
+    if (likely(cur_virgin_bit_batch[i] == 0xffffffffffffffff))
+      continue;
+
+    u8 *cur_virgin_bit = (u8 *)(cur_virgin_bit_batch + i);
+    for (u32 j = 0; j < 8; j++) {
+      if (cur_virgin_bit[j] == 0xff)
+        continue;
+
+      u32 parent = i * 8 + j;
+
+      u32 cur_num_of_children = num_of_children[parent];
+
+      // only check conditional branches
+      if (cur_num_of_children < 2)
+        continue;
+
+      u32 base_border_edge_id = border_edge_parent_first_id[parent];
+      u8 cmp_type_parent = cmp_type[parent];
+      for (u32 cur_border_edge_id = base_border_edge_id; cur_border_edge_id < base_border_edge_id + cur_num_of_children; cur_border_edge_id++) {
+        u32 child_node = border_edge_child[cur_border_edge_id];
+
+        if (was_reached(child_node, virgin_bits))
+          continue;
+
+        struct queue_entry *top_seed = top_rated_seed(afl, cur_border_edge_id, parent);
+        if (!top_seed)
+          continue;
+
+
+        if (cmp_type_parent != NOT_INSTRUMENTED) {
+          if (added_seeds[cur_border_edge_id] >= max_added_seeds)
+            continue;
+          u32 br_dist_edge_id = border_edge_2_br_dist[cur_border_edge_id];
+          if (br_cov[br_dist_edge_id] || size_gradient_checked[br_dist_edge_id])
+            continue;
+        }
+
+        fprintf(f, "%u ", top_seed->id);
+      }
+    }
+  }
+  fflush(f);
+  fclose(f);
+}
+
 void create_alias_table_wd_scheduler(afl_state_t *afl) {
 
   u64 *cur_virgin_bit_batch = (u64 *)afl->virgin_bits;
@@ -367,6 +435,7 @@ void create_alias_table_wd_scheduler(afl_state_t *afl) {
     fprintf(afl->fsrv.fox_debug_log_file, "WD_SCHEDULER: no new coverage for in the past %llu us, stopping.\n", MAX_NO_NEW_COV_TIME_US);
 #endif
     save_fox_metadata(afl);
+    save_top_rated_seed_ids(afl);
   }
 }
 
