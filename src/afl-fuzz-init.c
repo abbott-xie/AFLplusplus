@@ -944,14 +944,12 @@ void load_fox_metadata(afl_state_t *afl) {
   if (!afl->fox_metadata_resume_dir)
     return;
 
-  printf("loading fox metadata from %s\n", afl->fox_metadata_resume_dir);
-
   u8 *tmp = alloc_printf("%s/time_spent_us", afl->fox_metadata_resume_dir);
   fp = fopen(tmp, "r");
   if (!fp) { FATAL("time_spent_us open failed"); }
   ck_free(tmp);
 
-  fread(afl->fsrv.spent_time_us, sizeof(u64), afl->fsrv.map_size, fp);
+  fread(afl->fsrv.spent_time_us, sizeof(u64), afl->fox_map_size, fp);
   fclose(fp);
 
   tmp = alloc_printf("%s/time_productive_us", afl->fox_metadata_resume_dir);
@@ -959,7 +957,7 @@ void load_fox_metadata(afl_state_t *afl) {
   if (!fp) { FATAL("time_productive_us open failed"); }
   ck_free(tmp);
 
-  fread(afl->fsrv.productive_time_us, sizeof(u64), afl->fsrv.map_size, fp);
+  fread(afl->fsrv.productive_time_us, sizeof(u64), afl->fox_map_size, fp);
   fclose(fp);
 
   tmp = alloc_printf("%s/added_seeds", afl->fox_metadata_resume_dir);
@@ -967,7 +965,7 @@ void load_fox_metadata(afl_state_t *afl) {
   if (!fp) { FATAL("added_seeds open failed"); }
   ck_free(tmp);
 
-  fread(afl->fsrv.added_seeds, sizeof(u32), afl->fsrv.map_size, fp);
+  fread(afl->fsrv.added_seeds, sizeof(u32), afl->fox_map_size, fp);
   fclose(fp);
 
   tmp = alloc_printf("%s/br_cov", afl->fox_metadata_resume_dir);
@@ -975,7 +973,7 @@ void load_fox_metadata(afl_state_t *afl) {
   if (!fp) { FATAL("br_cov open failed"); }
   ck_free(tmp);
 
-  fread(afl->fsrv.br_cov, sizeof(u8), afl->fsrv.map_size, fp);
+  fread(afl->fsrv.br_cov, sizeof(u8), afl->fox_total_border_edge_cnt, fp);
   fclose(fp);
 
   tmp = alloc_printf("%s/size_gradient_checked", afl->fox_metadata_resume_dir);
@@ -983,7 +981,7 @@ void load_fox_metadata(afl_state_t *afl) {
   if (!fp) { FATAL("size_gradient_checked open failed"); }
   ck_free(tmp);
 
-  fread(afl->fsrv.size_gradient_checked, sizeof(u8), afl->fsrv.map_size, fp);
+  fread(afl->fsrv.size_gradient_checked, sizeof(u8), afl->fox_total_border_edge_cnt, fp);
   fclose(fp);
 
   tmp = alloc_printf("%s/fallthrough_line_search", afl->fox_metadata_resume_dir);
@@ -991,7 +989,7 @@ void load_fox_metadata(afl_state_t *afl) {
   if (!fp) { FATAL("fallthrough_line_search open failed"); }
   ck_free(tmp);
 
-  fread(afl->fsrv.fallthrough_line_search, sizeof(u8), afl->fsrv.map_size, fp);
+  fread(afl->fsrv.fallthrough_line_search, sizeof(u8), afl->fox_total_border_edge_cnt, fp);
   fclose(fp);
 }
 
@@ -1008,7 +1006,7 @@ void save_fox_metadata(afl_state_t *afl) {
   f = fdopen(fd, "w");
   if (!f) { PFATAL("fdopen() failed"); }
 
-  fwrite(afl->fsrv.spent_time_us, sizeof(u64), afl->fsrv.map_size, f);
+  fwrite(afl->fsrv.spent_time_us, sizeof(u64), afl->fox_map_size, f);
   fclose(f);
 
   tmp = alloc_printf("%s/time_productive_us", afl->out_dir);
@@ -1018,7 +1016,7 @@ void save_fox_metadata(afl_state_t *afl) {
   f = fdopen(fd, "w");
   if (!f) { PFATAL("fdopen() failed"); }
 
-  fwrite(afl->fsrv.productive_time_us, sizeof(u64), afl->fsrv.map_size, f);
+  fwrite(afl->fsrv.productive_time_us, sizeof(u64), afl->fox_map_size, f);
   fclose(f);
 
   tmp = alloc_printf("%s/added_seeds", afl->out_dir);
@@ -1028,7 +1026,7 @@ void save_fox_metadata(afl_state_t *afl) {
   f = fdopen(fd, "w");
   if (!f) { PFATAL("fdopen() failed"); }
 
-  fwrite(afl->fsrv.added_seeds, sizeof(u32), afl->fsrv.map_size, f);
+  fwrite(afl->fsrv.added_seeds, sizeof(u32), afl->fox_map_size, f);
   fclose(f);
 
   tmp = alloc_printf("%s/br_cov", afl->out_dir);
@@ -1038,7 +1036,7 @@ void save_fox_metadata(afl_state_t *afl) {
   f = fdopen(fd, "w");
   if (!f) { PFATAL("fdopen() failed"); }
 
-  fwrite(afl->fsrv.br_cov, sizeof(u8), afl->fsrv.map_size, f);
+  fwrite(afl->fsrv.br_cov, sizeof(u8), afl->fox_total_border_edge_cnt, f);
   fclose(f);
 
   tmp = alloc_printf("%s/size_gradient_checked", afl->out_dir);
@@ -1048,7 +1046,7 @@ void save_fox_metadata(afl_state_t *afl) {
   f = fdopen(fd, "w");
   if (!f) { PFATAL("fdopen() failed"); }
 
-  fwrite(afl->fsrv.size_gradient_checked, sizeof(u8), afl->fsrv.map_size, f);
+  fwrite(afl->fsrv.size_gradient_checked, sizeof(u8), afl->fox_total_border_edge_cnt, f);
   fclose(f);
 
   tmp = alloc_printf("%s/fallthrough_line_search", afl->out_dir);
@@ -1058,7 +1056,7 @@ void save_fox_metadata(afl_state_t *afl) {
   f = fdopen(fd, "w");
   if (!f) { PFATAL("fdopen() failed"); }
 
-  fwrite(afl->fsrv.fallthrough_line_search, sizeof(u8), afl->fsrv.map_size, f);
+  fwrite(afl->fsrv.fallthrough_line_search, sizeof(u8), afl->fox_total_border_edge_cnt, f);
   fclose(f);
 }
 
