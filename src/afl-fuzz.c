@@ -519,7 +519,7 @@ int main(int argc, char **argv_orig, char **envp) {
 
   // still available: HjJkKqruvwz
   while ((opt = getopt(argc, argv,
-                       "+a:Ab:B:c:CdDke:K:E:f:F:g:G:hi:I:l:L:m:M:nNo:Op:P:QRs:S:t:"
+                       "+a:Ab:B:c:CdDke:K:J:E:f:F:g:G:hi:I:l:L:m:M:nNo:Op:P:QRs:S:t:"
                        "T:UV:WXx:YZ")) > 0) {
 
     switch (opt) {
@@ -633,6 +633,10 @@ int main(int argc, char **argv_orig, char **envp) {
 
       case 'K': {
         afl->fox_metadata_resume_dir = ck_strdup(optarg);
+      }
+
+      case 'J': {
+        afl->max_no_new_cov_time_us = atoi(optarg) * 1000000ULL;
       }
 
       case 's': {

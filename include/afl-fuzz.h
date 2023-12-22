@@ -289,7 +289,6 @@ enum {
 #define MAX_TOTAL_FRONTIER_DISCOVERY_TIME_US 3600000000 /* 1 hour */
 #define WD_SCHED_BREAK_TIE_FASTER_SEED
 #define SHOW_STATS_INTERVAL_LINE_SEARCH 10
-#define MAX_NO_NEW_COV_TIME_US 3600000000 /* 1 hour */
 
 /* Branch distance trace setting */
 
@@ -638,7 +637,8 @@ typedef struct afl_state {
       wd_scheduler_total_cal_us,
       wd_scheduler_total_cal_cycles,
       wd_scheduler_avg_us,
-      last_cov_time_us;
+      last_cov_time_us,
+      max_no_new_cov_time_us;
   char *fox_metadata_resume_dir;
   s64 diff_l1_norm;
   line_search_stats_t line_stats;
