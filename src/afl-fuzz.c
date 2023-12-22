@@ -2815,8 +2815,10 @@ int main(int argc, char **argv_orig, char **envp) {
 #ifdef FOX_INTROSPECTION
         fprintf(afl->fsrv.fox_debug_log_file, "No new coverage for in the past %llu us, stopping.\n", afl->max_no_new_cov_time_us);
 #endif
-        save_fox_metadata(afl);
-        save_top_rated_seed_ids(afl);
+        if (likely(afl->schedule == WD_SCHEDULER)) {
+          save_fox_metadata(afl);
+          save_top_rated_seed_ids(afl);
+        }
       }
 
       skipped_fuzz = fuzz_one(afl);
