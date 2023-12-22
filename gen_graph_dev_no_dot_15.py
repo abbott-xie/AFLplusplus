@@ -1,5 +1,3 @@
-#python ./gen_graph_dev_refactor.py LLVM_IR_FILE CFG_OUT_DIR BINARY_PATH META_FILE
-#
 import hashlib
 import sys
 import glob
@@ -7,16 +5,23 @@ import sys
 import subprocess
 from collections import defaultdict
 import re
+import time
 
 dummy_id_2_local_table = {}
+orig_dummy_id_2_local_table = {}
 covered_node = []
 node_2_callee, func_name_2_root_exit_dict = {}, {}
 id_map = {}
 global_reverse_graph = defaultdict(list)
+orig_global_reverse_graph = defaultdict(list)
 global_graph = defaultdict(list)
 global_graph_weighted = defaultdict(dict)
+orig_global_graph = defaultdict(list)
+orig_global_graph_weighted = defaultdict(dict)
 global_back_edge = list()
 debug_sw = set()
+orig_global_select_node = defaultdict(list)
+global_select_node = defaultdict(list)
 strcmp_node = []
 sw_node = []
 int_cmp_node = []
@@ -24,6 +29,8 @@ eq_cmp_node = []
 
 select_edge_2_cmp_type = {}
 sw_border_edge_2_br_dist = {}
+debug_tmp_cnt = 0
+debug_tmp_cnt2 = 0
 missing_cnt = [0]
 id_2_fun = {}
 
@@ -41,14 +48,16 @@ cmp_typ_dic = {'NA': 0, 'ugt': 1, 'sgt': 2, 'eq': 3, 'uge': 4, 'sge': 5, 'ult': 
 cond_typ_dic = {'and': 0, 'or': 1, 'xor': 2}
 binary_log_funcs = ['log_br8', 'log_br16', 'log_br32', 'log_br64','log_br8_unsign', 'log_br16_unsign', 'log_br32_unsign', 'log_br64_unsign', 'eq_log_br8', 'eq_log_br16', 'eq_log_br32', 'eq_log_br64']
 switch_log_funcs = ['sw_log_br8', 'sw_log_br16', 'sw_log_br32', 'sw_log_br64','sw_log_br8_unsign', 'sw_log_br16_unsign', 'sw_log_br32_unsign', 'sw_log_br64_unsign']
+select_log_funcs = ['log_br8_r', 'log_br16_r', 'log_br32_r', 'log_br64_r', 'log_br8_unsign_r', 'log_br16_unsign_r', 'log_br32_unsign_r', 'log_br64_unsign_r']
 strcmp_log_funcs = ['strcmp_log']
 strncmp_log_funcs = ['strncmp_log']
 memcmp_log_funcs = ['memcmp_log']
 strstr_log_funcs = ['strstr_log']
 sancov_set = set()
 sancov_2_func = {}
-func_2_sancov = {}
-nm_ret = subprocess.check_output('llvm-nm ' + sys.argv[2], shell=True, encoding='utf-8').splitlines()
+orig_sancov_set = set()
+orig_sancov_2_func = {}
+nm_ret = subprocess.check_output('llvm-nm ' + sys.argv[3], shell=True, encoding='utf-8').splitlines()
 internal_func_list = set()
 for ele in nm_ret:
     fun_name = ele.split()[-1]
@@ -79,187 +88,226 @@ def inline_counter_table_init(filename, bin_name):
 
     return inline_table
 
-
-# get sancov id from function
-def get_sancov_id_from_function(func):
-    lines = func.split("\n")
-    func_name = lines[1].split("@")[1].split("(")[0]
+def orig_build_sancov_set(dot_file):
+    func_str = open(dot_file, 'r').read()
+    if " @__sancov_gen_" not in func_str: return
+    my_func_name = dot_file.split('/')[-1].split('.')[0]
+    lines = open(dot_file, 'r').readlines()
     for line in lines:
-        if " @__sancov_gen_" in line:
-            for subinst in line.split():
-                if "__sancov_gen_" in subinst:
-                    if "," not in subinst:
-                        sancov_set.add(subinst)
-                        sancov_2_func[subinst] = func_name
-                        func_2_sancov[func_name] = subinst
-                    elif subinst.endswith(","):
-                        sancov_set.add(subinst[:-1])
-                        sancov_2_func[subinst[:-1]] = func_name
-                        func_2_sancov[func_name] = subinst[:-1]
-                    return
+        if line.startswith('\t'):
+            if '[' in line:
+                code = line.split('label=')[1].strip()[1:-3]
+                # check instrumention basic block only
+                loc = code.find(' @__sancov_gen_')
+
+                # convert dot node id to llvm node id
+                if loc != -1:
+                    code = code.replace("\l...", '')
+                    insts = code.split('\\l  ')
+                    for inst in insts:
+                        if "__sancov_gen_" in inst:
+                            for subinst in inst.split():
+                                if "__sancov_gen_" in subinst:
+                                    if "," not in subinst:
+                                        orig_sancov_set.add(subinst)
+                                        orig_sancov_2_func[subinst] = my_func_name
+                                    elif subinst.endswith(","):
+                                        orig_sancov_set.add(subinst[:-1])
+                                        orig_sancov_2_func[subinst[:-1]] = my_func_name
+                                    return
+
+def build_sancov_set(ll_file):
+
+    global debug_tmp_cnt
+    global debug_tmp_cnt2
+
+    fun_name=''
+    enter_func = 0
+    ll_file_r = open(ll_file).readlines()
+
+    i = 0
+    while i < len(ll_file_r):
+        line = ll_file_r[i]
+        
+        if line.startswith('}'):
+            enter_func = 0
+
+        if line.startswith('define '): # check if function declaration
+            enter_func = 1
+            sancov_found = 0
+            fun_name_strt = line.find('@')
+            fun_name_end = line.find('(', fun_name_strt)
+            fun_name = line[fun_name_strt+1 : fun_name_end]
+            if fun_name not in internal_func_list:
+                i += 1
+                continue
+        
+        if enter_func and line.find(' @__sancov_gen_') != -1:
+            if "__sancov_gen_" in line:
+                for subinst in line.split():
+                    if "__sancov_gen_" in subinst:
+                        if "," not in subinst:
+                            sancov_set.add(subinst)
+                        elif subinst.endswith(","):
+                            sancov_set.add(subinst[:-1])
+        
+        i += 1
     
+    return
 
-# build sancov set from ll file
-def build_sancov_set_from_ll_file(ll_file):
-    file_content = open(ll_file, 'r').read()
-    funcs = file_content.split('; Function Attrs:')
-    # begin from the second element of funcs
-    for func in funcs[1:]:
-        get_sancov_id_from_function(func)
-
-def construct_graph_init_from_func(func_str, inline_table):
-    if " @__sancov_gen_" not in func_str:
-        return
+def orig_construct_graph_init(dot_file, inline_table):
+    lines = open(dot_file, 'r').readlines()
     graph, reverse_graph = {}, {}
+
+    my_func_name = dot_file.split('/')[-1].split('.')[0]
+    if my_func_name not in internal_func_list:
+        # print("######## skip a dead function")
+        return
+
+    global debug_tmp_cnt
+    global debug_tmp_cnt2
     dot_id_2_llvm_id = {}
+    last_global_edge = -1
+
     non_sancov_nodes = []
     total_node = 0
+    local_select_node = []
     local_table = None
-    
-    fun_name = func_str.split("\n")[1].split("@")[1].split("(")[0]
-    func_str = '\n'.join(func_str.split("\n")[2:])
-    # %84 = extractvalue { ptr, i32 } %75, 0, !dbg !227022
-    # %75 = landingpad { ptr, i32 }
-    func_str = '}'.join(func_str.split("}")[:-1])
-    blocks = func_str.split("\n\n")
-    for block in blocks:
-        # parse node
-        dot_node_id = fun_name + "_" + block.split(":")[0]
-        code = ':'.join(block.split(":")[1:])
-        loc = code.find(' @__sancov_gen_')
-        # convert dot node id to llvm node id
-        if loc != -1:
-            insts = code.split('\n')
-            found_the_first_node = 0
-            found_the_second_node = 0
-            first_node = None
-            second_node = None
-            found_select = None
-            non_first_second_node_select = None
-            for inst in insts:
-                if "__sancov_gen_" in inst:
-                    if "load" in inst and "inttoptr" not in inst:
-                        found_the_first_node = 1
-                        first_node = inst
-                    elif ' = select' not in inst:
-                        found_the_second_node = 1
-                        second_node = inst
-                    else:
-                        found_select = 1
 
-            local_edge = None
-            # three cases for first/second node checking:
-            # 1. bb with first_node
-            # 2. bb with second_node
-            # 3. bb without first_node and second_node
-            if found_the_first_node:
-                if not local_table:
-                    local_table = first_node.split()[5][:-1]
-                local_edge = 0
-            elif found_the_second_node:
-                if not local_table:
-                    local_table = second_node.split()[11]
-                local_edge = second_node.split()[15][:-1]
-            else:
-                non_first_second_node_select = 1
-                
+    func_str = open(dot_file, 'r').read()
+    if " @__sancov_gen_" not in func_str: return
 
-            if found_the_first_node or found_the_second_node:
-                global_edge = int(int(local_edge)/4) + inline_table[local_table] # "global edge" is the final sancov node id used in AFL++ to trace edge coverage
-                dot_id_2_llvm_id[dot_node_id] = global_edge # dot_node_id is the node ID in the raw dot graph
+    # 1. parse node(sancov instrumentation site with sancov ID) and edge("->" in dot graph) from the dot graph
+    # 2. parse our instrumentation function (log_br() with br_dist_edge_id), hook sancov ID with br_dist_edge_id. Switch is a special case since our instrumentation function occurs before sancov instrumentation, so we need to scan the function for a second time.
+    # 3. parse select instructions as additional nodes and their br_dist_edge_id
+    # algorithm: linear scan each line of instructions, then identify instruction with "__sancov_node_id" as nodes
 
-            if found_select:
-                if non_first_second_node_select:
-                    non_sancov_nodes.append(dot_node_id)
-        # handle inject log function
-        # map dummy id to local table
-        else:
-            non_sancov_nodes.append(dot_node_id)
-            insts = code.split('\n')
+    for i in range(len(lines)):
+        line = lines[i]
+        if line.startswith('\t'):
+            if '[' in line:
+                split_idx = line.index('[')
+                dot_node_id = line[:split_idx].strip()
+                code = line.split('label=')[1].strip()[1:-3]
+                # check instrumention basic block only
+                loc = code.find(' @__sancov_gen_')
 
-            for _, inst in enumerate(insts):
-                if ('call ' in inst or 'invoke ' in inst) and '@' in inst:
-                    caller_func_name = inst[inst.find('@')+1:inst.find('(')]
-                    # normal cmp condition (log_br)
-                    if caller_func_name in (switch_log_funcs + binary_log_funcs + memcmp_log_funcs + strcmp_log_funcs + strncmp_log_funcs + strstr_log_funcs):
-                        dummy_id = int(inst.split()[3][:-1])
+                # convert dot node id to llvm node id
+                if loc != -1:
+
+                    code = code.replace("\l...", '')
+                    insts = code.split('\\l  ')
+                    found_select = 0
+                    found_the_first_node = 0
+                    found_the_second_node = 0
+                    first_node = None
+                    second_node = None
+                    non_first_second_node_select = 0
+                    select_node = []
+                    for inst in insts:
+                        if "__sancov_gen_" in inst:
+                            # There are three types of instruction with "__sancov_gen"
+                            # case1: first sancov node in a function
+                            # load i32, i32* getelementptr inbounds ... @__sancov_gen_
+                            if "load" in inst and "inttoptr" not in inst:
+                                found_the_first_node = 1
+                                first_node = inst
+                            # case2 : second and the following sancov node in a function
+                            # load i32, i32* inttoptr ... @__sancov_gen_
+                            elif ' = select' not in inst:
+                                found_the_second_node = 1
+                                second_node = inst
+                            # case3: select instruction with sancov node
+                            # select i1 ... @__sancov_gen_
+                            else:
+                                found_select = 1
+                                select_node.append(inst)
+
+                    local_edge = None
+                    # three cases for first/second node checking:
+                    # 1. bb with first_node
+                    # 2. bb with second_node
+                    # 3. bb without first_node and second_node
+
+                    # two cases for select node checking
+                    # 3. bb with single/multiple select_node
+                    # 4. bb without any select_node
+                    if found_the_first_node:
                         if not local_table:
-                            print("BUG: parse local table error!")
-                        else:
-                            dummy_id_2_local_table[dummy_id] = local_table
+                            local_table = first_node.split()[5][:-1]
+                        local_edge = 0
+                    elif found_the_second_node:
+                        if not local_table:
+                            local_table = second_node.split()[11]
+                        local_edge = second_node.split()[15][:-1]
+                    else:
+                        non_first_second_node_select = 1
 
+                    if found_the_first_node or found_the_second_node:
+                        global_edge = int(int(local_edge)/4) + inline_table[local_table] # "global edge" is the final sancov node id used in AFL++ to trace edge coverage
 
-        graph[dot_node_id] = []
-        if dot_node_id not in reverse_graph:
-            reverse_graph[dot_node_id] = []     
-    
-    for block in blocks:
-        # construct a graph with dot node id
-        dot_node_id = fun_name + "_" + block.split(":")[0]
-        code = ':'.join(block.split(":")[1:])
-        insts = code.split('\n')
-        for inst_ind, inst in enumerate(insts):
-            if re.match(r'\s*br ', inst):
-                src_node = dot_node_id
-                loc_strt = 0
-                while loc_strt >= 0:
-                    loc_strt = inst.find("label %", loc_strt)
-                    if loc_strt < 0:
-                            break
-                    loc_end = inst.find(",", loc_strt)
+                        last_global_edge = global_edge
+                        dot_id_2_llvm_id[dot_node_id] = global_edge # dot_node_id is the node ID in the raw dot graph
                     
-                    if loc_end < 0:
-                        dst_node = fun_name + "_" + inst[loc_strt+7:]
-                    else:
-                        dst_node = fun_name + "_" + inst[loc_strt+7:loc_end]
-                    loc_strt = loc_end
-                    
-                    if dst_node not in graph[src_node]:
-                        graph[src_node].append(dst_node)
-                    if dst_node not in reverse_graph:
-                        reverse_graph[dst_node] = [src_node]
-                    else:
-                        if src_node not in reverse_graph[dst_node]:
-                            reverse_graph[dst_node].append(src_node)
-                            
-            if re.match(r'\s*switch ', inst):
-                src_node = dot_node_id
-                select_labels = 0
-                while True:
-                    select_inst = insts[inst_ind + select_labels]
-                    if re.match(r'\s*]', select_inst):
-                        break
-                    loc_strt = select_inst.find("label %", 0)
-                    loc_end = select_inst.find(" ", loc_strt+7)
-                    dst_node = fun_name + "_" + select_inst[loc_strt+7:]
-                    if loc_end != -1:
-                        dst_node = fun_name + "_" + select_inst[loc_strt+7:loc_end]
-                    select_labels += 1
+                    # handle select case
+                    if found_select:
+                        if non_first_second_node_select:
+                            non_sancov_nodes.append(dot_node_id)
+                        for inst in select_node:
+                            select_node_local_edge = None
+                            new_loc = inst.find(" @__sancov_gen_")
+                            if ',' not in inst[new_loc:].split(')')[0]:
+                                if not local_table:
+                                    local_table = inst[new_loc:].split(')')[0].split()[0]
+                                select_node_local_edge = inst[new_loc:].split(')')[1].split()[-1]
+                            else:
+                                print("BUG: parse select error")
+                            select_node_global_edge = int(int(select_node_local_edge)/4) + inline_table[local_table] # "global edge" is sancov node id
+                            local_select_node.append((last_global_edge, select_node_global_edge))
+                            orig_global_select_node[last_global_edge].append(select_node_global_edge)
 
-                    if dst_node not in graph[src_node]:
-                        graph[src_node].append(dst_node)
-                    if dst_node not in reverse_graph:
-                        reverse_graph[dst_node] = [src_node]
-                    else:
-                        if src_node not in reverse_graph[dst_node]:
-                            reverse_graph[dst_node].append(src_node)
-            
-            # first situation:
-            # %call = invoke noundef nonnull align 8 dereferenceable(56) ptr @_ZN6google8protobuf8internal10LogMessagelsEPKc(ptr noundef nonnull align 8 dereferenceable(56) %12, ptr noundef nonnull @.str. 10)
-            # to label %invoke.cont unwind label %lpad, !dbg !226885
-            # second situation:
-            # invoke void %77(ptr noundef nonnull align 8 dereferenceable(8) %60, i32 noundef %sub)
-            # third situation:
-            # normal invoke: invoke void @_ZN6google8protobuf8internal10LogMessagelsEPKc(ptr noundef nonnull align 8 dereferenceable(56) %12, ptr noundef nonnull @.str)
-            # direct find the label  
-            if re.match(r'\s*to\s+label\s+%[^ ]+\s+unwind\s+label\s+%[^ ]+', inst):
-                src_node = dot_node_id
-                loc_strt = 0
-                select_inst = inst
-                # first label
-                loc_strt = select_inst.find("label %", loc_strt)
-                loc_end = select_inst.find(" ", loc_strt + 7)
-                dst_node = fun_name + "_" + select_inst[loc_strt+7:loc_end]
+                            # parse the next select node
+                            sub_code = inst[new_loc+14:]
+                            new_loc = sub_code.find(' @__sancov_gen_')
+                            if ',' not in sub_code[new_loc:].split(')')[0]:
+                                if not local_table:
+                                    local_table = sub_code[new_loc:].split(')')[0].split()[0]
+                                select_node_local_edge = sub_code[new_loc:].split(')')[1].split()[-1]
+                            else:
+                                print("BUG: parse select error")
+                            select_node_global_edge = int(int(select_node_local_edge)/4) + inline_table[local_table] # "global edge" is sancov node id
+                            local_select_node.append((last_global_edge, select_node_global_edge))
+                            orig_global_select_node[last_global_edge].append(select_node_global_edge)
+
+                # handle inject log function
+                # map dummy id to local table
+                else:
+                    non_sancov_nodes.append(dot_node_id)
+                    code = code.replace("\l...", '')
+                    insts = code.split('\\l  ')
+
+                    for _, inst in enumerate(insts):
+                        if ('call ' in inst or 'invoke ' in inst) and '@' in inst:
+                            fun_name = inst[inst.find('@')+1:inst.find('(')]
+                            # normal cmp condition (log_br)
+                            if fun_name in (switch_log_funcs + binary_log_funcs + select_log_funcs + memcmp_log_funcs + strcmp_log_funcs + strncmp_log_funcs + strstr_log_funcs):
+                                dummy_id = int(inst.split()[3][:-1])
+                                if not local_table:
+                                    print("BUG: parse local table error!")
+                                else:
+                                    orig_dummy_id_2_local_table[dummy_id] = local_table
+
+
+                graph[dot_node_id] = []
+                if dot_node_id not in reverse_graph:
+                    reverse_graph[dot_node_id] = []
+
+            # construct a graph with dot node id
+            elif '->' in line:
+                # ignore the last character ';'
+                tokens = line.split('->')
+                src_node = tokens[0].strip().split(':')[0]
+                dst_node = tokens[1].strip()[:-1]
                 if dst_node not in graph[src_node]:
                     graph[src_node].append(dst_node)
                 if dst_node not in reverse_graph:
@@ -267,20 +315,7 @@ def construct_graph_init_from_func(func_str, inline_table):
                 else:
                     if src_node not in reverse_graph[dst_node]:
                         reverse_graph[dst_node].append(src_node)
-                # second label
-                loc_strt = select_inst.find("label %", loc_end)
-                loc_end = select_inst.find(",", loc_strt + 7)
-                dst_node = fun_name + "_" + select_inst[loc_strt+7:loc_end]
-                if dst_node not in graph[src_node]:
-                    graph[src_node].append(dst_node)
-                if dst_node not in reverse_graph:
-                    reverse_graph[dst_node] = [src_node]
-                else:
-                    if src_node not in reverse_graph[dst_node]:
-                        reverse_graph[dst_node].append(src_node)
-                
-                        
-                        
+
     # TODO: group sancov node (delete ASAN-nodes as well) DONE
     for node in non_sancov_nodes:
         children, parents = graph[node], reverse_graph[node]
@@ -317,31 +352,383 @@ def construct_graph_init_from_func(func_str, inline_table):
         for nei in neis:
             new_reverse_graph[dot_id_2_llvm_id[node]].append(dot_id_2_llvm_id[nei])
 
+    # add select edge
+    for select_1, select_2 in local_select_node:
+        if select_2 not in new_graph:
+            new_graph[select_2] = []
+        if select_2 not in new_reverse_graph:
+            new_reverse_graph[select_2] = []
+        # find all edges in (select_1, child)
+        # 1. delete (select_1, child)
+        # 2. add (select_1, select_2) and (select_2, child)
+        # find all edges in (child, selelct_1)
+        # 1. delete (child, select_1)
+        # 2. add (child, select_1) and (select_1, select_2)
+        '''
+        tmp_child_list = new_graph[select_1].copy()
+        for child in tmp_child_list:
+            new_graph[select_1].remove(child)
+            new_reverse_graph[child].remove(select_1)
+            new_graph[select_1].append(select_2)
+            new_reverse_graph[select_2].append(select_1)
+            new_graph[select_2].append(child)
+            new_reverse_graph[child].append(select_2)
+        '''
+        #new_graph[select_1].append(select_2)
+        #new_reverse_graph[select_2].append(select_1)
+
+
     # convert node id from dot_id to llvm_instrumented_id, add to global graph
     for node, neis in new_graph.items():
         if not neis:
-            global_graph[node] = []
-            global_graph_weighted[node] = {}
+            orig_global_graph[node] = []
+            orig_global_graph_weighted[node] = {}
         for nei in neis:
-            global_graph[node].append(nei)
-            global_graph_weighted[node][nei] = 1
+            orig_global_graph[node].append(nei)
+            orig_global_graph_weighted[node][nei] = 1
 
     for node, neis in reverse_graph.items():
         if not neis:
-            global_reverse_graph[node] = []
+            orig_global_reverse_graph[node] = []
         for nei in neis:
-            global_reverse_graph[node].append(nei)
+            orig_global_reverse_graph[node].append(nei)
 
+    debug_tmp_cnt += total_node
+    debug_tmp_cnt2 += len(new_graph)
+    # print(my_func_name, total_node, debug_tmp_cnt, debug_tmp_cnt2, len(global_graph))
     if total_node != len(new_graph):
         missing_cnt[0] += 1
+        #print("!!!BUG", my_func_name, total_node, len(new_graph), missing_cnt[0])
+
     return
+
+def construct_graph_init(ll_file, inline_table):
+
+    global debug_tmp_cnt
+    global debug_tmp_cnt2
+
+    dot_id_2_llvm_id = {}
+    last_global_edge = -1
+
+    graph, reverse_graph = {}, {}
+    non_sancov_nodes = []
+    sw_bb_2_dummy_id = {}
+    sw_case_bb = []
+    total_node = 0
+    local_select_node = []
+    local_table = None
+
+    fun_name=''
+    func_node_id=''
+    enter_func = 0
+    sancov_found = 0
+    inst_strt = 0
+    inst_entered = 0
+
+    found_select = 0
+    found_the_first_node = 0
+    found_the_second_node = 0
+    first_node = None
+    second_node = None
+    non_first_second_node_select = 0
+    select_node = []
+    list_inst = []
+
+    ll_file_r = open(ll_file).readlines()
+
+    i = 0
+    while i < len(ll_file_r):
+        line = ll_file_r[i]
+
+        if line.startswith('}'):
+            enter_func = 0
+
+        if line.startswith('define '): # check if function declaration
+            enter_func = 1
+            sancov_found = 0
+            fun_name_strt = line.find('@')
+            fun_name_end = line.find('(', fun_name_strt)
+            fun_name = line[fun_name_strt+1 : fun_name_end]
+            if fun_name not in internal_func_list:
+                i += 1
+                continue
+        
+        node_name_end = ll_file_r[i].find(':')
+        if enter_func and node_name_end != -1:
+            func_node_id = fun_name + "_%" + line[:node_name_end]
+            if func_node_id not in graph:
+                graph[func_node_id] = []
+            if func_node_id not in reverse_graph:
+                reverse_graph[func_node_id] = []
+            
+            src_node_loc = ll_file_r[i].find('; preds = ')
+            if (src_node_loc != -1):
+                src_node_list = ll_file_r[i][src_node_loc + 10:].split(", ")
+                for src_node in src_node_list:
+                    src_node = fun_name + "_" + src_node.strip()
+                    if src_node not in graph:
+                        graph[src_node] = []
+                    if func_node_id not in graph[src_node]:
+                        graph[src_node].append(func_node_id)
+                    if func_node_id not in reverse_graph:
+                        reverse_graph[func_node_id] = [src_node]
+                    else:
+                        if src_node not in reverse_graph[func_node_id]:
+                            reverse_graph[func_node_id].append(src_node)
+                
+            inst_strt = 1
+        
+        inst_ind = i + 1
+        while (enter_func and inst_strt):
+            inst_entered = 1
+            inst = ll_file_r[inst_ind]
+            if inst.find(' @__sancov_gen_') != -1:
+                sancov_found = 1
+            while re.match(r'\s{10}', ll_file_r[inst_ind + 1]):
+                inst = inst.rstrip()
+                inst += ll_file_r[inst_ind + 1][9:]
+                inst_ind += 1
+            if re.match(r'\S', inst):
+                inst_strt = 0
+                i = inst_ind - 1
+            if (sancov_found):
+                if "__sancov_gen_" in inst:
+                    if "load" in inst and "inttoptr" not in inst:
+                        found_the_first_node = 1
+                        first_node = inst
+                    elif ' = select ' not in inst:
+                        found_the_second_node = 1
+                        second_node = inst
+                    else:
+                        found_select = 1
+                        select_node.append(inst)
+            list_inst.append(inst)
+            # construct a graph with dot node id
+            # if re.match(r'\s*br ', inst):
+            #     src_node = func_node_id
+            #     loc_strt = 0
+            #     while loc_strt >= 0:
+            #         loc_strt = inst.find("label %", loc_strt)
+            #         if loc_strt < 0:
+            #             break
+            #         loc_end = inst.find(",", loc_strt)
+            #         dst_node = fun_name + "_" + inst[loc_strt+6:loc_end]
+            #         loc_strt = loc_end
+                
+            #         if dst_node not in graph[src_node]:
+            #             graph[src_node].append(dst_node)
+            #         if dst_node not in reverse_graph:
+            #             reverse_graph[dst_node] = [src_node]
+            #         else:
+            #             if src_node not in reverse_graph[dst_node]:
+            #                 reverse_graph[dst_node].append(src_node)
+            # if re.match(r'\s*switch ', inst):
+            #     src_node = func_node_id
+            #     select_labels = 0
+            #     while True:
+            #         select_inst = ll_file_r[inst_ind + select_labels]
+            #         if re.match(r'\s*]', select_inst):
+            #             break
+            #         loc_strt = select_inst.find("label %", 0)
+            #         loc_end = select_inst.find(" ", loc_strt+6)
+            #         dst_node = fun_name + "_" + select_inst[loc_strt+6:-1]
+            #         if loc_end != -1:
+            #             dst_node = fun_name + "_" + select_inst[loc_strt+6:loc_end]
+            #         select_labels += 1
+
+            #         if dst_node not in graph[src_node]:
+            #             graph[src_node].append(dst_node)
+            #         if dst_node not in reverse_graph:
+            #             reverse_graph[dst_node] = [src_node]
+            #         else:
+            #             if src_node not in reverse_graph[dst_node]:
+            #                 reverse_graph[dst_node].append(src_node)
+            inst_ind += 1
     
+        if enter_func and inst_entered and sancov_found:
+            # three cases for first/second node checking:
+            # 1. bb with first_node
+            # 2. bb with second_node
+            # 3. bb without first_node and second_node
+
+            # two cases for select node checking
+            # 3. bb with single/multiple select_node
+            # 4. bb without any select_node
+            sancov_found = 0
+            inst_entered = 0
+            local_edge = None
+
+            if found_the_first_node:
+                if not local_table:
+                    local_table = first_node.split()[5][:-1]
+                local_edge = 0
+            elif found_the_second_node:
+                if not local_table:
+                    local_table = second_node.split()[11]
+                local_edge = second_node.split()[15][:-1]
+            else:
+                non_first_second_node_select = 1
+
+            if found_the_first_node or found_the_second_node:
+                global_edge = int(int(local_edge)/4) + inline_table[local_table] # "global edge" is our custom edge id
+                last_global_edge = global_edge
+                dot_id_2_llvm_id[func_node_id] = global_edge # is "node_id" the actual id that should be mapped to global edge?
+
+            # handle select case
+            if found_select:
+                if non_first_second_node_select:
+                    non_sancov_nodes.append(func_node_id)
+                for inst in select_node:
+                    # TODO: check if there is a instrumentation site hooked with this select-instr ID
+                    select_node_local_edge = None
+                    new_loc = inst.find(" @__sancov_gen_")
+                    if ',' not in inst[new_loc:].split(')')[0]:
+                        if not local_table:
+                            local_table = inst[new_loc:].split(')')[0].split()[0]
+                        select_node_local_edge = inst[new_loc:].split(')')[1].split()[-1]
+                    else:
+                        print("BUG: parse select error")
+                    select_node_global_edge = int(int(select_node_local_edge)/4) + inline_table[local_table] # "global edge" is our custom edge id
+                    local_select_node.append((last_global_edge, select_node_global_edge))
+                    global_select_node[last_global_edge].append(select_node_global_edge)
+
+                    # parse the next select node
+                    sub_code = inst[new_loc+14:]
+                    new_loc = sub_code.find(' @__sancov_gen_')
+                    if ',' not in sub_code[new_loc:].split(')')[0]:
+                        if not local_table:
+                            local_table = sub_code[new_loc:].split(')')[0].split()[0]
+                        select_node_local_edge = sub_code[new_loc:].split(')')[1].split()[-1]
+                    else:
+                        print("BUG: parse select error")
+                    select_node_global_edge = int(int(select_node_local_edge)/4) + inline_table[local_table] # "global edge" is our custom edge id
+                    local_select_node.append((last_global_edge, select_node_global_edge))
+                    global_select_node[last_global_edge].append(select_node_global_edge)
+        
+            found_select = 0
+            found_the_first_node = 0
+            found_the_second_node = 0
+            first_node = None
+            second_node = None
+            non_first_second_node_select = 0
+            select_node = []
+
+        elif enter_func and inst_entered and not sancov_found:
+            inst_entered = 0
+            # handle non-id BBs 1) skip asan node; 2) hook instrumentation site with a corresponding llvm id
+            non_sancov_nodes.append(func_node_id)
+
+            for _, inst in enumerate(list_inst):
+                if ('call ' in inst or 'invoke ' in inst) and '@' in inst:
+                    br_fun_name = inst[inst.find('@')+1:inst.find('(')]
+                    # normal cmp condition (log_br)
+                    if br_fun_name in (switch_log_funcs + binary_log_funcs + select_log_funcs + memcmp_log_funcs + strcmp_log_funcs + strncmp_log_funcs + strstr_log_funcs):
+                        dummy_id = int(inst.split()[3][:-1])
+                        if not local_table:
+                            print("BUG: parse local table error!")
+                        else:
+                            dummy_id_2_local_table[dummy_id] = local_table
+        
+        i += 1
+        list_inst = []
+        if line.startswith('}'):
+            # TODO: group sancov node (delete ASAN-nodes as well) DONE
+            for node in non_sancov_nodes:
+                children, parents = graph[node], reverse_graph[node]
+                for child in children:
+                    for parent in parents:
+                        #if child == -1 or parent == -1:
+                        #    continue
+                        if child not in graph[parent]:
+                            graph[parent].append(child)
+                        if parent not in reverse_graph[child]:
+                            reverse_graph[child].append(parent)
+
+                del graph[node]
+                del reverse_graph[node]
+                for parent in parents:
+                    if parent in graph:
+                        if node in graph[parent]:
+                            graph[parent].remove(node)
+                for child in children:
+                    if child in reverse_graph:
+                        if node in reverse_graph[child]:
+                            reverse_graph[child].remove(node)
+
+            new_graph, new_reverse_graph = {}, {}
+            for node, neis in graph.items():
+                if dot_id_2_llvm_id[node] not in new_graph:
+                    new_graph[dot_id_2_llvm_id[node]] = []
+                for nei in neis:
+                    new_graph[dot_id_2_llvm_id[node]].append(dot_id_2_llvm_id[nei])
+
+            for node, neis in reverse_graph.items():
+                if dot_id_2_llvm_id[node] not in new_reverse_graph:
+                    new_reverse_graph[dot_id_2_llvm_id[node]] = []
+                for nei in neis:
+                    new_reverse_graph[dot_id_2_llvm_id[node]].append(dot_id_2_llvm_id[nei])
+
+            # add select edge
+            for select_1, select_2 in local_select_node:
+                if select_2 not in new_graph:
+                    new_graph[select_2] = []
+                if select_2 not in new_reverse_graph:
+                    new_reverse_graph[select_2] = []
+                # find all edges in (select_1, child)
+                # 1. delete (select_1, child)
+                # 2. add (select_1, select_2) and (select_2, child)
+                # find all edges in (child, selelct_1)
+                # 1. delete (child, select_1)
+                # 2. add (child, select_1) and (select_1, select_2)
+                '''
+                tmp_child_list = new_graph[select_1].copy()
+                for child in tmp_child_list:
+                    new_graph[select_1].remove(child)
+                    new_reverse_graph[child].remove(select_1)
+                    new_graph[select_1].append(select_2)
+                    new_reverse_graph[select_2].append(select_1)
+                    new_graph[select_2].append(child)
+                    new_reverse_graph[child].append(select_2)
+                '''
+                #new_graph[select_1].append(select_2)
+                #new_reverse_graph[select_2].append(select_1)
+
+
+            # convert node id from dot_id to llvm_instrumented_id, add to global graph
+            for node, neis in new_graph.items():
+                if not neis:
+                    global_graph[node] = []
+                    global_graph_weighted[node] = {}
+                for nei in neis:
+                    global_graph[node].append(nei)
+                    global_graph_weighted[node][nei] = 1
+
+            for node, neis in reverse_graph.items():
+                if not neis:
+                    global_reverse_graph[node] = []
+                for nei in neis:
+                    global_reverse_graph[node].append(nei)
+
+            debug_tmp_cnt += total_node
+            debug_tmp_cnt2 += len(new_graph)
+            # print(my_func_name, total_node, debug_tmp_cnt, debug_tmp_cnt2, len(global_graph))
+            if total_node != len(new_graph):
+                missing_cnt[0] += 1
+                #print("!!!BUG", my_func_name, total_node, len(new_graph), missing_cnt[0])
     
-def construct_graph_init_from_ll_file(ll_file, inline_table):
-    file_content = open(ll_file, 'r').read()
-    funcs = file_content.split('; Function Attrs:')
-    for func in funcs[1:]:
-        construct_graph_init_from_func(func, inline_table)
+            graph, reverse_graph = {}, {}
+            non_sancov_nodes = []
+            sw_caseval_2_dummy_id = {}
+            sw_bb_2_dummy_id = {}
+            sw_case_bb = []
+            total_node = 0
+            local_select_node = []
+            local_table = None
+
+            dot_id_2_llvm_id = {}
+            last_global_edge = -1
+
+    return
 
 # only for normal sancov instrument
 # for example:
@@ -382,10 +769,68 @@ def recognize_strcmp_subtype(instruction):
 
 
 if __name__ == '__main__':
-    build_sancov_set_from_ll_file(sys.argv[1])
+    start_time = time.time()
+    build_sancov_set(sys.argv[1])
+    for dot_file in glob.glob("./" + sys.argv[2] +"/*"):
+        orig_build_sancov_set(dot_file)
+    
+    if (sancov_set == orig_sancov_set):
+        print("sancov_set success")
+
     # check if there is discrepency between llvm IR symbol table and binary's symbol table
-    inline_table = inline_counter_table_init(sys.argv[1], sys.argv[2])
-    construct_graph_init_from_ll_file(sys.argv[1], inline_table)
+    inline_table = inline_counter_table_init(sys.argv[1], sys.argv[3])
+    
+    construct_graph_init(sys.argv[1], inline_table)
+    fun_list = [dot_file.split('/')[-1].split('.')[0] for dot_file in glob.glob("./" + sys.argv[2] + "/*")]
+    for dot_file in glob.glob("./" + sys.argv[2] +"/*"):
+        orig_construct_graph_init(dot_file, inline_table)
+
+    elapsed_time = time.time() - start_time
+    print(elapsed_time)
+
+    print(len(orig_global_graph))
+    print(len(global_graph))
+    eq_falg = True
+    for key in orig_global_graph:
+        global_graph[key].sort()
+        orig_global_graph[key].sort()
+        if global_graph[key] != orig_global_graph[key]:
+            print(key)
+            print(global_graph[key])
+            print(orig_global_graph[key])
+            eq_falg = False
+            break
+    if eq_falg:
+        print("global_graph success")
+    
+    print(len(orig_global_graph_weighted))
+    print(len(global_graph_weighted))
+    if global_graph_weighted == orig_global_graph_weighted:
+        print("global_graph_weighted success")
+    
+    print(len(orig_global_reverse_graph))
+    print(len(global_reverse_graph))
+    if len(orig_global_reverse_graph) == len(global_reverse_graph):
+        print("global_graph_reversed success")
+    
+    print(len(orig_global_select_node))
+    print(len(global_select_node))
+    if global_select_node == orig_global_select_node:
+        print("global_graph_select success")
+    
+    print(len(orig_dummy_id_2_local_table))
+    print(len(dummy_id_2_local_table))
+    i = 0
+    j = 0
+    for key in dummy_id_2_local_table:
+        if key not in orig_dummy_id_2_local_table:
+            i += 1
+        elif orig_dummy_id_2_local_table[key] != dummy_id_2_local_table[key]:
+            j += 1
+    print(i)
+    print(j)
+    if dummy_id_2_local_table == orig_dummy_id_2_local_table:
+        print("dummy_id_2_local_table success")
 
     border_edges = []
     select_border_edges = []
@@ -396,7 +841,7 @@ if __name__ == '__main__':
     # build id_2_cmp_type and select_edge_2_cmp_type
     # id_2_cmp_type: id_2_cmp_type[sancov_id] = (cmp_type, dummy_id, str_len)
     # select_edge_2_cmp_type: select_edge_2_cmp_type[(src_sancov_id, dst_sancov_id)] = (cmp_type, dummy_id, str_len)
-    with open(sys.argv[3], 'r') as f:
+    with open(sys.argv[4], 'r') as f:
         for line in f.readlines():
             tokens = line.split('|')
             dummy_id = int(tokens[1])
@@ -434,6 +879,27 @@ if __name__ == '__main__':
                 id_2_cmp_type[sancov_src_id] = (cmp_typ_dic[cmp_type], -1, str_len)
                 sw_border_edge_2_br_dist[(sancov_src_id, sancov_dst_id)] = dummy_id
 
+            # for select:2 edges
+            # (src sancov id, 1st element of select instruction sancov id)
+            elif tokens[0] == '4':
+                cmp_inst = tokens[3]
+                cmp_type = cmp_inst.split()[3]
+                str_len = int(tokens[6])
+                sancov_src_instrument = tokens[2]
+                local_src_edge = parse_local_edge_from_normal_sancov_instrument(sancov_src_instrument)
+                sancov_src_id = cal_sancov_id_from_local_edge_and_dummy_id(local_src_edge, dummy_id)
+
+                sancov_dst_instrument = tokens[4]
+                # we choose the fist element
+                local_dst_edge = sancov_dst_instrument.split()[16][:-1]
+                sancov_dst_id = cal_sancov_id_from_local_edge_and_dummy_id(local_dst_edge, dummy_id)
+
+                select_edge_2_cmp_type[(sancov_src_id, sancov_dst_id)] = (cmp_typ_dic[cmp_type], dummy_id, str_len)
+
+                # then choose the second element
+                second_sancov_dst_id = sancov_dst_id + 1
+                select_edge_2_cmp_type[(sancov_src_id, second_sancov_dst_id)] = (cmp_typ_dic[cmp_type], dummy_id, str_len)
+
 
     # cmp_type[node_id] = cmp_type
     # sancov node_id, cmp_type
@@ -448,6 +914,20 @@ if __name__ == '__main__':
                 else:
                     cmp_type = id_2_cmp_type[node][0]
                     f.write(str(node+6) + " " + str(cmp_type) + "\n")
+
+    # cmp_type[select_node_id] = cmp_type
+    # select_node_id, cmp_type
+    with open("select_node_id_2_cmp_type", "w") as f:
+        for node in sorted(global_graph.keys()):
+            children = global_graph[node]
+            children.sort()
+            if node in global_select_node:
+                for select_node in global_select_node[node]:
+                    if (node, select_node) in select_edge_2_cmp_type:
+                        cmp_type = select_edge_2_cmp_type[(node, select_node)][0]
+                        f.write(str(node+6) + " " + str(cmp_type) + "\n")
+                    else:
+                        f.write(str(node+6) + " " + str(0) + "\n")
 
     # build border edge array
     for node in sorted(global_graph.keys()):
@@ -473,6 +953,16 @@ if __name__ == '__main__':
                     else:
                         border_edges.append((node, c, dummy_id, str_len))
 
+        if node in global_select_node:
+            for select_node in global_select_node[node]:
+                if (node, select_node) in select_edge_2_cmp_type:
+                    dummy_id = select_edge_2_cmp_type[(node, select_node)][1]
+                    str_len = select_edge_2_cmp_type[(node, select_node)][2]
+                    select_border_edges.append((node, select_node, dummy_id,  str_len))
+                else:
+                    select_border_edges.append((node, select_node, -1, 0))
+
+
     # border_edge_parent sancov id, boder_edge_child sancov id, border_edge_br_dist_id(i.e., dummy id), str_len
     # DO NOT FORGET to add 1 to the node_id!!!!
     with open("border_edges", "w") as f:
@@ -490,3 +980,19 @@ if __name__ == '__main__':
             if (id_list[-1] - id_list[0] + 1) <= 1:
                 print("BUG: bug in 'border_edges_cache'")
 
+    # border_edge_parent, boder_edge_child, border_edge_br_dist_id(i.e., dummy id), str_len
+    #
+    with open("select_border_edges", "w") as f:
+        for parent, child, dummy_id, str_len in select_border_edges:
+            f.write(str(parent+6) + " " + str(child+6) + " " + str(dummy_id) + " " + str(str_len) + "\n")
+
+    select_parent_node_id_map = defaultdict(list)
+    for key, val in enumerate(select_border_edges):
+        select_parent_node_id_map[val[0]].append(key)
+
+    # border_edge_parent, first_border_edge_idx, num_of_border_edges_starting_from_this_parent
+    with open("select_border_edges_cache", "w") as f:
+        for parent, id_list in select_parent_node_id_map.items():
+            f.write(str(parent+6) + " " + str(id_list[0]) + " " + str(id_list[-1] - id_list[0] + 1) + "\n")
+            if (id_list[-1] - id_list[0] + 1) <= 1:
+                print("BUG: bug in 'select_border_edges_cache'")
