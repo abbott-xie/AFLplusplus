@@ -54,7 +54,7 @@ sancov_set = set()
 sancov_2_func = {}
 orig_sancov_set = set()
 orig_sancov_2_func = {}
-nm_ret = subprocess.check_output('llvm-nm ' + sys.argv[3], shell=True, encoding='utf-8').splitlines()
+nm_ret = subprocess.check_output('llvm-nm ' + sys.argv[2], shell=True, encoding='utf-8').splitlines()
 internal_func_list = set()
 for ele in nm_ret:
     fun_name = ele.split()[-1]
