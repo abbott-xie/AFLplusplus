@@ -1,11 +1,8 @@
 import hashlib
 import sys
-import glob
-import sys
 import subprocess
 from collections import defaultdict
 import re
-import time
 
 dummy_id_2_local_table = {}
 orig_dummy_id_2_local_table = {}
@@ -88,34 +85,6 @@ def inline_counter_table_init(filename, bin_name):
 
     return inline_table
 
-def orig_build_sancov_set(dot_file):
-    func_str = open(dot_file, 'r').read()
-    if " @__sancov_gen_" not in func_str: return
-    my_func_name = dot_file.split('/')[-1].split('.')[0]
-    lines = open(dot_file, 'r').readlines()
-    for line in lines:
-        if line.startswith('\t'):
-            if '[' in line:
-                code = line.split('label=')[1].strip()[1:-3]
-                # check instrumention basic block only
-                loc = code.find(' @__sancov_gen_')
-
-                # convert dot node id to llvm node id
-                if loc != -1:
-                    code = code.replace("\l...", '')
-                    insts = code.split('\\l  ')
-                    for inst in insts:
-                        if "__sancov_gen_" in inst:
-                            for subinst in inst.split():
-                                if "__sancov_gen_" in subinst:
-                                    if "," not in subinst:
-                                        orig_sancov_set.add(subinst)
-                                        orig_sancov_2_func[subinst] = my_func_name
-                                    elif subinst.endswith(","):
-                                        orig_sancov_set.add(subinst[:-1])
-                                        orig_sancov_2_func[subinst[:-1]] = my_func_name
-                                    return
-
 def build_sancov_set(ll_file):
 
     global debug_tmp_cnt
@@ -153,253 +122,6 @@ def build_sancov_set(ll_file):
         
         i += 1
     
-    return
-
-def orig_construct_graph_init(dot_file, inline_table):
-    lines = open(dot_file, 'r').readlines()
-    graph, reverse_graph = {}, {}
-
-    my_func_name = dot_file.split('/')[-1].split('.')[0]
-    if my_func_name not in internal_func_list:
-        # print("######## skip a dead function")
-        return
-
-    global debug_tmp_cnt
-    global debug_tmp_cnt2
-    dot_id_2_llvm_id = {}
-    last_global_edge = -1
-
-    non_sancov_nodes = []
-    total_node = 0
-    local_select_node = []
-    local_table = None
-
-    func_str = open(dot_file, 'r').read()
-    if " @__sancov_gen_" not in func_str: return
-
-    # 1. parse node(sancov instrumentation site with sancov ID) and edge("->" in dot graph) from the dot graph
-    # 2. parse our instrumentation function (log_br() with br_dist_edge_id), hook sancov ID with br_dist_edge_id. Switch is a special case since our instrumentation function occurs before sancov instrumentation, so we need to scan the function for a second time.
-    # 3. parse select instructions as additional nodes and their br_dist_edge_id
-    # algorithm: linear scan each line of instructions, then identify instruction with "__sancov_node_id" as nodes
-
-    for i in range(len(lines)):
-        line = lines[i]
-        if line.startswith('\t'):
-            if '[' in line:
-                split_idx = line.index('[')
-                dot_node_id = line[:split_idx].strip()
-                code = line.split('label=')[1].strip()[1:-3]
-                # check instrumention basic block only
-                loc = code.find(' @__sancov_gen_')
-
-                # convert dot node id to llvm node id
-                if loc != -1:
-
-                    code = code.replace("\l...", '')
-                    insts = code.split('\\l  ')
-                    found_select = 0
-                    found_the_first_node = 0
-                    found_the_second_node = 0
-                    first_node = None
-                    second_node = None
-                    non_first_second_node_select = 0
-                    select_node = []
-                    for inst in insts:
-                        if "__sancov_gen_" in inst:
-                            # There are three types of instruction with "__sancov_gen"
-                            # case1: first sancov node in a function
-                            # load i32, i32* getelementptr inbounds ... @__sancov_gen_
-                            if "load" in inst and "inttoptr" not in inst:
-                                found_the_first_node = 1
-                                first_node = inst
-                            # case2 : second and the following sancov node in a function
-                            # load i32, i32* inttoptr ... @__sancov_gen_
-                            elif ' = select' not in inst:
-                                found_the_second_node = 1
-                                second_node = inst
-                            # case3: select instruction with sancov node
-                            # select i1 ... @__sancov_gen_
-                            else:
-                                found_select = 1
-                                select_node.append(inst)
-
-                    local_edge = None
-                    # three cases for first/second node checking:
-                    # 1. bb with first_node
-                    # 2. bb with second_node
-                    # 3. bb without first_node and second_node
-
-                    # two cases for select node checking
-                    # 3. bb with single/multiple select_node
-                    # 4. bb without any select_node
-                    if found_the_first_node:
-                        if not local_table:
-                            local_table = first_node.split()[5][:-1]
-                        local_edge = 0
-                    elif found_the_second_node:
-                        if not local_table:
-                            local_table = second_node.split()[11]
-                        local_edge = second_node.split()[15][:-1]
-                    else:
-                        non_first_second_node_select = 1
-
-                    if found_the_first_node or found_the_second_node:
-                        global_edge = int(int(local_edge)/4) + inline_table[local_table] # "global edge" is the final sancov node id used in AFL++ to trace edge coverage
-
-                        last_global_edge = global_edge
-                        dot_id_2_llvm_id[dot_node_id] = global_edge # dot_node_id is the node ID in the raw dot graph
-                    
-                    # handle select case
-                    if found_select:
-                        if non_first_second_node_select:
-                            non_sancov_nodes.append(dot_node_id)
-                        for inst in select_node:
-                            select_node_local_edge = None
-                            new_loc = inst.find(" @__sancov_gen_")
-                            if ',' not in inst[new_loc:].split(')')[0]:
-                                if not local_table:
-                                    local_table = inst[new_loc:].split(')')[0].split()[0]
-                                select_node_local_edge = inst[new_loc:].split(')')[1].split()[-1]
-                            else:
-                                print("BUG: parse select error")
-                            select_node_global_edge = int(int(select_node_local_edge)/4) + inline_table[local_table] # "global edge" is sancov node id
-                            local_select_node.append((last_global_edge, select_node_global_edge))
-                            orig_global_select_node[last_global_edge].append(select_node_global_edge)
-
-                            # parse the next select node
-                            sub_code = inst[new_loc+14:]
-                            new_loc = sub_code.find(' @__sancov_gen_')
-                            if ',' not in sub_code[new_loc:].split(')')[0]:
-                                if not local_table:
-                                    local_table = sub_code[new_loc:].split(')')[0].split()[0]
-                                select_node_local_edge = sub_code[new_loc:].split(')')[1].split()[-1]
-                            else:
-                                print("BUG: parse select error")
-                            select_node_global_edge = int(int(select_node_local_edge)/4) + inline_table[local_table] # "global edge" is sancov node id
-                            local_select_node.append((last_global_edge, select_node_global_edge))
-                            orig_global_select_node[last_global_edge].append(select_node_global_edge)
-
-                # handle inject log function
-                # map dummy id to local table
-                else:
-                    non_sancov_nodes.append(dot_node_id)
-                    code = code.replace("\l...", '')
-                    insts = code.split('\\l  ')
-
-                    for _, inst in enumerate(insts):
-                        if ('call ' in inst or 'invoke ' in inst) and '@' in inst:
-                            fun_name = inst[inst.find('@')+1:inst.find('(')]
-                            # normal cmp condition (log_br)
-                            if fun_name in (switch_log_funcs + binary_log_funcs + select_log_funcs + memcmp_log_funcs + strcmp_log_funcs + strncmp_log_funcs + strstr_log_funcs):
-                                dummy_id = int(inst.split()[3][:-1])
-                                if not local_table:
-                                    print("BUG: parse local table error!")
-                                else:
-                                    orig_dummy_id_2_local_table[dummy_id] = local_table
-
-
-                graph[dot_node_id] = []
-                if dot_node_id not in reverse_graph:
-                    reverse_graph[dot_node_id] = []
-
-            # construct a graph with dot node id
-            elif '->' in line:
-                # ignore the last character ';'
-                tokens = line.split('->')
-                src_node = tokens[0].strip().split(':')[0]
-                dst_node = tokens[1].strip()[:-1]
-                if dst_node not in graph[src_node]:
-                    graph[src_node].append(dst_node)
-                if dst_node not in reverse_graph:
-                    reverse_graph[dst_node] = [src_node]
-                else:
-                    if src_node not in reverse_graph[dst_node]:
-                        reverse_graph[dst_node].append(src_node)
-
-    # TODO: group sancov node (delete ASAN-nodes as well) DONE
-    for node in non_sancov_nodes:
-        children, parents = graph[node], reverse_graph[node]
-        for child in children:
-            for parent in parents:
-                #if child == -1 or parent == -1:
-                #    continue
-                if child not in graph[parent]:
-                    graph[parent].append(child)
-                if parent not in reverse_graph[child]:
-                    reverse_graph[child].append(parent)
-
-        del graph[node]
-        del reverse_graph[node]
-        for parent in parents:
-            if parent in graph:
-                if node in graph[parent]:
-                    graph[parent].remove(node)
-        for child in children:
-            if child in reverse_graph:
-                if node in reverse_graph[child]:
-                    reverse_graph[child].remove(node)
-
-    new_graph, new_reverse_graph = {}, {}
-    for node, neis in graph.items():
-        if dot_id_2_llvm_id[node] not in new_graph:
-            new_graph[dot_id_2_llvm_id[node]] = []
-        for nei in neis:
-            new_graph[dot_id_2_llvm_id[node]].append(dot_id_2_llvm_id[nei])
-
-    for node, neis in reverse_graph.items():
-        if dot_id_2_llvm_id[node] not in new_reverse_graph:
-            new_reverse_graph[dot_id_2_llvm_id[node]] = []
-        for nei in neis:
-            new_reverse_graph[dot_id_2_llvm_id[node]].append(dot_id_2_llvm_id[nei])
-
-    # add select edge
-    for select_1, select_2 in local_select_node:
-        if select_2 not in new_graph:
-            new_graph[select_2] = []
-        if select_2 not in new_reverse_graph:
-            new_reverse_graph[select_2] = []
-        # find all edges in (select_1, child)
-        # 1. delete (select_1, child)
-        # 2. add (select_1, select_2) and (select_2, child)
-        # find all edges in (child, selelct_1)
-        # 1. delete (child, select_1)
-        # 2. add (child, select_1) and (select_1, select_2)
-        '''
-        tmp_child_list = new_graph[select_1].copy()
-        for child in tmp_child_list:
-            new_graph[select_1].remove(child)
-            new_reverse_graph[child].remove(select_1)
-            new_graph[select_1].append(select_2)
-            new_reverse_graph[select_2].append(select_1)
-            new_graph[select_2].append(child)
-            new_reverse_graph[child].append(select_2)
-        '''
-        #new_graph[select_1].append(select_2)
-        #new_reverse_graph[select_2].append(select_1)
-
-
-    # convert node id from dot_id to llvm_instrumented_id, add to global graph
-    for node, neis in new_graph.items():
-        if not neis:
-            orig_global_graph[node] = []
-            orig_global_graph_weighted[node] = {}
-        for nei in neis:
-            orig_global_graph[node].append(nei)
-            orig_global_graph_weighted[node][nei] = 1
-
-    for node, neis in reverse_graph.items():
-        if not neis:
-            orig_global_reverse_graph[node] = []
-        for nei in neis:
-            orig_global_reverse_graph[node].append(nei)
-
-    debug_tmp_cnt += total_node
-    debug_tmp_cnt2 += len(new_graph)
-    # print(my_func_name, total_node, debug_tmp_cnt, debug_tmp_cnt2, len(global_graph))
-    if total_node != len(new_graph):
-        missing_cnt[0] += 1
-        #print("!!!BUG", my_func_name, total_node, len(new_graph), missing_cnt[0])
-
     return
 
 def construct_graph_init(ll_file, inline_table):
@@ -769,69 +491,12 @@ def recognize_strcmp_subtype(instruction):
 
 
 if __name__ == '__main__':
-    start_time = time.time()
     build_sancov_set(sys.argv[1])
-    for dot_file in glob.glob("./" + sys.argv[2] +"/*"):
-        orig_build_sancov_set(dot_file)
-    
-    if (sancov_set == orig_sancov_set):
-        print("sancov_set success")
-
     # check if there is discrepency between llvm IR symbol table and binary's symbol table
-    inline_table = inline_counter_table_init(sys.argv[1], sys.argv[3])
+    inline_table = inline_counter_table_init(sys.argv[1], sys.argv[2])
     
     construct_graph_init(sys.argv[1], inline_table)
-    fun_list = [dot_file.split('/')[-1].split('.')[0] for dot_file in glob.glob("./" + sys.argv[2] + "/*")]
-    for dot_file in glob.glob("./" + sys.argv[2] +"/*"):
-        orig_construct_graph_init(dot_file, inline_table)
-
-    elapsed_time = time.time() - start_time
-    print(elapsed_time)
-
-    print(len(orig_global_graph))
-    print(len(global_graph))
-    eq_falg = True
-    for key in orig_global_graph:
-        global_graph[key].sort()
-        orig_global_graph[key].sort()
-        if global_graph[key] != orig_global_graph[key]:
-            print(key)
-            print(global_graph[key])
-            print(orig_global_graph[key])
-            eq_falg = False
-            break
-    if eq_falg:
-        print("global_graph success")
     
-    print(len(orig_global_graph_weighted))
-    print(len(global_graph_weighted))
-    if global_graph_weighted == orig_global_graph_weighted:
-        print("global_graph_weighted success")
-    
-    print(len(orig_global_reverse_graph))
-    print(len(global_reverse_graph))
-    if len(orig_global_reverse_graph) == len(global_reverse_graph):
-        print("global_graph_reversed success")
-    
-    print(len(orig_global_select_node))
-    print(len(global_select_node))
-    if global_select_node == orig_global_select_node:
-        print("global_graph_select success")
-    
-    print(len(orig_dummy_id_2_local_table))
-    print(len(dummy_id_2_local_table))
-    i = 0
-    j = 0
-    for key in dummy_id_2_local_table:
-        if key not in orig_dummy_id_2_local_table:
-            i += 1
-        elif orig_dummy_id_2_local_table[key] != dummy_id_2_local_table[key]:
-            j += 1
-    print(i)
-    print(j)
-    if dummy_id_2_local_table == orig_dummy_id_2_local_table:
-        print("dummy_id_2_local_table success")
-
     border_edges = []
     select_border_edges = []
     # 0x00 build a map from br_dist_edge_id to local_edge_table(base number)
@@ -841,7 +506,7 @@ if __name__ == '__main__':
     # build id_2_cmp_type and select_edge_2_cmp_type
     # id_2_cmp_type: id_2_cmp_type[sancov_id] = (cmp_type, dummy_id, str_len)
     # select_edge_2_cmp_type: select_edge_2_cmp_type[(src_sancov_id, dst_sancov_id)] = (cmp_type, dummy_id, str_len)
-    with open(sys.argv[4], 'r') as f:
+    with open(sys.argv[3], 'r') as f:
         for line in f.readlines():
             tokens = line.split('|')
             dummy_id = int(tokens[1])
