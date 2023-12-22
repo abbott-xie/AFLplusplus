@@ -1307,6 +1307,7 @@ void   get_core_count(afl_state_t *);
 void   fix_up_sync(afl_state_t *);
 void   load_fox_metadata(afl_state_t *);
 void   save_fox_metadata(afl_state_t *);
+void   save_top_rated_seed_ids(afl_state_t *);
 void   check_asan_opts(afl_state_t *);
 void   check_binary(afl_state_t *, u8 *);
 void   check_if_tty(afl_state_t *);
