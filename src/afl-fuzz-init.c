@@ -999,7 +999,7 @@ void save_fox_metadata(afl_state_t *afl) {
   u8 *tmp;
   FILE *f;
 
-  tmp = alloc_printf("%s/time_spent_us", afl->out_dir);
+  tmp = alloc_printf("%s/time_spent_us", afl->fox_metadata_resume_dir);
   fd = open(tmp, O_WRONLY | O_CREAT | O_TRUNC, 0600);
   if (fd < 0) { PFATAL("Unable to create '%s'", tmp); }
   ck_free(tmp);
@@ -1009,7 +1009,7 @@ void save_fox_metadata(afl_state_t *afl) {
   fwrite(afl->fsrv.spent_time_us, sizeof(u64), afl->fox_map_size, f);
   fclose(f);
 
-  tmp = alloc_printf("%s/productive_time_us", afl->out_dir);
+  tmp = alloc_printf("%s/productive_time_us", afl->fox_metadata_resume_dir);
   fd = open(tmp, O_WRONLY | O_CREAT | O_TRUNC, 0600);
   if (fd < 0) { PFATAL("Unable to create '%s'", tmp); }
   ck_free(tmp);
@@ -1019,7 +1019,7 @@ void save_fox_metadata(afl_state_t *afl) {
   fwrite(afl->fsrv.productive_time_us, sizeof(u64), afl->fox_map_size, f);
   fclose(f);
 
-  tmp = alloc_printf("%s/added_seeds", afl->out_dir);
+  tmp = alloc_printf("%s/added_seeds", afl->fox_metadata_resume_dir);
   fd = open(tmp, O_WRONLY | O_CREAT | O_TRUNC, 0600);
   if (fd < 0) { PFATAL("Unable to create '%s'", tmp); }
   ck_free(tmp);
@@ -1029,7 +1029,7 @@ void save_fox_metadata(afl_state_t *afl) {
   fwrite(afl->fsrv.added_seeds, sizeof(u32), afl->fox_map_size, f);
   fclose(f);
 
-  tmp = alloc_printf("%s/br_cov", afl->out_dir);
+  tmp = alloc_printf("%s/br_cov", afl->fox_metadata_resume_dir);
   fd = open(tmp, O_WRONLY | O_CREAT | O_TRUNC, 0600);
   if (fd < 0) { PFATAL("Unable to create '%s'", tmp); }
   ck_free(tmp);
@@ -1039,7 +1039,7 @@ void save_fox_metadata(afl_state_t *afl) {
   fwrite(afl->fsrv.br_cov, sizeof(u8), afl->fox_total_border_edge_cnt, f);
   fclose(f);
 
-  tmp = alloc_printf("%s/size_gradient_checked", afl->out_dir);
+  tmp = alloc_printf("%s/size_gradient_checked", afl->fox_metadata_resume_dir);
   fd = open(tmp, O_WRONLY | O_CREAT | O_TRUNC, 0600);
   if (fd < 0) { PFATAL("Unable to create '%s'", tmp); }
   ck_free(tmp);
@@ -1049,7 +1049,7 @@ void save_fox_metadata(afl_state_t *afl) {
   fwrite(afl->fsrv.size_gradient_checked, sizeof(u8), afl->fox_total_border_edge_cnt, f);
   fclose(f);
 
-  tmp = alloc_printf("%s/fallthrough_line_search", afl->out_dir);
+  tmp = alloc_printf("%s/fallthrough_line_search", afl->fox_metadata_resume_dir);
   fd = open(tmp, O_WRONLY | O_CREAT | O_TRUNC, 0600);
   if (fd < 0) { PFATAL("Unable to create '%s'", tmp); }
   ck_free(tmp);
