@@ -624,7 +624,8 @@ typedef struct afl_state {
   u8  wd_scheduler_havoc_max_mult,
       wd_scheduler_dry_run,
       line_search,
-      wd_scheduler_shared_mode;
+      wd_scheduler_shared_mode,
+      fox_resume;
   u32 fox_total_border_edge_cnt,
       fox_map_size,
       wd_scheduler_selected_border_edge_idx,

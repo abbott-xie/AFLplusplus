@@ -941,8 +941,9 @@ void load_fox_metadata(afl_state_t *afl) {
   free(line);
   fclose(fp);
 
-  if (!afl->fox_metadata_resume_dir)
+  if (!afl->fox_resume)
     return;
+  if (!afl->fox_metadata_resume_dir) { FATAL("fox_metadata_resume_dir has not been set"); }
 
   u8 *tmp = alloc_printf("%s/time_spent_us", afl->fox_metadata_resume_dir);
   fp = fopen(tmp, "r");

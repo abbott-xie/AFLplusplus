@@ -635,6 +635,10 @@ int main(int argc, char **argv_orig, char **envp) {
         afl->fox_metadata_resume_dir = ck_strdup(optarg);
       }
 
+      case 'j': {
+        afl->fox_resume = 1;
+      }
+
       case 'J': {
         afl->max_no_new_cov_time_us = atoi(optarg) * 1000000ULL;
       }
