@@ -2811,10 +2811,11 @@ int main(int argc, char **argv_orig, char **envp) {
 
       }
 
-      if (unlikely(afl->max_no_new_cov_time_us && (afl->stop_soon = get_cur_time_us() - afl->last_cov_time_us > afl->max_no_new_cov_time_us))) {
+      if (unlikely(afl->max_no_new_cov_time_us && get_cur_time_us() - afl->last_cov_time_us > afl->max_no_new_cov_time_us)) {
 #ifdef FOX_INTROSPECTION
         fprintf(afl->fsrv.fox_debug_log_file, "No new coverage for in the past %llu us, stopping.\n", afl->max_no_new_cov_time_us);
 #endif
+        afl->stop_soon = 1;
         if (likely(afl->schedule == WD_SCHEDULER)) {
           save_fox_metadata(afl);
           save_top_rated_seed_ids(afl);
