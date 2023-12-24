@@ -91,6 +91,7 @@ double compute_weight(afl_state_t *afl, struct queue_entry *q,
   if (unlikely(weight < 0.1)) { weight = 0.1; }
   if (unlikely(q->favored)) { weight *= 5; }
   if (unlikely(!q->was_fuzzed)) { weight *= 2; }
+  if (unlikely(q->fs_redundant)) { weight *= 0.8; }
 
   return weight;
 
@@ -1083,7 +1084,11 @@ void update_bitmap_score(afl_state_t *afl, struct queue_entry *q) {
         u64 top_rated_fav_factor;
         u64 top_rated_fuzz_p2;
 
-        if (likely(afl->schedule >= FAST && afl->schedule <= RARE)) {
+        if (likely(afl->schedule >= FAST && afl->schedule < RARE)) {
+
+          top_rated_fuzz_p2 = 0;  // Skip the fuzz_p2 comparison
+
+        } else if (unlikely(afl->schedule == RARE)) {
 
           top_rated_fuzz_p2 =
               next_pow2(afl->n_fuzz[afl->top_rated[i]->n_fuzz_entry]);
@@ -1172,6 +1177,8 @@ void cull_queue(afl_state_t *afl) {
   /* Let's see if anything in the bitmap isn't captured in temp_v.
      If yes, and if it has a afl->top_rated[] contender, let's use it. */
 
+  afl->smallest_favored = -1;
+
   for (i = 0; i < afl->fsrv.map_size; ++i) {
 
     if (afl->top_rated[i] && (temp_v[i >> 3] & (1 << (i & 7)))) {
@@ -1195,7 +1202,16 @@ void cull_queue(afl_state_t *afl) {
         afl->top_rated[i]->favored = 1;
         ++afl->queued_favored;
 
-        if (!afl->top_rated[i]->was_fuzzed) { ++afl->pending_favored; }
+        if (!afl->top_rated[i]->was_fuzzed) {
+
+          ++afl->pending_favored;
+          if (unlikely(afl->smallest_favored < 0)) {
+
+            afl->smallest_favored = (s64)afl->top_rated[i]->id;
+
+          }
+
+        }
 
       }
 
@@ -1212,6 +1228,8 @@ void cull_queue(afl_state_t *afl) {
     }
 
   }
+
+  afl->reinit_table = 1;
 
 }
 
