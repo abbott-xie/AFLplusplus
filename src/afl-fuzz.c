@@ -519,7 +519,7 @@ int main(int argc, char **argv_orig, char **envp) {
 
   // still available: HjJkKqruvwz
   while ((opt = getopt(argc, argv,
-                       "+a:Ab:B:c:CdDkre:K:J:E:f:F:g:G:hi:I:l:L:m:M:nNo:Op:P:QRs:S:t:"
+                       "+a:Ab:B:c:CdDke:J:E:f:F:g:G:hi:I:l:L:m:M:nNo:Op:P:QRs:S:t:"
                        "T:UV:WXx:YZ")) > 0) {
 
     switch (opt) {
@@ -580,14 +580,6 @@ int main(int argc, char **argv_orig, char **envp) {
 
       case 'k':
         afl->line_search = 1;
-        break;
-
-      case 'r':
-        afl->fox_resume = 1;
-        break;
-
-      case 'K':
-        afl->fox_metadata_resume_dir = ck_strdup(optarg);
         break;
 
       case 'J':

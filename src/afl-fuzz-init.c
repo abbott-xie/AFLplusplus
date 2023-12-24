@@ -941,11 +941,12 @@ void load_fox_metadata(afl_state_t *afl) {
   free(line);
   fclose(fp);
 
-  if (!afl->fox_resume)
+  if (!afl->in_place_resume)
     return;
-  if (!afl->fox_metadata_resume_dir) { FATAL("fox_metadata_resume_dir has not been set"); }
 
-  u8 *tmp = alloc_printf("%s/time_spent_us", afl->fox_metadata_resume_dir);
+  u8 *fox_metadata_dir = alloc_printf("%s/fox_metadata", afl->out_dir);
+
+  u8 *tmp = alloc_printf("%s/time_spent_us", fox_metadata_dir);
   fp = fopen(tmp, "r");
   if (!fp) { FATAL("time_spent_us open failed"); }
   ck_free(tmp);
@@ -953,7 +954,7 @@ void load_fox_metadata(afl_state_t *afl) {
   fread(afl->fsrv.spent_time_us, sizeof(u64), afl->fox_map_size, fp);
   fclose(fp);
 
-  tmp = alloc_printf("%s/productive_time_us", afl->fox_metadata_resume_dir);
+  tmp = alloc_printf("%s/productive_time_us", fox_metadata_dir);
   fp = fopen(tmp, "r");
   if (!fp) { FATAL("productive_time_us open failed"); }
   ck_free(tmp);
@@ -961,7 +962,7 @@ void load_fox_metadata(afl_state_t *afl) {
   fread(afl->fsrv.productive_time_us, sizeof(u64), afl->fox_map_size, fp);
   fclose(fp);
 
-  tmp = alloc_printf("%s/added_seeds", afl->fox_metadata_resume_dir);
+  tmp = alloc_printf("%s/added_seeds", fox_metadata_dir);
   fp = fopen(tmp, "r");
   if (!fp) { FATAL("added_seeds open failed"); }
   ck_free(tmp);
@@ -969,7 +970,7 @@ void load_fox_metadata(afl_state_t *afl) {
   fread(afl->fsrv.added_seeds, sizeof(u32), afl->fox_map_size, fp);
   fclose(fp);
 
-  tmp = alloc_printf("%s/br_cov", afl->fox_metadata_resume_dir);
+  tmp = alloc_printf("%s/br_cov", fox_metadata_dir);
   fp = fopen(tmp, "r");
   if (!fp) { FATAL("br_cov open failed"); }
   ck_free(tmp);
@@ -977,7 +978,7 @@ void load_fox_metadata(afl_state_t *afl) {
   fread(afl->fsrv.br_cov, sizeof(u8), afl->fox_total_border_edge_cnt, fp);
   fclose(fp);
 
-  tmp = alloc_printf("%s/size_gradient_checked", afl->fox_metadata_resume_dir);
+  tmp = alloc_printf("%s/size_gradient_checked", fox_metadata_dir);
   fp = fopen(tmp, "r");
   if (!fp) { FATAL("size_gradient_checked open failed"); }
   ck_free(tmp);
@@ -985,13 +986,15 @@ void load_fox_metadata(afl_state_t *afl) {
   fread(afl->fsrv.size_gradient_checked, sizeof(u8), afl->fox_total_border_edge_cnt, fp);
   fclose(fp);
 
-  tmp = alloc_printf("%s/fallthrough_line_search", afl->fox_metadata_resume_dir);
+  tmp = alloc_printf("%s/fallthrough_line_search", fox_metadata_dir);
   fp = fopen(tmp, "r");
   if (!fp) { FATAL("fallthrough_line_search open failed"); }
   ck_free(tmp);
 
   fread(afl->fsrv.fallthrough_line_search, sizeof(u8), afl->fox_total_border_edge_cnt, fp);
   fclose(fp);
+
+  ck_free(fox_metadata_dir);
 }
 
 
@@ -1000,7 +1003,11 @@ void save_fox_metadata(afl_state_t *afl) {
   u8 *tmp;
   FILE *f;
 
-  tmp = alloc_printf("%s/time_spent_us", afl->fox_metadata_resume_dir);
+  u8 *fox_metadata_dir = alloc_printf("%s/fox_metadata", afl->out_dir);
+  if (mkdir(fox_metadata_dir, 0700)) { PFATAL("Unable to create '%s'", fox_metadata_dir); }
+
+
+  tmp = alloc_printf("%s/time_spent_us", fox_metadata_dir);
   fd = open(tmp, O_WRONLY | O_CREAT | O_TRUNC, 0600);
   if (fd < 0) { PFATAL("Unable to create '%s'", tmp); }
   ck_free(tmp);
@@ -1010,7 +1017,7 @@ void save_fox_metadata(afl_state_t *afl) {
   fwrite(afl->fsrv.spent_time_us, sizeof(u64), afl->fox_map_size, f);
   fclose(f);
 
-  tmp = alloc_printf("%s/productive_time_us", afl->fox_metadata_resume_dir);
+  tmp = alloc_printf("%s/productive_time_us", fox_metadata_dir);
   fd = open(tmp, O_WRONLY | O_CREAT | O_TRUNC, 0600);
   if (fd < 0) { PFATAL("Unable to create '%s'", tmp); }
   ck_free(tmp);
@@ -1020,7 +1027,7 @@ void save_fox_metadata(afl_state_t *afl) {
   fwrite(afl->fsrv.productive_time_us, sizeof(u64), afl->fox_map_size, f);
   fclose(f);
 
-  tmp = alloc_printf("%s/added_seeds", afl->fox_metadata_resume_dir);
+  tmp = alloc_printf("%s/added_seeds", fox_metadata_dir);
   fd = open(tmp, O_WRONLY | O_CREAT | O_TRUNC, 0600);
   if (fd < 0) { PFATAL("Unable to create '%s'", tmp); }
   ck_free(tmp);
@@ -1030,7 +1037,7 @@ void save_fox_metadata(afl_state_t *afl) {
   fwrite(afl->fsrv.added_seeds, sizeof(u32), afl->fox_map_size, f);
   fclose(f);
 
-  tmp = alloc_printf("%s/br_cov", afl->fox_metadata_resume_dir);
+  tmp = alloc_printf("%s/br_cov", fox_metadata_dir);
   fd = open(tmp, O_WRONLY | O_CREAT | O_TRUNC, 0600);
   if (fd < 0) { PFATAL("Unable to create '%s'", tmp); }
   ck_free(tmp);
@@ -1040,7 +1047,7 @@ void save_fox_metadata(afl_state_t *afl) {
   fwrite(afl->fsrv.br_cov, sizeof(u8), afl->fox_total_border_edge_cnt, f);
   fclose(f);
 
-  tmp = alloc_printf("%s/size_gradient_checked", afl->fox_metadata_resume_dir);
+  tmp = alloc_printf("%s/size_gradient_checked", fox_metadata_dir);
   fd = open(tmp, O_WRONLY | O_CREAT | O_TRUNC, 0600);
   if (fd < 0) { PFATAL("Unable to create '%s'", tmp); }
   ck_free(tmp);
@@ -1050,7 +1057,7 @@ void save_fox_metadata(afl_state_t *afl) {
   fwrite(afl->fsrv.size_gradient_checked, sizeof(u8), afl->fox_total_border_edge_cnt, f);
   fclose(f);
 
-  tmp = alloc_printf("%s/fallthrough_line_search", afl->fox_metadata_resume_dir);
+  tmp = alloc_printf("%s/fallthrough_line_search", fox_metadata_dir);
   fd = open(tmp, O_WRONLY | O_CREAT | O_TRUNC, 0600);
   if (fd < 0) { PFATAL("Unable to create '%s'", tmp); }
   ck_free(tmp);
@@ -1059,6 +1066,8 @@ void save_fox_metadata(afl_state_t *afl) {
 
   fwrite(afl->fsrv.fallthrough_line_search, sizeof(u8), afl->fox_total_border_edge_cnt, f);
   fclose(f);
+
+  ck_free(fox_metadata_dir);
 }
 
 
@@ -2442,7 +2451,7 @@ void setup_dirs_fds(afl_state_t *afl) {
 
   int fd;
   tmp = alloc_printf("%s/wd_scheduler_log", afl->out_dir);
-  fd = open(tmp, O_WRONLY | O_CREAT | O_EXCL, 0600);
+  fd = open(tmp, O_WRONLY | O_CREAT, DEFAULT_PERMISSION);
   if (fd < 0) PFATAL("Unable to create '%s'", tmp);
   ck_free(tmp);
 
@@ -2451,7 +2460,7 @@ void setup_dirs_fds(afl_state_t *afl) {
 
 #ifdef FOX_INTROSPECTION
   tmp = alloc_printf("%s/fox_debug_log_file", afl->out_dir);
-  fd = open(tmp, O_WRONLY | O_CREAT | O_EXCL, 0600);
+  fd = open(tmp, O_WRONLY | O_CREAT, DEFAULT_PERMISSION);
   if (fd < 0) PFATAL("Unable to create '%s'", tmp);
   ck_free(tmp);
 
