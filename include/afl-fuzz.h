@@ -289,6 +289,7 @@ enum {
 #define MAX_TOTAL_FRONTIER_DISCOVERY_TIME_US 3600000000 /* 1 hour */
 #define WD_SCHED_BREAK_TIE_FASTER_SEED
 #define SHOW_STATS_INTERVAL_LINE_SEARCH 10
+// #define TIME_SINCE_START_STRAT 1
 
 /* Branch distance trace setting */
 
