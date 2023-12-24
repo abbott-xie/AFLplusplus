@@ -2870,8 +2870,10 @@ int main(int argc, char **argv_orig, char **envp) {
         }
       }
 
+#define TIME_SINCE_START_STRAT
+
 #ifdef TIME_SINCE_START_STRAT
-      if (unlikely(afl->max_no_new_cov_time_us && get_cur_time_us() - afl->start_time > afl->max_no_new_cov_time_us)) {
+      if (unlikely(afl->max_no_new_cov_time_us && get_cur_time_us() - afl->start_time * 1000ULL > afl->max_no_new_cov_time_us)) {
 #else
       if (unlikely(afl->max_no_new_cov_time_us && get_cur_time_us() - afl->last_cov_time_us > afl->max_no_new_cov_time_us)) {
 #endif
