@@ -1004,8 +1004,7 @@ void save_fox_metadata(afl_state_t *afl) {
   FILE *f;
 
   u8 *fox_metadata_dir = alloc_printf("%s/fox_metadata", afl->out_dir);
-  if (mkdir(fox_metadata_dir, 0700)) { PFATAL("Unable to create '%s'", fox_metadata_dir); }
-
+  if (mkdir(fox_metadata_dir, 0700) && errno != EEXIST) { PFATAL("Unable to create '%s'", fox_metadata_dir); }
 
   tmp = alloc_printf("%s/time_spent_us", fox_metadata_dir);
   fd = open(tmp, O_WRONLY | O_CREAT | O_TRUNC, 0600);
