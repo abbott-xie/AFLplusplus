@@ -430,6 +430,8 @@ void create_alias_table_wd_scheduler(afl_state_t *afl) {
       shared_mode,
       total_frontier_discovery_time_us);
   fflush(afl->fsrv.wd_scheduler_log_file);
+
+  save_fox_metadata(afl);
 }
 
 static inline void add_capacity(struct queue_entry ***seed_list_p, u32 *capacity_p) {
