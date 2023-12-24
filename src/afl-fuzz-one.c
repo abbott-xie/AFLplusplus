@@ -692,13 +692,13 @@ u8 fuzz_one_original(afl_state_t *afl) {
    * SIMPLE BITFLIP (+dictionary construction) *
    *********************************************/
 
-#define FLIP_BIT(_ar, _b)                   \
-  do {                                      \
-                                            \
-    u8 *_arf = (u8 *)(_ar);                 \
-    u32 _bf = (_b);                         \
-    _arf[(_bf) >> 3] ^= (128 >> ((_bf)&7)); \
-                                            \
+#define FLIP_BIT(_ar, _b)                     \
+  do {                                        \
+                                              \
+    u8 *_arf = (u8 *)(_ar);                   \
+    u32 _bf = (_b);                           \
+    _arf[(_bf) >> 3] ^= (128 >> ((_bf) & 7)); \
+                                              \
   } while (0)
 
   /* Single walking bit. */
@@ -2010,6 +2010,8 @@ custom_mutator_stage:
 
     if (el->afl_custom_fuzz) {
 
+      havoc_queued = afl->queued_items;
+
       afl->current_custom_fuzz = el;
       afl->stage_name = el->name_short;
 
@@ -2393,7 +2395,7 @@ havoc_stage:
 
       }
 
-    retry_havoc_step : {
+    retry_havoc_step: {
 
       u32 r = rand_below(afl, rand_max), item;
 
@@ -4255,8 +4257,12 @@ abandon_entry:
     afl->queue_cur->was_fuzzed = 1;
     if (unlikely(afl->schedule != WD_SCHEDULER))
       afl->reinit_table = 1;
-    if (afl->queue_cur->favored) { --afl->pending_favored; }
+    if (afl->queue_cur->favored) {
 
+      --afl->pending_favored;
+      afl->smallest_favored = -1;
+
+      }
   }
 
   ++afl->queue_cur->fuzz_level;
@@ -4511,13 +4517,13 @@ static u8 mopt_common_fuzzing(afl_state_t *afl, MOpt_globals_t MOpt_globals) {
    * SIMPLE BITFLIP (+dictionary construction) *
    *********************************************/
 
-#define FLIP_BIT(_ar, _b)                   \
-  do {                                      \
-                                            \
-    u8 *_arf = (u8 *)(_ar);                 \
-    u32 _bf = (_b);                         \
-    _arf[(_bf) >> 3] ^= (128 >> ((_bf)&7)); \
-                                            \
+#define FLIP_BIT(_ar, _b)                     \
+  do {                                        \
+                                              \
+    u8 *_arf = (u8 *)(_ar);                   \
+    u32 _bf = (_b);                           \
+    _arf[(_bf) >> 3] ^= (128 >> ((_bf) & 7)); \
+                                              \
   } while (0)
 
   /* Single walking bit. */
@@ -6718,7 +6724,13 @@ pacemaker_fuzzing:
 
             --afl->pending_not_fuzzed;
             afl->queue_cur->was_fuzzed = 1;
-            if (afl->queue_cur->favored) { --afl->pending_favored; }
+            afl->reinit_table = 1
+            if (afl->queue_cur->favored) {
+
+              --afl->pending_favored;
+              afl->smallest_favored = -1;
+
+            }
 
           }
 

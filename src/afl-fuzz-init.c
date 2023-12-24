@@ -1159,6 +1159,7 @@ void perform_dry_run(afl_state_t *afl) {
           if (!q->was_fuzzed) {
 
             q->was_fuzzed = 1;
+            afl->reinit_table = 1;
             --afl->pending_not_fuzzed;
             --afl->active_items;
 
@@ -1199,6 +1200,7 @@ void perform_dry_run(afl_state_t *afl) {
           if (!q->was_fuzzed) {
 
             q->was_fuzzed = 1;
+            afl->reinit_table = 1;
             --afl->pending_not_fuzzed;
             --afl->active_items;
 
@@ -1330,6 +1332,7 @@ void perform_dry_run(afl_state_t *afl) {
         if (!q->was_fuzzed) {
 
           q->was_fuzzed = 1;
+          afl->reinit_table = 1;
           --afl->pending_not_fuzzed;
           --afl->active_items;
 
@@ -1508,6 +1511,7 @@ void perform_dry_run(afl_state_t *afl) {
           if (!p->was_fuzzed) {
 
             p->was_fuzzed = 1;
+            afl->reinit_table = 1;
             --afl->pending_not_fuzzed;
             --afl->active_items;
 
@@ -1528,6 +1532,7 @@ void perform_dry_run(afl_state_t *afl) {
           if (!q->was_fuzzed) {
 
             q->was_fuzzed = 1;
+            afl->reinit_table = 1;
             --afl->pending_not_fuzzed;
             --afl->active_items;
 

@@ -50,6 +50,7 @@ memcmp_log_funcs = ['memcmp_log']
 strstr_log_funcs = ['strstr_log']
 sancov_set = set()
 sancov_2_func = {}
+func_2_sancov = {}
 nm_ret = subprocess.check_output('llvm-nm ' + sys.argv[3], shell=True, encoding='utf-8').splitlines()
 internal_func_list = set()
 for ele in nm_ret:
@@ -72,7 +73,6 @@ def inline_counter_table_init(filename, bin_name):
     tmp_sum = 0
     for key in ordered_key:
         inline_table[key] = tmp_sum
-#        print(sancov_2_func[key], tmp_sum)
         tmp_sum += ans[key]
 
     tokens = subprocess.check_output('llvm-nm ' + bin_name + ' |grep sancov_guards', shell=True, encoding='utf-8').split()
@@ -81,40 +81,12 @@ def inline_counter_table_init(filename, bin_name):
 
     return inline_table
 
-def build_sancov_set(dot_file):
-    func_str = open(dot_file, 'r').read()
-    if " @__sancov_gen_" not in func_str: return
-    my_func_name = dot_file.split('/')[-1].split('.')[0]
-    lines = open(dot_file, 'r').readlines()
-    for line in lines:
-        if line.startswith('\t'):
-            if '[' in line:
-                code = line.split('label=')[1].strip()[1:-3]
-                # check instrumention basic block only
-                loc = code.find(' @__sancov_gen_')
-
-                # convert dot node id to llvm node id
-                if loc != -1:
-                    code = code.replace("\l...", '')
-                    insts = code.split('\\l  ')
-                    for inst in insts:
-                        if "__sancov_gen_" in inst:
-                            for subinst in inst.split():
-                                if "__sancov_gen_" in subinst:
-                                    if "," not in subinst:
-                                        sancov_set.add(subinst)
-                                        sancov_2_func[subinst] = my_func_name
-                                    elif subinst.endswith(","):
-                                        sancov_set.add(subinst[:-1])
-                                        sancov_2_func[subinst[:-1]] = my_func_name
-                                    return
-
 def construct_graph_init(dot_file, inline_table):
     lines = open(dot_file, 'r').readlines()
     graph, reverse_graph = {}, {}
 
-    my_func_name = dot_file.split('/')[-1].split('.')[0]
-    if my_func_name not in internal_func_list:
+    my_func_name = dot_file.split('/')[-1][:-4]
+    if dot_file.split('/')[-1].split('.')[0] not in internal_func_list:
         # print("######## skip a dead function")
         return
 
@@ -126,7 +98,11 @@ def construct_graph_init(dot_file, inline_table):
     non_sancov_nodes = []
     total_node = 0
     local_select_node = []
-    local_table = None
+    try:
+        local_table = func_2_sancov[my_func_name]
+    except:
+        # this function is not instrumented
+        return
 
     func_str = open(dot_file, 'r').read()
     if " @__sancov_gen_" not in func_str: return
@@ -187,12 +163,8 @@ def construct_graph_init(dot_file, inline_table):
                     # 3. bb with single/multiple select_node
                     # 4. bb without any select_node
                     if found_the_first_node:
-                        if not local_table:
-                            local_table = first_node.split()[5][:-1]
                         local_edge = 0
                     elif found_the_second_node:
-                        if not local_table:
-                            local_table = second_node.split()[11]
                         local_edge = second_node.split()[15][:-1]
                     else:
                         non_first_second_node_select = 1
@@ -211,8 +183,6 @@ def construct_graph_init(dot_file, inline_table):
                             select_node_local_edge = None
                             new_loc = inst.find(" @__sancov_gen_")
                             if ',' not in inst[new_loc:].split(')')[0]:
-                                if not local_table:
-                                    local_table = inst[new_loc:].split(')')[0].split()[0]
                                 select_node_local_edge = inst[new_loc:].split(')')[1].split()[-1]
                             else:
                                 print("BUG: parse select error")
@@ -224,8 +194,6 @@ def construct_graph_init(dot_file, inline_table):
                             sub_code = inst[new_loc+14:]
                             new_loc = sub_code.find(' @__sancov_gen_')
                             if ',' not in sub_code[new_loc:].split(')')[0]:
-                                if not local_table:
-                                    local_table = sub_code[new_loc:].split(')')[0].split()[0]
                                 select_node_local_edge = sub_code[new_loc:].split(')')[1].split()[-1]
                             else:
                                 print("BUG: parse select error")
@@ -356,6 +324,39 @@ def construct_graph_init(dot_file, inline_table):
 
     return
 
+def cmp_to_str_type(cmp_id):
+    '''
+    Given a cmp_id, returns it natural language description
+    Type descriptions: switch, strcmp, unhandled
+    '''
+    if (cmp_id == 15):
+        return "switch"
+    elif (cmp_id == 13):
+        return "memcmp"
+    elif (cmp_id == 11 or cmp_id == 12 or cmp_id == 14):
+        return "strcmp"
+    elif (cmp_id >= 1 and cmp_id < 11):
+        return "intcmp"
+    elif (cmp_id == 0):
+        return "NA"
+    else:
+        raise ValueError("Unknown cmp ID encountered here")
+
+def collect_children(sancov_br_list, global_graph):
+    '''
+    Given a list of branch sancov ID's creates a list of it's children keyed at
+    the branch types as listed in cmp_to_str_type
+    '''
+    for item in sancov_br_list:
+        sancov_id, cmp_type_id, dummy_id = item[0], item[1], item[2]
+        tmp_list = [sancov_id + 1]
+        cmp_type_str = cmp_to_str_type(cmp_type_id)
+        child_nodes = global_graph[sancov_id]
+        assert len(child_nodes) >= 2, "Non-branch node was selected for stat collection, please check"
+        tmp_list.extend([int(child) + 1 for child in child_nodes])
+        sancov_mapping[cmp_type_str].append(tmp_list)
+    return sancov_mapping
+
 # only for normal sancov instrument
 # for example:
 # getelementptr inbounds ([12 x i32], [12 x i32]* @__sancov_gen_.5, i32 0, i32 0)
@@ -393,10 +394,36 @@ def recognize_strcmp_subtype(instruction):
 
     return 'error'
 
+# get sancov id from function
+def get_sancov_id_from_function(func):
+    lines = func.split("\n")
+    func_name = lines[1].split("@")[1].split("(")[0]
+    for line in lines:
+        if " @__sancov_gen_" in line:
+            for subinst in line.split():
+                if "__sancov_gen_" in subinst:
+                    if "," not in subinst:
+                        sancov_set.add(subinst)
+                        sancov_2_func[subinst] = func_name
+                        func_2_sancov[func_name] = subinst
+                    elif subinst.endswith(","):
+                        sancov_set.add(subinst[:-1])
+                        sancov_2_func[subinst[:-1]] = func_name
+                        func_2_sancov[func_name] = subinst[:-1]
+                    return
+    
+
+# build sancov set from ll file
+def build_sancov_set_from_ll_file(ll_file):
+    file_content = open(ll_file, 'r').read()
+    funcs = file_content.split('; Function Attrs:')
+    # begin from the second element of funcs
+    for func in funcs[1:]:
+        get_sancov_id_from_function(func)
+        
 
 if __name__ == '__main__':
-    for dot_file in glob.glob("./" + sys.argv[2] +"/*"):
-        build_sancov_set(dot_file)
+    build_sancov_set_from_ll_file(sys.argv[1])
     # check if there is discrepency between llvm IR symbol table and binary's symbol table
     inline_table = inline_counter_table_init(sys.argv[1], sys.argv[3])
     fun_list = [dot_file.split('/')[-1].split('.')[0] for dot_file in glob.glob("./" + sys.argv[2] + "/*")]

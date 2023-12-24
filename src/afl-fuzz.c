@@ -176,6 +176,7 @@ static void usage(u8 *argv0, int more_help) {
       "                  pacemaker mode (minutes of no new finds). 0 = "
       "immediately,\n"
       "                  -1 = immediately and together with normal mutation.\n"
+      "                  Note: this option is usually not very effective\n"
       "  -c program    - enable CmpLog by specifying a binary compiled for "
       "it.\n"
       "                  if using QEMU/FRIDA or the fuzzing target is "
@@ -380,6 +381,10 @@ static void usage(u8 *argv0, int more_help) {
   SAYF("Compiled with NO_SPLICING.\n");
 #endif
 
+#ifdef FANCY_BOXES_NO_UTF
+  SAYF("Compiled without UTF-8 support for line rendering in status screen.\n");
+#endif
+
 #ifdef PROFILING
   SAYF("Compiled with PROFILING.\n");
 #endif
@@ -481,6 +486,22 @@ int main(int argc, char **argv_orig, char **envp) {
   struct timeval  tv;
   struct timezone tz;
 
+  doc_path = access(DOC_PATH, F_OK) != 0 ? (u8 *)"docs" : (u8 *)DOC_PATH;
+
+  if (argc > 1 && strcmp(argv_orig[1], "--version") == 0) {
+
+    printf("afl-fuzz" VERSION "\n");
+    exit(0);
+
+  }
+
+  if (argc > 1 && strcmp(argv_orig[1], "--help") == 0) {
+
+    usage(argv_orig[0], 1);
+    exit(0);
+
+  }
+
   #if defined USE_COLOR && defined ALWAYS_COLORED
   if (getenv("AFL_NO_COLOR") || getenv("AFL_NO_COLOUR")) {
 
@@ -510,8 +531,6 @@ int main(int argc, char **argv_orig, char **envp) {
   SAYF(cCYA "afl-fuzz" VERSION cRST
             " based on afl by Michal Zalewski and a large online community\n");
 
-  doc_path = access(DOC_PATH, F_OK) != 0 ? (u8 *)"docs" : (u8 *)DOC_PATH;
-
   gettimeofday(&tv, &tz);
   rand_set_seed(afl, tv.tv_sec ^ tv.tv_usec ^ getpid());
 
@@ -534,6 +553,10 @@ int main(int argc, char **argv_orig, char **envp) {
         } else if (!stricmp(optarg, "bin") || !stricmp(optarg, "binary")) {
 
           afl->input_mode = 2;
+
+        } else if (!stricmp(optarg, "def") || !stricmp(optarg, "default")) {
+
+          afl->input_mode = 0;
 
         } else {
 
@@ -1155,6 +1178,10 @@ int main(int argc, char **argv_orig, char **envp) {
             case 'A':
               afl->cmplog_enable_arith = 1;
               break;
+            case 's':
+            case 'S':
+              afl->cmplog_enable_scale = 1;
+              break;
             case 't':
             case 'T':
               afl->cmplog_enable_transform = 1;
@@ -1349,6 +1376,12 @@ int main(int argc, char **argv_orig, char **envp) {
 
   }
 
+  if (afl->sync_id && strcmp(afl->sync_id, "addseeds") == 0) {
+
+    FATAL("-M/-S name 'addseeds' is a reserved name, choose something else");
+
+  }
+
   if (afl->is_main_node == 1 && afl->schedule != FAST &&
       afl->schedule != EXPLORE) {
 
@@ -1503,9 +1536,9 @@ int main(int argc, char **argv_orig, char **envp) {
 
   if (afl->sync_id) {
 
-    if (strlen(afl->sync_id) > 24) {
+    if (strlen(afl->sync_id) > 50) {
 
-      FATAL("sync_id max length is 24 characters");
+      FATAL("sync_id max length is 50 characters");
 
     }
 
@@ -2446,7 +2479,7 @@ int main(int argc, char **argv_orig, char **envp) {
 
   } else {
 
-    ACTF("skipping initial seed calibration due option override");
+    ACTF("skipping initial seed calibration due option override!");
     usleep(1000);
 
   }
@@ -2786,25 +2819,55 @@ int main(int argc, char **argv_orig, char **envp) {
         if (likely(afl->schedule == WD_SCHEDULER)) {
           create_alias_table_wd_scheduler(afl);
           afl->current_entry = select_next_queue_entry_wd_scheduler(afl);
+          afl->queue_cur = afl->queue_buf[afl->current_entry];
         } else {
-          if (unlikely(prev_queued_items < afl->queued_items ||
-                      afl->reinit_table)) {
+          if (likely(afl->pending_favored && afl->smallest_favored >= 0)) {
 
-            // we have new queue entries since the last run, recreate alias table
-            prev_queued_items = afl->queued_items;
-            create_alias_table(afl);
+            afl->current_entry = afl->smallest_favored;
+
+            /*
+
+                      } else {
+
+                        for (s32 iter = afl->queued_items - 1; iter >= 0; --iter)
+              {
+
+                          if (unlikely(afl->queue_buf[iter]->favored &&
+                                      !afl->queue_buf[iter]->was_fuzzed)) {
+
+                            afl->current_entry = iter;
+                            break;
+
+                          }
+
+                        }
+
+            */
+
+            afl->queue_cur = afl->queue_buf[afl->current_entry];
+
+          } else {
+
+            if (unlikely(prev_queued_items < afl->queued_items ||
+                        afl->reinit_table)) {
+
+              // we have new queue entries since the last run, recreate alias
+              // table
+              prev_queued_items = afl->queued_items;
+              create_alias_table(afl);
+
+            }
+
+            do {
+
+              afl->current_entry = select_next_queue_entry(afl);
+
+            } while (unlikely(afl->current_entry >= afl->queued_items));
+
+            afl->queue_cur = afl->queue_buf[afl->current_entry];
 
           }
-
-          do {
-
-            afl->current_entry = select_next_queue_entry(afl);
-
-          } while (unlikely(afl->current_entry >= afl->queued_items));
-
         }
-        afl->queue_cur = afl->queue_buf[afl->current_entry];
-
       }
 
       if (unlikely(afl->max_no_new_cov_time_us && get_cur_time_us() - afl->last_cov_time_us > afl->max_no_new_cov_time_us)) {
@@ -2880,7 +2943,9 @@ int main(int argc, char **argv_orig, char **envp) {
 
     if (likely(afl->switch_fuzz_mode && afl->fuzz_mode == 0 &&
                !afl->non_instrumented_mode) &&
-        unlikely(cur_time > afl->last_find_time + afl->switch_fuzz_mode)) {
+        unlikely(cur_time > (likely(afl->last_find_time) ? afl->last_find_time
+                                                         : afl->start_time) +
+                                afl->switch_fuzz_mode)) {
 
       if (afl->afl_env.afl_no_ui) {
 

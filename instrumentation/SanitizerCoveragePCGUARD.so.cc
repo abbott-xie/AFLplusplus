@@ -264,7 +264,11 @@ llvmGetPassPluginInfo() {
 #if LLVM_VERSION_MAJOR == 13
             using OptimizationLevel = typename PassBuilder::OptimizationLevel;
 #endif
+#if LLVM_VERSION_MAJOR >= 16
+            PB.registerOptimizerEarlyEPCallback(
+#else
             PB.registerOptimizerLastEPCallback(
+#endif
                 [](ModulePassManager &MPM, OptimizationLevel OL) {
 
                   MPM.addPass(ModuleSanitizerCoverageAFL());
@@ -1219,6 +1223,9 @@ void ModuleSanitizerCoverageAFL::instrumentFunction(
         for (auto i = SI->case_begin(), e = SI->case_end(); i != e;++i) {
           ConstantInt* op2 = dyn_cast<ConstantInt>(i->getCaseValue());
           tmp_val_list.push_back(op2->getSExtValue());
+        }
+	if (tmp_val_list.empty()) {
+            continue;
         }
         int max_int = *max_element(tmp_val_list.begin(), tmp_val_list.end());
         int min_int = *min_element(tmp_val_list.begin(), tmp_val_list.end());
