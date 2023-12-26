@@ -9,8 +9,8 @@
 # EnsembleFuzzer(corpus_dir, output_dir, dicts, target_binary, cmplog_target_binary, fox_target_binary).run()
 # 
 # Required fuzzer binaries in the current directory (names/paths modifiable in the script, see CMPLOG_FUZZ_BIN_NAME and FOX_FUZZ_BIN_NAME):
-#   - fox_4.09c_hybrid: https://github.com/adamstorek/AFLplusplus/tree/sbft24_hybrid_mode
-#   - cmplog_4.09c_hybrid: https://github.com/adamstorek/AFLplusplus/tree/4.09c_hybrid_mode
+#   - fox_4.09c_hybrid: https://github.com/adamstorek/AFLplusplus/tree/sbft24_hybrid_mode # sbft24_stable + ~10 added lines
+#   - cmplog_4.09c_hybrid: https://github.com/adamstorek/AFLplusplus/tree/4.09c_hybrid_mode # 4.09c_baseline (4.09c release) + ~5 added lines
 # 
 # Required environment variables:
 #   - AFL_AUTORESUME: set to 1 (EnsembleFuzzer will set it to 1 if it is not set)
@@ -51,7 +51,7 @@ FOX_FUZZ_BIN_NAME = "./fox_4.09c_hybrid"
 
 # Might be needed to remove dangling processes after the fuzzer,
 # needs to be verified whether this actually is a problem in the fuzzbench container
-FUZZBENCH_RUN = False
+# FUZZBENCH_RUN = False
 
 # Timeout strategies
 TMOUT_STRAT_GEOM_BASE = 5 * 60 # 5 min
@@ -103,6 +103,7 @@ def force_afl_autoresume():
     if "AFL_AUTORESUME" not in os.environ:
         print("AFL_AUTORESUME needs to be set to 1, setting it now")
         os.environ["AFL_AUTORESUME"] = "1"
+
 
 # Experimental
 def is_inline_table_wrong(target_binary: str, args: List[str]):
@@ -208,8 +209,8 @@ class AFLFuzzer(AbstractFuzzer):
         self.build_command()
         self.do_run_timed()
         self.log()
-        if FUZZBENCH_RUN:
-            self.kill_dangling_processes()
+        # if FUZZBENCH_RUN:
+            # self.kill_dangling_processes()
         self.run_cnt += 1
 
     def init_log(self):
@@ -264,11 +265,6 @@ class EnsembleFuzzer:
             CmplogFuzzer(corpus_dir, output_dir, dicts, target_binary, cmplog_target_binary, args)
         ])
 
-        # Experimental
-        if is_inline_table_wrong(target_binary, args):
-            print("Inline table is wrong, disabling FOX")
-            self.fuzzer_queue.popleft()
-
     def run(self):
         """Run the fuzzer ensemble. If a fuzzer fails, it is removed from the queue. If one fuzzer remains, it is run without a timeout."""
         force_afl_autoresume()
@@ -286,11 +282,11 @@ def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("-i", "--corpus_dir", type=str, required=True, help="Directory containing the corpus")
     parser.add_argument("-o", "--output_dir", type=str, required=True, help="Directory to store output")
-    parser.add_argument("-b", "--target_binary", type=str, required=True, help="Path to the target binary")
+    parser.add_argument("-b", "--target_binary", type=str, required=True, help="Path to the vanila AFLplusplus-instrumented target binary")
     parser.add_argument("-a", "--args", type=list, default=[], help="Arguments to pass to the target binary")
     parser.add_argument("-x", "--dicts", type=list, default=None, help="Path to the dictionaries, if not provided, will be set to all .dict files in the current directory")
-    parser.add_argument("--fox_target_binary", type=str, default=None, help="Path to the target binary for fox, if not provided, will be set to [target_binary]_fox")
-    parser.add_argument("--cmplog_target_binary", type=str, default=None, help="Path to the target binary for cmplog, if not provided, will be set to [target_binary]_cmplog")
+    parser.add_argument("--fox_target_binary", type=str, default=None, help="Path to the FOX-instrumented target binary, if not provided, will be set to [target_binary]_fox")
+    parser.add_argument("--cmplog_target_binary", type=str, default=None, help="Path to the cmplog-instrumented target binary, if not provided, will be set to [target_binary]_cmplog")
     # Experimental
     parser.add_argument("--strat", type=str, default="geom-cov", choices=["geom-cov", "const-start"], help="Timeout strategy, can be one of: geom-cov, const-start")
     args = parser.parse_args()
