@@ -268,7 +268,6 @@ class EnsembleFuzzer:
     def run(self):
         """Run the fuzzer ensemble. If a fuzzer fails, it is removed from the queue. If one fuzzer remains, it is run without a timeout."""
         force_afl_autoresume()
-        rmtree_if_exists(self.fuzzer_queue[0].output_dir)
         while len(self.fuzzer_queue):
             fuzzer = self.fuzzer_queue.popleft()
             fuzzer.timeout = len(self.fuzzer_queue) > 0
