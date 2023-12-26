@@ -37,6 +37,7 @@ import glob
 import json
 import os
 import shutil
+import signal
 import subprocess
 import time
 
@@ -65,11 +66,6 @@ def get_locks():
     """Get the current locks."""
     ret = json.loads(subprocess.run(['lslocks', '-J'], capture_output=True, text=True).stdout)
     return [Lock(**lock) for lock in ret['locks']]
-
-
-def kill_process(pid: int):
-    """Kill a process."""
-    run_command(['kill', '-9', str(pid)])
 
 
 def kill_dangling_processes(target_binary: str):
@@ -171,7 +167,7 @@ class AFLFuzzer(AbstractFuzzer):
         """Kill any locking processes."""
         for lock in get_locks():
             if os.path.samefile(lock.path, os.path.join(self.output_dir, "default")) or os.path.samefile(lock.path, self.output_dir):
-                kill_process(lock.pid)
+                os.kill(lock.pid, signal.SIGKILL)
 
     def replace_output_dir(self):
         """Replace the output directory with a new one."""
