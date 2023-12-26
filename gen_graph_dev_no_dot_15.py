@@ -82,6 +82,7 @@ def inline_counter_table_init(filename, bin_name):
     tokens = subprocess.check_output('llvm-nm ' + bin_name + ' |grep sancov_guards', shell=True, encoding='utf-8').split()
     if tmp_sum != ((int('0x'+ tokens[3], 0) - int('0x' + tokens[0], 0))/4):
         print("BUGG: inline table wrong, try to fix...")
+        sys.exit("ERR")
 
     return inline_table
 
