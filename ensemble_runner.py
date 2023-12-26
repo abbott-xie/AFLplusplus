@@ -170,7 +170,7 @@ class AFLFuzzer(AbstractFuzzer):
     def kill_locking_processes(self):
         """Kill any locking processes."""
         for lock in get_locks():
-            if os.path.samefile(lock.path, self.output_dir):
+            if os.path.samefile(lock.path, os.path.join(self.output_dir, "default")) or os.path.samefile(lock.path, self.output_dir):
                 kill_process(lock.pid)
 
     def replace_output_dir(self):
@@ -185,10 +185,10 @@ class AFLFuzzer(AbstractFuzzer):
         for fail_handler in [self.kill_locking_processes, self.replace_output_dir]:
             try:
                 run_command(self.command)
+                return
             except subprocess.CalledProcessError as e:
                 print(f"Run failed with error {e}, attempting to recover")
                 fail_handler()
-            return
         run_command(self.command) # This should not fail, if it does, we give up
 
     def do_run_timed(self):
