@@ -5,7 +5,6 @@
 # If fox_target_binary and cmplog_target_binary are not provided, they will be set to [target_binary]_fox and [target_binary]_cmplog respectively
 # If dicts are not provided, all .dict files in the current directory will be used
 #
-# The script uses only standard Python 3 libraries, so it should work on any system with Python 3 installed
 # One can also directly import the EnsembleFuzzer class, which can be used as follows:
 # EnsembleFuzzer(corpus_dir, output_dir, dicts, target_binary, cmplog_target_binary, fox_target_binary).run()
 # 
@@ -21,22 +20,28 @@
 #    - const: constant timeout of 2 hours (TMOUT_STRAT_CONST)
 #    - geom: geometric timeout, starting at 5 minutes and doubling after each run (TMOUT_STRAT_GEOM_BASE and TMOUT_STRAT_GEOM_MULT)
 #
-#  - fuzzer-side policy: determines the baseline which to measure the timeout against (can be changed by modifying setting #define TIME_SINCE_START)
-#    - time-since-last-cov: timeout is measured against the time since the last coverage discovery (no #define TIME_SINCE_START)
-#    - time-since-start: timeout is measured against the time since the start of the fuzzing run (#define TIME_SINCE_START)
+#  - fuzzer-side policy: determines the baseline which to measure the timeout against (can be changed by modifying setting #define TIME_SINCE_START_STRAT)
+#    - time-since-last-cov: timeout is measured against the time since the last coverage discovery (no #define TIME_SINCE_START_STRAT)
+#    - time-since-start: timeout is measured against the time since the start of the fuzzing run (#define TIME_SINCE_START_STRAT)
 #
-# The default combination is script-side policy: geom, fuzzer-side policy: time-since-last-cov
+# The default combination is script-side policy: geom, fuzzer-side policy: time-since-last-cov (strat=geom-cov)
+#
+# The two combinations I am currently testing are:
+# - script-side policy: const, fuzzer-side policy: time-since-start (strat=const-start, expecting binaries with _start suffix and compiled with #define TIME_SINCE_START_STRAT)
+# - script-side policy: geom, fuzzer-side policy: time-since-last-cov (strat=geom-cov)
 #
 
 
 import argparse
 import glob
+import json
 import os
 import shutil
 import subprocess
 import time
 
-from typing import List
+from collections import deque, namedtuple
+from typing import List, Deque # breaks with Python >= 3.9, replace with list[str], deque[AFLFuzzer]
 
 # Fuzzer-command specific constants
 INT_MAX = '2147483647'
@@ -54,6 +59,18 @@ TMOUT_STRAT_GEOM_MULT = 2
 TMOUT_STRAT_CONST = 2 * 60 * 60 # 2 hours
 TMOUT_STRAT = "geom"
 
+Lock = namedtuple('Lock', ['command', 'pid', 'type', 'size', 'mode', 'm', 'start', 'end', 'path'])
+
+def get_locks():
+    """Get the current locks."""
+    ret = json.loads(subprocess.run(['lslocks', '-J'], capture_output=True, text=True).stdout)
+    return [Lock(**lock) for lock in ret['locks']]
+
+
+def kill_process(pid: int):
+    """Kill a process."""
+    run_command(['kill', '-9', str(pid)])
+
 
 def kill_dangling_processes(target_binary: str):
     """Kill any dangling processes. Only used in fuzzbench, where memory usage is limited and each fuzzer runs in isolation."""
@@ -65,17 +82,14 @@ def tmout_strat_geom(run_cnt: int):
     return TMOUT_STRAT_GEOM_BASE * (TMOUT_STRAT_GEOM_MULT ** run_cnt)
 
 
-def get_cur_time_ms():
-    """Get the current time in milliseconds."""
-    return int(time.time() * 1000)
+def get_cur_time_s():
+    """Get the current time in seconds."""
+    return int(time.time())
 
 
 def run_command(command: List[str]):
-    """Run a command with a timeout."""
-    try:
-        subprocess.run(command, check=True)
-    except subprocess.CalledProcessError as e:
-        print(f'Error running "{" ".join(command)}": {e}')
+    """Run a checked command."""
+    subprocess.run(command, check=True)
 
 
 def rmtree_if_exists(dir: str):
@@ -101,7 +115,6 @@ class AbstractFuzzer:
     dicts: List[str]
     target_binary: str
     log_path: str
-    time_run_start: int
 
     def run(self):
         raise NotImplementedError()
@@ -109,7 +122,7 @@ class AbstractFuzzer:
     def build_command(self):
         raise NotImplementedError()
 
-    def get_tmout(self):
+    def get_timeout(self):
         raise NotImplementedError()
 
     def log(self):
@@ -118,7 +131,8 @@ class AbstractFuzzer:
 
 class AFLFuzzer(AbstractFuzzer):
     """Base class for an AFL fuzzer."""
-    plot_data_dir: str
+    timeout: bool
+    run_err: Exception
 
     def __init__(self, name: str, corpus_dir: str, output_dir: str, dicts: List[str], target_binary: str):
         self.name = name
@@ -128,27 +142,58 @@ class AFLFuzzer(AbstractFuzzer):
         self.dicts = dicts
         self.target_binary = target_binary
         self.log_path = os.path.join(self.output_dir, "ensemble_log");
+        self.timeout = True
         self.command = None
+        self.run_err = None
 
     def add_common_args(self):
-        self.command += ['-J', str(self.get_tmout())]
+        """Add the common arguments to the command."""
+        if self.timeout:
+            self.command += ['-J', str(self.get_timeout())]
         self.command += COMMON_ARGS
         for dict in self.dicts:
             self.command += ['-x', dict]
         self.command += ['-i', self.corpus_dir, '-o', self.output_dir, '--', self.target_binary, INT_MAX]
 
+    def kill_locking_processes(self):
+        """Kill any locking processes."""
+        for lock in get_locks():
+            if os.path.samefile(lock.path, self.output_dir):
+                kill_process(lock.pid)
+
+    def replace_output_dir(self):
+        """Replace the output directory with a new one."""
+        new_output_dir = self.output_dir + "_new"
+        shutil.copytree(self.output_dir, new_output_dir)
+        shutil.rmtree(self.output_dir)
+        os.rename(new_output_dir, self.output_dir)
+
     def do_run(self):
-        run_command(self.command)
+        """Run the fuzzer. If it fails with a CalledProcessError, try to recover. If it fails again, give up."""
+        for fail_handler in [self.kill_locking_processes, self.replace_output_dir]:
+            try:
+                run_command(self.command)
+            except subprocess.CalledProcessError as e:
+                print(f"Run failed with error {e}, attempting to recover")
+                fail_handler()
+            return
+        run_command(self.command) # This should not fail, if it does, we give up
 
     def do_run_timed(self):
-        self.time_start = get_cur_time_ms()
-        self.do_run()
-        self.time_end = get_cur_time_ms()
+        """Run the fuzzer, time it, and save the error if it fails."""
+        self.time_start = get_cur_time_s()
+        try:
+            self.do_run()
+        except Exception as e:
+            print(f"Run failed with error {e}, irrecoverable")
+            self.run_err = e
+        self.time_end = get_cur_time_s()
 
     def kill_dangling_processes(self):
         kill_dangling_processes(self.target_binary)
 
     def run(self):
+        """Run the fuzzer and log the result."""
         self.build_command()
         self.do_run_timed()
         self.log()
@@ -157,16 +202,19 @@ class AFLFuzzer(AbstractFuzzer):
         self.run_cnt += 1
 
     def init_log(self):
+        """Initialize the log file."""
         with open(self.log_path, "w") as f:
-            f.write("time_start, time_end, fuzzer, run_cnt, command\n")
+            f.write("time_start, time_end, fuzzer, run_cnt, command, err\n")
 
     def log(self):
+        """Log the result of a run."""
         if not os.path.exists(self.log_path):
             self.init_log()
         with open(self.log_path, "a") as f:
-            f.write(f"{self.time_start}, {self.time_end}, {self.name}, {self.run_cnt}, {' '.join(self.command)}\n")
+            f.write(f"{self.time_start}, {self.time_end}, {self.name}, {self.run_cnt}, {' '.join(self.command)}, {self.run_err}\n")
 
-    def get_tmout(self):
+    def get_timeout(self):
+        """Get the timeout for a run."""
         if TMOUT_STRAT == "const":
             return TMOUT_STRAT_CONST
         elif TMOUT_STRAT == "geom":
@@ -176,7 +224,6 @@ class AFLFuzzer(AbstractFuzzer):
 
 
 class CmplogFuzzer(AFLFuzzer):
-    """Class for a cmplog fuzzer."""
     cmplog_target_binary: str
 
     def __init__(self, corpus_dir: str, output_dir: str, dicts: List[str], target_binary: str, cmplog_target_binary: str):
@@ -198,24 +245,25 @@ class FoxFuzzer(AFLFuzzer):
         self.add_common_args()
 
 class EnsembleFuzzer:
+    fuzzer_queue: Deque[AFLFuzzer]
 
     def __init__(self, corpus_dir: str, output_dir: str, dicts: List[str], target_binary: str, cmplog_target_binary: str, fox_target_binary: str):
-        self.cmplog_fuzzer = CmplogFuzzer(corpus_dir, output_dir, dicts, target_binary, cmplog_target_binary)
-        self.fox_fuzzer = FoxFuzzer(corpus_dir, output_dir, dicts, fox_target_binary)
-        self.current_fuzzer = self.fox_fuzzer
-
-    def switch_current_fuzzer(self):
-        self.current_fuzzer = self.cmplog_fuzzer if self.current_fuzzer is self.fox_fuzzer else self.fox_fuzzer
-
-    def flush_output_dir(self):
-        rmtree_if_exists(self.current_fuzzer.output_dir)
+        self.fuzzer_queue = deque([
+            FoxFuzzer(corpus_dir, output_dir, dicts, fox_target_binary),
+            CmplogFuzzer(corpus_dir, output_dir, dicts, target_binary, cmplog_target_binary)
+        ])
 
     def run(self):
+        """Run the fuzzer ensemble. If a fuzzer fails, it is removed from the queue. If one fuzzer remains, it is run without a timeout."""
         force_afl_autoresume()
-        self.flush_output_dir()
-        while True:
-            self.current_fuzzer.run()
-            self.switch_current_fuzzer()
+        rmtree_if_exists(self.fuzzer_queue[0].output_dir)
+        while len(self.fuzzer_queue):
+            fuzzer = self.fuzzer_queue.popleft()
+            fuzzer.timeout = len(self.fuzzer_queue) > 0
+            fuzzer.run()
+            if fuzzer.run_err is None:
+                self.fuzzer_queue.append(fuzzer)
+        raise RuntimeError("No fuzzer left in the queue, this should not happen")
 
 
 def parse_args():
@@ -226,6 +274,8 @@ def parse_args():
     parser.add_argument("-x", "--dicts", type=list, default=None, help="Path to the dictionaries, if not provided, will be set to all .dict files in the current directory")
     parser.add_argument("--fox_target_binary", type=str, default=None, help="Path to the target binary for fox, if not provided, will be set to [target_binary]_fox")
     parser.add_argument("--cmplog_target_binary", type=str, default=None, help="Path to the target binary for cmplog, if not provided, will be set to [target_binary]_cmplog")
+    # Experimental
+    parser.add_argument("--strat", type=str, default="geom-cov", choices=["geom-cov", "const-start"], help="Timeout strategy, can be one of: geom-cov, const-start")
     args = parser.parse_args()
 
     if args.cmplog_target_binary is None:
@@ -234,6 +284,15 @@ def parse_args():
         args.fox_target_binary = f"{args.target_binary}_fox"
     if args.dicts is None:
         args.dicts = glob.glob("*.dict")
+
+    # Experimental
+    global TMOUT_STRAT, CMPLOG_FUZZ_BIN_NAME, FOX_FUZZ_BIN_NAME
+    if args.strat == "geom-cov":
+        TMOUT_STRAT = "geom"
+    elif args.strat == "const-start":
+        TMOUT_STRAT = "const"
+        CMPLOG_FUZZ_BIN_NAME = f"{CMPLOG_FUZZ_BIN_NAME}_start"
+        FOX_FUZZ_BIN_NAME = f"{FOX_FUZZ_BIN_NAME}_start"
 
     return args
 
