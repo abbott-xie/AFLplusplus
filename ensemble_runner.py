@@ -104,6 +104,15 @@ def force_afl_autoresume():
         print("AFL_AUTORESUME needs to be set to 1, setting it now")
         os.environ["AFL_AUTORESUME"] = "1"
 
+# Experimental
+def is_inline_table_wrong(target_binary: str, args: List[str]):
+    """Check whether the inline table is wrong."""
+    os.environ["AFL_DEBUG"] = "1"
+    ret = subprocess.run([target_binary] + args, capture_output=True, text=True)
+    os.environ["AFL_DEBUG"] = "0"
+    num_occ = sum(line.startswith("Running __sanitizer_cov_trace_pc_guard_init: ") for line in ret.stdout.splitlines() + ret.stderr.splitlines())
+    return num_occ != 1
+
 
 class AbstractFuzzer:
     """Abstract class for a fuzzer."""
@@ -114,6 +123,7 @@ class AbstractFuzzer:
     command: List[str]
     dicts: List[str]
     target_binary: str
+    args: List[str]
     log_path: str
 
     def run(self):
@@ -134,13 +144,14 @@ class AFLFuzzer(AbstractFuzzer):
     timeout: bool
     run_err: Exception
 
-    def __init__(self, name: str, corpus_dir: str, output_dir: str, dicts: List[str], target_binary: str):
+    def __init__(self, name: str, corpus_dir: str, output_dir: str, dicts: List[str], target_binary: str, args: List[str]):
         self.name = name
         self.run_cnt = 0
         self.corpus_dir = corpus_dir
         self.output_dir = output_dir
         self.dicts = dicts
         self.target_binary = target_binary
+        self.args = args
         self.log_path = os.path.join(self.output_dir, "ensemble_log");
         self.timeout = True
         self.command = None
@@ -153,7 +164,7 @@ class AFLFuzzer(AbstractFuzzer):
         self.command += COMMON_ARGS
         for dict in self.dicts:
             self.command += ['-x', dict]
-        self.command += ['-i', self.corpus_dir, '-o', self.output_dir, '--', self.target_binary, INT_MAX]
+        self.command += ['-i', self.corpus_dir, '-o', self.output_dir, '--', self.target_binary] + self.args + [INT_MAX]
 
     def kill_locking_processes(self):
         """Kill any locking processes."""
@@ -226,9 +237,9 @@ class AFLFuzzer(AbstractFuzzer):
 class CmplogFuzzer(AFLFuzzer):
     cmplog_target_binary: str
 
-    def __init__(self, corpus_dir: str, output_dir: str, dicts: List[str], target_binary: str, cmplog_target_binary: str):
+    def __init__(self, corpus_dir: str, output_dir: str, dicts: List[str], target_binary: str, cmplog_target_binary: str, args: List[str]):
         self.cmplog_target_binary = cmplog_target_binary
-        super().__init__("cmplog", corpus_dir, output_dir, dicts, target_binary)
+        super().__init__("cmplog", corpus_dir, output_dir, dicts, target_binary, args)
 
     def build_command(self):
         self.command = [CMPLOG_FUZZ_BIN_NAME, '-c', self.cmplog_target_binary]
@@ -237,8 +248,8 @@ class CmplogFuzzer(AFLFuzzer):
 
 class FoxFuzzer(AFLFuzzer):
 
-    def __init__(self, corpus_dir: str, output_dir: str, dicts: List[str], target_binary: str):
-        super().__init__("fox", corpus_dir, output_dir, dicts, target_binary)
+    def __init__(self, corpus_dir: str, output_dir: str, dicts: List[str], target_binary: str, args: List[str]):
+        super().__init__("fox", corpus_dir, output_dir, dicts, target_binary, args)
 
     def build_command(self):
         self.command = [FOX_FUZZ_BIN_NAME, '-k', '-p', 'wd_scheduler']
@@ -247,11 +258,16 @@ class FoxFuzzer(AFLFuzzer):
 class EnsembleFuzzer:
     fuzzer_queue: Deque[AFLFuzzer]
 
-    def __init__(self, corpus_dir: str, output_dir: str, dicts: List[str], target_binary: str, cmplog_target_binary: str, fox_target_binary: str):
+    def __init__(self, corpus_dir: str, output_dir: str, dicts: List[str], target_binary: str, cmplog_target_binary: str, fox_target_binary: str, args: List[str]):
         self.fuzzer_queue = deque([
-            FoxFuzzer(corpus_dir, output_dir, dicts, fox_target_binary),
-            CmplogFuzzer(corpus_dir, output_dir, dicts, target_binary, cmplog_target_binary)
+            FoxFuzzer(corpus_dir, output_dir, dicts, fox_target_binary, args),
+            CmplogFuzzer(corpus_dir, output_dir, dicts, target_binary, cmplog_target_binary, args)
         ])
+
+        # Experimental
+        if is_inline_table_wrong(target_binary, args):
+            print("Inline table is wrong, disabling FOX")
+            self.fuzzer_queue.popleft()
 
     def run(self):
         """Run the fuzzer ensemble. If a fuzzer fails, it is removed from the queue. If one fuzzer remains, it is run without a timeout."""
@@ -271,6 +287,7 @@ def parse_args():
     parser.add_argument("-i", "--corpus_dir", type=str, required=True, help="Directory containing the corpus")
     parser.add_argument("-o", "--output_dir", type=str, required=True, help="Directory to store output")
     parser.add_argument("-b", "--target_binary", type=str, required=True, help="Path to the target binary")
+    parser.add_argument("-a", "--args", type=list, default=[], help="Arguments to pass to the target binary")
     parser.add_argument("-x", "--dicts", type=list, default=None, help="Path to the dictionaries, if not provided, will be set to all .dict files in the current directory")
     parser.add_argument("--fox_target_binary", type=str, default=None, help="Path to the target binary for fox, if not provided, will be set to [target_binary]_fox")
     parser.add_argument("--cmplog_target_binary", type=str, default=None, help="Path to the target binary for cmplog, if not provided, will be set to [target_binary]_cmplog")
@@ -298,7 +315,7 @@ def parse_args():
 
 
 def main(args):
-    fuzzer = EnsembleFuzzer(args.corpus_dir, args.output_dir, args.dicts, args.target_binary, args.cmplog_target_binary, args.fox_target_binary)
+    fuzzer = EnsembleFuzzer(args.corpus_dir, args.output_dir, args.dicts, args.target_binary, args.cmplog_target_binary, args.fox_target_binary, args.args)
     try:
         fuzzer.run()
     except KeyboardInterrupt:
