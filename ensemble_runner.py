@@ -56,7 +56,7 @@ FOX_FUZZ_BIN_NAME = "./fox_4.09c_hybrid"
 
 # Timeout strategies
 TMOUT_STRAT_GEOM_BASE = 5 * 60 # 5 min
-TMOUT_STRAT_GEOM_MULT = 2
+TMOUT_STRAT_GEOM_MULT = 2 # double after each run
 TMOUT_STRAT_CONST = 2 * 60 * 60 # 2 hours
 TMOUT_STRAT = "geom"
 
@@ -278,7 +278,7 @@ def parse_args():
     parser.add_argument("-i", "--corpus_dir", type=str, required=True, help="Directory containing the corpus")
     parser.add_argument("-o", "--output_dir", type=str, required=True, help="Directory to store output")
     parser.add_argument("-b", "--target_binary", type=str, required=True, help="Path to the vanila AFLplusplus-instrumented target binary")
-    parser.add_argument("-a", "--args", type=list, default=[], help="Arguments to pass to the target binary")
+    parser.add_argument("-a", "--args", type=str, nargs="*", default=[], help="Arguments to pass to the target binary")
     parser.add_argument("-x", "--dicts", type=str, nargs="+", default=None, help="Path to the dictionaries, if not provided, will be set to all .dict files in the current directory")
     parser.add_argument("--fox_target_binary", type=str, default=None, help="Path to the FOX-instrumented target binary, if not provided, will be set to [target_binary]_fox")
     parser.add_argument("--cmplog_target_binary", type=str, default=None, help="Path to the cmplog-instrumented target binary, if not provided, will be set to [target_binary]_cmplog")
