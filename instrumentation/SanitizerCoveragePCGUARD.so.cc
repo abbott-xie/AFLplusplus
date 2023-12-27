@@ -1839,6 +1839,10 @@ void ModuleSanitizerCoverageAFL::OptfuzzInjectTraceForSwitch(Function &F, ArrayR
       // handle default case: choose a target value for defacut case
       
       caseCnt+=1;
+      if (case_val_list.size() == caseCnt) {
+           errs()<< "\n[LOG] skip to instrument an empty switch.\n";
+           continue;
+       }
       Value* op2 = case_val_list[caseCnt]; // default case value   
       
       if (!op2){
