@@ -165,16 +165,26 @@ class AFLFuzzer(AbstractFuzzer):
 
     def kill_locking_processes(self):
         """Kill any locking processes."""
+        killed_processes = set()
+        output_dirs = [self.output_dir, os.path.join(self.output_dir, "default")]
         for lock in get_locks():
-            if os.path.samefile(lock.path, os.path.join(self.output_dir, "default")) or os.path.samefile(lock.path, self.output_dir):
-                os.kill(lock.pid, signal.SIGKILL)
+            for output_dir in output_dirs:
+                if os.path.samefile(lock.path, output_dir) and lock.pid not in killed_processes:
+                    try:
+                        os.kill(lock.pid, signal.SIGKILL)
+                        killed_processes.add(lock.pid)
+                    except OSError as e:
+                        print(f"Failed to kill process {lock.pid}: {e}")
 
     def replace_output_dir(self):
         """Replace the output directory with a new one."""
         new_output_dir = self.output_dir + "_new"
-        shutil.copytree(self.output_dir, new_output_dir)
-        shutil.rmtree(self.output_dir)
-        os.rename(new_output_dir, self.output_dir)
+        try:
+            shutil.copytree(self.output_dir, new_output_dir)
+            shutil.rmtree(self.output_dir)
+            os.rename(new_output_dir, self.output_dir)
+        except OSError as e:
+            print(f"Failed to replace output directory: {e}")
 
     def do_run(self):
         """Run the fuzzer. If it fails with a CalledProcessError, try to recover. If it fails again, give up."""
