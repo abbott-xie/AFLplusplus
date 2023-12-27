@@ -121,7 +121,7 @@ class AbstractFuzzer:
     dicts: List[str]
     target_binary: str
     args: List[str]
-    log_path: str
+    run_log_path: str
 
     def run(self):
         raise NotImplementedError()
@@ -132,7 +132,7 @@ class AbstractFuzzer:
     def get_timeout(self):
         raise NotImplementedError()
 
-    def log(self):
+    def log_run(self):
         raise NotImplementedError()
 
 
@@ -149,7 +149,8 @@ class AFLFuzzer(AbstractFuzzer):
         self.dicts = dicts
         self.target_binary = target_binary
         self.args = args
-        self.log_path = os.path.join(self.output_dir, "ensemble_log");
+        self.run_log_path = os.path.join(self.output_dir, "run_log");
+        self.err_log_path = os.path.join(self.output_dir, "err_log");
         self.timeout = False
         self.command = None
         self.run_err = None
@@ -174,7 +175,7 @@ class AFLFuzzer(AbstractFuzzer):
                         os.kill(lock.pid, signal.SIGKILL)
                         killed_processes.add(lock.pid)
                     except OSError as e:
-                        print(f"Failed to kill process {lock.pid}: {e}")
+                        self.log_err(f"Failed to kill process {lock.pid}: {e}")
 
     def replace_output_dir(self):
         """Replace the output directory with a new one."""
@@ -184,7 +185,7 @@ class AFLFuzzer(AbstractFuzzer):
             shutil.rmtree(self.output_dir)
             os.rename(new_output_dir, self.output_dir)
         except OSError as e:
-            print(f"Failed to replace output directory: {e}")
+            self.log_err(f"Failed to replace output directory: {e}")
 
     def do_run(self):
         """Run the fuzzer. If it fails with a CalledProcessError, try to recover. If it fails again, give up."""
@@ -193,7 +194,7 @@ class AFLFuzzer(AbstractFuzzer):
                 run_command(self.command)
                 return
             except subprocess.CalledProcessError as e:
-                print(f"Run failed with error {e}, attempting to recover")
+                self.log_err(f"Run failed with error {e}, attempting to recover")
                 fail_handler()
         run_command(self.command) # This should not fail, if it does, we give up
 
@@ -203,7 +204,7 @@ class AFLFuzzer(AbstractFuzzer):
         try:
             self.do_run()
         except Exception as e:
-            print(f"Run failed with error {e}, irrecoverable")
+            self.log_err(f"Run failed with error {e}, irrecoverable")
             self.run_err = e
         self.time_end = get_cur_time_s()
 
@@ -214,22 +215,27 @@ class AFLFuzzer(AbstractFuzzer):
         """Run the fuzzer and log the result."""
         self.build_command()
         self.do_run_timed()
-        self.log()
+        self.log_run()
         # if FUZZBENCH_RUN:
             # self.kill_dangling_processes()
         self.run_cnt += 1
 
-    def init_log(self):
+    def init_run_log(self):
         """Initialize the log file."""
-        with open(self.log_path, "w") as f:
+        with open(self.run_log_path, "w") as f:
             f.write("time_start, time_end, fuzzer, run_cnt, command, err\n")
 
-    def log(self):
+    def log_run(self):
         """Log the result of a run."""
-        if not os.path.exists(self.log_path):
-            self.init_log()
-        with open(self.log_path, "a") as f:
+        if not os.path.exists(self.run_log_path):
+            self.init_run_log()
+        with open(self.run_log_path, "a") as f:
             f.write(f"{self.time_start}, {self.time_end}, {self.name}, {self.run_cnt}, {' '.join(self.command)}, {self.run_err}\n")
+
+    def log_err(self, msg: str):
+        """Log an error."""
+        with open(self.err_log_path, "a") as f:
+            f.write(f"{self.name}: {msg}\n")
 
     def get_timeout(self):
         """Get the timeout for a run."""
