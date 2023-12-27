@@ -279,7 +279,7 @@ def parse_args():
     parser.add_argument("-o", "--output_dir", type=str, required=True, help="Directory to store output")
     parser.add_argument("-b", "--target_binary", type=str, required=True, help="Path to the vanila AFLplusplus-instrumented target binary")
     parser.add_argument("-a", "--args", type=list, default=[], help="Arguments to pass to the target binary")
-    parser.add_argument("-x", "--dicts", type=list, default=None, help="Path to the dictionaries, if not provided, will be set to all .dict files in the current directory")
+    parser.add_argument("-x", "--dicts", type=str, nargs="+", default=None, help="Path to the dictionaries, if not provided, will be set to all .dict files in the current directory")
     parser.add_argument("--fox_target_binary", type=str, default=None, help="Path to the FOX-instrumented target binary, if not provided, will be set to [target_binary]_fox")
     parser.add_argument("--cmplog_target_binary", type=str, default=None, help="Path to the cmplog-instrumented target binary, if not provided, will be set to [target_binary]_cmplog")
     # Experimental
