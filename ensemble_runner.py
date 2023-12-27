@@ -150,7 +150,7 @@ class AFLFuzzer(AbstractFuzzer):
         self.target_binary = target_binary
         self.args = args
         self.log_path = os.path.join(self.output_dir, "ensemble_log");
-        self.timeout = True
+        self.timeout = False
         self.command = None
         self.run_err = None
 
