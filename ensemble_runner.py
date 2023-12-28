@@ -33,6 +33,7 @@
 
 
 import argparse
+import fcntl
 import glob
 import json
 import os
@@ -180,6 +181,18 @@ class AFLFuzzer(AbstractFuzzer):
                     except OSError as e:
                         self.log_err(f"Failed to kill process {lock.pid}: {e}")
 
+    def unlock_output_dir(self):
+        """Unlock the output directory."""
+        output_dirs = [self.output_dir, os.path.join(self.output_dir, "default")]
+        for output_dir in output_dirs:
+            try:
+                fd = os.open(output_dir, os.O_RDONLY)
+                fcntl.flock(fd, fcntl.LOCK_UN)
+            except OSError as e:
+                self.log_err(f"Failed to unlock output directory: {e}")
+            finally:
+                os.close(fd)
+
     def replace_output_dir(self):
         """Replace the output directory with a new one."""
         new_output_dir = self.output_dir + "_new"
@@ -192,7 +205,7 @@ class AFLFuzzer(AbstractFuzzer):
 
     def do_run(self):
         """Run the fuzzer. If it fails with a CalledProcessError, try to recover. If it fails again, give up."""
-        for fail_handler in [self.kill_locking_processes, self.replace_output_dir]:
+        for fail_handler in [self.kill_locking_processes, self.unlock_output_dir, self.replace_output_dir]:
             try:
                 run_command(self.command)
                 return
