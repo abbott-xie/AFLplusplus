@@ -158,7 +158,7 @@ class AFLFuzzer(AbstractFuzzer):
     def add_common_args(self):
         """Add the common arguments to the command."""
         if self.timeout:
-            self.command += ['-J', str(self.get_timeout())]
+            self.command += ['-V', str(self.get_timeout())]
         self.command += COMMON_ARGS
         for dict in self.dicts:
             self.command += ['-x', dict]

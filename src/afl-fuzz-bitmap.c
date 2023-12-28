@@ -619,7 +619,7 @@ inline u8 has_new_bits(afl_state_t *afl, u8 *virgin_map) {
 
   if (unlikely(ret) && likely(virgin_map == afl->virgin_bits)) {
     afl->bitmap_changed = 1;
-    afl->last_cov_time_us = get_cur_time_us();
+    afl->last_cov_time = get_cur_time();
   }
 
   return ret;
