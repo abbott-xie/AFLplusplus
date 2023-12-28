@@ -64,7 +64,10 @@ Lock = namedtuple('Lock', ['command', 'pid', 'type', 'size', 'mode', 'm', 'start
 
 def get_locks():
     """Get the current locks."""
-    ret = json.loads(subprocess.run(['lslocks', '-J'], capture_output=True, text=True).stdout)
+    ret = subprocess.run(['lslocks', '-J'], capture_output=True, text=True).stdout
+    if len(ret) == 0:
+        return []
+    ret = json.loads(ret)
     return [Lock(**lock) for lock in ret['locks']]
 
 
