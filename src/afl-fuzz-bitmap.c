@@ -346,7 +346,7 @@ static inline s64 icmp_single_br_dist_le(s16 *br_dist_buf, s16 sw_len, bool *has
             productive_time_us[cur_border_edge_id] += this_exec_us;
             added_seeds[cur_border_edge_id]++;
             global_br_bits[base_br_dist_edge_id] = total_br_dist_abs;
-            if (winning_cnt >= winning_capacity) { PFATAL("BUG: number of winners exceeds capacity"); }
+            if (unlikely(winning_cnt >= winning_capacity)) { PFATAL("BUG: number of winners exceeds capacity"); }
             winning_list[winning_cnt] = cur_border_edge_id;
             winning_cnt++;
             has_decreased_global_br = true;
@@ -359,7 +359,7 @@ static inline s64 icmp_single_br_dist_le(s16 *br_dist_buf, s16 sw_len, bool *has
               added_seeds[cur_border_edge_id]++;
             productive_time_us[cur_border_edge_id] += this_exec_us;
             global_br_bits[base_br_dist_edge_id] = total_br_dist_abs;
-            if (winning_cnt >= winning_capacity) { PFATAL("BUG: number of winners exceeds capacity"); }
+            if (unlikely(winning_cnt >= winning_capacity)) { PFATAL("BUG: number of winners exceeds capacity"); }
             winning_list[winning_cnt] = cur_border_edge_id;
             winning_cnt++;
             has_decreased_global_br = true;
@@ -442,7 +442,7 @@ static inline s64 icmp_single_br_dist_le(s16 *br_dist_buf, s16 sw_len, bool *has
           productive_time_us[cur_border_edge_id] += this_exec_us;
           added_seeds[cur_border_edge_id]++;
           global_br_bits[br_dist_edge_id] = br_dist_abs;
-          if (winning_cnt >= winning_capacity) { PFATAL("BUG: number of winners exceeds capacity"); }
+          if (unlikely(winning_cnt >= winning_capacity)) { PFATAL("BUG: number of winners exceeds capacity"); }
           winning_list[winning_cnt] = cur_border_edge_id;
           winning_cnt++;
           has_decreased_global_br = true;
@@ -482,7 +482,7 @@ static inline s64 icmp_single_br_dist_le(s16 *br_dist_buf, s16 sw_len, bool *has
           if (likely(not_dry_run))
             added_seeds[cur_border_edge_id]++;
           global_br_bits[br_dist_edge_id] = br_dist_abs;
-          if (winning_cnt >= winning_capacity) { PFATAL("BUG: number of winners exceeds capacity"); }
+          if (unlikely(winning_cnt >= winning_capacity)) { PFATAL("BUG: number of winners exceeds capacity"); }
           winning_list[winning_cnt] = cur_border_edge_id;
           winning_cnt++;
         }
