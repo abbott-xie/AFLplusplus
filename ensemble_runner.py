@@ -58,7 +58,7 @@ FOX_FUZZ_BIN_NAME = "./fox_4.09c_hybrid"
 # Timeout strategies
 TMOUT_STRAT_GEOM_BASE = 5 * 60 # 5 min
 TMOUT_STRAT_GEOM_MULT = 2 # double after each run
-TMOUT_STRAT_CONST = 1 * 60 * 60 # 1 hour
+TMOUT_STRAT_CONST = 3 * 60 * 60 # 3 hours
 TMOUT_STRAT = "geom"
 
 Lock = namedtuple('Lock', ['command', 'pid', 'type', 'size', 'mode', 'm', 'start', 'end', 'path'])
