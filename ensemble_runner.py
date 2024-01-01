@@ -315,7 +315,7 @@ def parse_args():
     parser.add_argument("--fox_target_binary", type=str, default=None, help="Path to the FOX-instrumented target binary, if not provided, will be set to [target_binary]_fox")
     parser.add_argument("--cmplog_target_binary", type=str, default=None, help="Path to the cmplog-instrumented target binary, if not provided, will be set to [target_binary]_cmplog")
     # Experimental
-    parser.add_argument("--strat", type=str, default="geom-cov", choices=["geom-cov", "const-start"], help="Timeout strategy, can be one of: geom-cov, const-start")
+    parser.add_argument("--strat", type=str, default="const-start", choices=["geom-cov", "const-start"], help="Timeout strategy, can be one of: geom-cov, const-start")
     args = parser.parse_args()
 
     if args.cmplog_target_binary is None:
