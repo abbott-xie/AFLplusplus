@@ -948,7 +948,7 @@ void load_fox_metadata(afl_state_t *afl) {
 
   u8 *tmp = alloc_printf("%s/time_spent_us", fox_metadata_dir);
   fp = fopen(tmp, "r");
-  if (!fp) { FATAL("time_spent_us open failed"); }
+  if (!fp) { WARNF("time_spent_us open failed"); }
   ck_free(tmp);
 
   fread(afl->fsrv.spent_time_us, sizeof(u64), afl->fox_map_size, fp);
@@ -956,7 +956,7 @@ void load_fox_metadata(afl_state_t *afl) {
 
   tmp = alloc_printf("%s/productive_time_us", fox_metadata_dir);
   fp = fopen(tmp, "r");
-  if (!fp) { FATAL("productive_time_us open failed"); }
+  if (!fp) { WARNF("productive_time_us open failed"); }
   ck_free(tmp);
 
   fread(afl->fsrv.productive_time_us, sizeof(u64), afl->fox_map_size, fp);
@@ -964,7 +964,7 @@ void load_fox_metadata(afl_state_t *afl) {
 
   tmp = alloc_printf("%s/added_seeds", fox_metadata_dir);
   fp = fopen(tmp, "r");
-  if (!fp) { FATAL("added_seeds open failed"); }
+  if (!fp) { WARNF("added_seeds open failed"); }
   ck_free(tmp);
 
   fread(afl->fsrv.added_seeds, sizeof(u32), afl->fox_map_size, fp);
@@ -972,7 +972,7 @@ void load_fox_metadata(afl_state_t *afl) {
 
   tmp = alloc_printf("%s/br_cov", fox_metadata_dir);
   fp = fopen(tmp, "r");
-  if (!fp) { FATAL("br_cov open failed"); }
+  if (!fp) { WARNF("br_cov open failed"); }
   ck_free(tmp);
 
   fread(afl->fsrv.br_cov, sizeof(u8), afl->fox_total_border_edge_cnt, fp);
@@ -980,7 +980,7 @@ void load_fox_metadata(afl_state_t *afl) {
 
   tmp = alloc_printf("%s/size_gradient_checked", fox_metadata_dir);
   fp = fopen(tmp, "r");
-  if (!fp) { FATAL("size_gradient_checked open failed"); }
+  if (!fp) { WARNF("size_gradient_checked open failed"); }
   ck_free(tmp);
 
   fread(afl->fsrv.size_gradient_checked, sizeof(u8), afl->fox_total_border_edge_cnt, fp);
@@ -988,7 +988,7 @@ void load_fox_metadata(afl_state_t *afl) {
 
   tmp = alloc_printf("%s/fallthrough_line_search", fox_metadata_dir);
   fp = fopen(tmp, "r");
-  if (!fp) { FATAL("fallthrough_line_search open failed"); }
+  if (!fp) { WARNF("fallthrough_line_search open failed"); }
   ck_free(tmp);
 
   fread(afl->fsrv.fallthrough_line_search, sizeof(u8), afl->fox_total_border_edge_cnt, fp);
