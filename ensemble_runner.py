@@ -58,7 +58,7 @@ FOX_FUZZ_BIN_NAME = "./fox_4.09c_hybrid"
 # Timeout strategies
 TMOUT_STRAT_GEOM_BASE = 5 * 60 # 5 min
 TMOUT_STRAT_GEOM_MULT = 2 # double after each run
-TMOUT_STRAT_CONST = 2 * 60 * 60 # 2 hours
+TMOUT_STRAT_CONST = 6 * 60 * 60 # 6 hours
 TMOUT_STRAT = "geom"
 
 Lock = namedtuple('Lock', ['command', 'pid', 'type', 'size', 'mode', 'm', 'start', 'end', 'path'])
@@ -315,7 +315,7 @@ def parse_args():
     parser.add_argument("--fox_target_binary", type=str, default=None, help="Path to the FOX-instrumented target binary, if not provided, will be set to [target_binary]_fox")
     parser.add_argument("--cmplog_target_binary", type=str, default=None, help="Path to the cmplog-instrumented target binary, if not provided, will be set to [target_binary]_cmplog")
     # Experimental
-    parser.add_argument("--strat", type=str, default="geom-cov", choices=["geom-cov", "const-start"], help="Timeout strategy, can be one of: geom-cov, const-start")
+    parser.add_argument("--strat", type=str, default="const-start", choices=["geom-cov", "const-start"], help="Timeout strategy, can be one of: geom-cov, const-start")
     args = parser.parse_args()
 
     if args.cmplog_target_binary is None:
