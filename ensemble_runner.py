@@ -58,7 +58,7 @@ FOX_FUZZ_BIN_NAME = "./fox_4.09c_hybrid"
 # Timeout strategies
 TMOUT_STRAT_GEOM_BASE = 5 * 60 # 5 min
 TMOUT_STRAT_GEOM_MULT = 2 # double after each run
-TMOUT_STRAT_CONST = 6 * 60 * 60 # 6 hours
+TMOUT_STRAT_CONST = 11 * 60 * 60 + 30 * 60 # 11.5 hours
 TMOUT_STRAT = "geom"
 
 Lock = namedtuple('Lock', ['command', 'pid', 'type', 'size', 'mode', 'm', 'start', 'end', 'path'])
@@ -289,8 +289,8 @@ class EnsembleFuzzer:
 
     def __init__(self, corpus_dir: str, output_dir: str, dicts: List[str], target_binary: str, cmplog_target_binary: str, fox_target_binary: str, args: List[str]):
         self.fuzzer_queue = deque([
-            FoxFuzzer(corpus_dir, output_dir, dicts, fox_target_binary, args),
-            CmplogFuzzer(corpus_dir, output_dir, dicts, target_binary, cmplog_target_binary, args)
+            CmplogFuzzer(corpus_dir, output_dir, dicts, target_binary, cmplog_target_binary, args),
+            FoxFuzzer(corpus_dir, output_dir, dicts, fox_target_binary, args)
         ])
 
     def run(self):
