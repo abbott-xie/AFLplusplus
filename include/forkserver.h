@@ -155,7 +155,9 @@ typedef struct afl_forkserver {
   u32 *border_edge_parent_first_id;     /* Border edge parent first id      */
   u32 *num_of_children;                 /* Number of children               */
   FILE *wd_scheduler_log_file;          /* WD scheduler log file            */
+#ifdef FOX_INTROSPECTION
   FILE *fox_debug_log_file;             /* FOX debug log file               */
+#endif
 
   s32 fsrv_pid,                         /* PID of the fork server           */
       child_pid,                        /* PID of the fuzzed program        */
