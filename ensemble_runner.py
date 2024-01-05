@@ -24,7 +24,7 @@
 #    - time-since-last-cov: timeout is measured against the time since the last coverage discovery (no #define TIME_SINCE_START_STRAT)
 #    - time-since-start: timeout is measured against the time since the start of the fuzzing run (#define TIME_SINCE_START_STRAT)
 #
-# The default combination is script-side policy: geom, fuzzer-side policy: time-since-last-cov (strat=geom-cov)
+# The default combination is script-side policy: const, fuzzer-side policy: time-since-start (strat=const-start)
 #
 # The two combinations I am currently testing are:
 # - script-side policy: const, fuzzer-side policy: time-since-start (strat=const-start, expecting binaries with _start suffix and compiled with #define TIME_SINCE_START_STRAT)
