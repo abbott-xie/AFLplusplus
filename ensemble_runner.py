@@ -65,11 +65,11 @@ Lock = namedtuple('Lock', ['command', 'pid', 'type', 'size', 'mode', 'm', 'start
 
 def get_locks():
     """Get the current locks."""
-    ret = subprocess.run(['lslocks', '-J'], capture_output=True, text=True).stdout
-    if len(ret) == 0:
+    try:
+        ret = subprocess.run(['lslocks', '-J'], capture_output=True, text=True, check=True).stdout
+    except (subprocess.CalledProcessError, FileNotFoundError):
         return []
-    ret = json.loads(ret)
-    return [Lock(**lock) for lock in ret['locks']]
+    return [Lock(**lock) for lock in json.loads(ret)['locks']] if len(ret) > 0 else []
 
 
 def kill_dangling_processes(target_binary: str):
@@ -210,22 +210,36 @@ class AFLFuzzer(AbstractFuzzer):
 
     def do_run(self):
         """Run the fuzzer. If it fails with a CalledProcessError, try to recover. If it fails again, give up."""
-        for fail_handler in [self.kill_locking_processes, self.unlock_output_dir, self.replace_output_dir]:
-            try:
-                run_command(self.command)
-                return
-            except subprocess.CalledProcessError as e:
-                self.log_err(f"Run failed with error {e}, attempting to recover")
-                fail_handler()
-        run_command(self.command) # This should not fail, if it does, we give up
+        try:
+            return run_command(self.command)
+        except subprocess.CalledProcessError as e:
+            self.log_err(f"Run failed with error {e}, attempting to recover by killing locking processes")
+            self.kill_locking_processes()
+        try:
+            return run_command(self.command)
+        except subprocess.CalledProcessError as e:
+            self.log_err(f"Run failed with error {e}, attempting to recover by unlocking the output directory")
+            self.unlock_output_dir()
+        try:
+            return run_command(self.command)
+        except subprocess.CalledProcessError as e:
+            self.log_err(f"Run failed with error {e}, attempting to recover by replacing the output directory")
+            self.replace_output_dir()
+        try:
+            return run_command(self.command)
+        except subprocess.CalledProcessError as e:
+            self.log_err(f"Run failed with error {e}, unable to recover")
+            raise e
 
     def do_run_timed(self):
         """Run the fuzzer, time it, and save the error if it fails."""
         self.time_start = get_cur_time_s()
         try:
             self.do_run()
+        except subprocess.CalledProcessError as e:
+            self.run_err = e
         except Exception as e:
-            self.log_err(f"Run failed with error {e}, irrecoverable")
+            self.log_err(f"Unexpected error while running the fuzzer: {e}")
             self.run_err = e
         self.time_end = get_cur_time_s()
 
