@@ -168,12 +168,15 @@ class AFLFuzzer(AbstractFuzzer):
             self.command += ['-x', dict]
         self.command += ['-i', self.corpus_dir, '-o', self.output_dir, '--', self.target_binary] + self.args + [INT_MAX]
 
+    def output_dirs(self):
+        """Get the output directories."""
+        return self.output_dir, os.path.join(self.output_dir, "default")
+
     def kill_locking_processes(self):
         """Kill any locking processes."""
         killed_processes = set()
-        output_dirs = [self.output_dir, os.path.join(self.output_dir, "default")]
         for lock in get_locks():
-            for output_dir in output_dirs:
+            for output_dir in self.output_dirs():
                 try:
                     if os.path.samefile(lock.path, output_dir) and lock.pid not in killed_processes:
                         os.kill(lock.pid, signal.SIGKILL)
@@ -183,8 +186,7 @@ class AFLFuzzer(AbstractFuzzer):
 
     def unlock_output_dir(self):
         """Unlock the output directory."""
-        output_dirs = [self.output_dir, os.path.join(self.output_dir, "default")]
-        for output_dir in output_dirs:
+        for output_dir in self.output_dirs():
             try:
                 fd = os.open(output_dir, os.O_RDONLY)
             except OSError as e:
@@ -201,9 +203,8 @@ class AFLFuzzer(AbstractFuzzer):
         """Replace the output directory with a new one."""
         new_output_dir = self.output_dir + "_new"
         try:
-            shutil.copytree(self.output_dir, new_output_dir)
-            shutil.rmtree(self.output_dir)
-            os.rename(new_output_dir, self.output_dir)
+            shutil.move(self.output_dir, new_output_dir)
+            shutil.move(new_output_dir, self.output_dir)
         except OSError as e:
             self.log_err(f"Failed to replace output directory: {e}")
 
