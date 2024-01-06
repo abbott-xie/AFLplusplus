@@ -179,7 +179,7 @@ class AFLFuzzer(AbstractFuzzer):
                         os.kill(lock.pid, signal.SIGKILL)
                         killed_processes.add(lock.pid)
                 except OSError as e:
-                    self.log_err(f"Failed to kill process {lock.pid}: {e}")
+                    self.log_err(f"Failed to kill process {lock.pid} corresponding to lock {str(lock)}: {e}")
 
     def unlock_output_dir(self):
         """Unlock the output directory."""
@@ -187,9 +187,13 @@ class AFLFuzzer(AbstractFuzzer):
         for output_dir in output_dirs:
             try:
                 fd = os.open(output_dir, os.O_RDONLY)
+            except OSError as e:
+                self.log_err(f"Failed to open output directory {output_dir}: {e}")
+                continue
+            try:
                 fcntl.flock(fd, fcntl.LOCK_UN)
             except OSError as e:
-                self.log_err(f"Failed to unlock output directory: {e}")
+                self.log_err(f"Failed to unlock output directory {output_dir}: {e}")
             finally:
                 os.close(fd)
 
