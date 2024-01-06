@@ -159,7 +159,7 @@ class AFLFuzzer(AbstractFuzzer):
         self.command += COMMON_ARGS
         for dict in self.dicts:
             self.command += ['-x', dict]
-        self.command += ['-i', self.corpus_dir, '-o', self.output_dir, '--', self.target_binary] + self.args + [INT_MAX]
+        self.command += ['-i', self.corpus_dir, '-o', self.output_dir, '-M', self.name, '--', self.target_binary] + self.args + [INT_MAX]
 
     def output_dirs(self):
         """Get the output directories."""
@@ -297,9 +297,11 @@ class FoxFuzzer(AFLFuzzer):
         self.add_common_args()
 
 class EnsembleFuzzer:
+    output_dir: str
     fuzzer_queue: Deque[AFLFuzzer]
 
     def __init__(self, corpus_dir: str, output_dir: str, dicts: List[str], target_binary: str, cmplog_target_binary: str, fox_target_binary: str, args: List[str]):
+        self.output_dir = output_dir
         self.fuzzer_queue = deque([
             CmplogFuzzer(corpus_dir, output_dir, dicts, target_binary, cmplog_target_binary, args),
             FoxFuzzer(corpus_dir, output_dir, dicts, fox_target_binary, args)
@@ -307,6 +309,7 @@ class EnsembleFuzzer:
 
     def run(self):
         """Run the fuzzer ensemble. If a fuzzer fails, it is removed from the queue. If one fuzzer remains, it is run without a timeout."""
+        os.makedirs(self.output_dir, exist_ok=True)
         while len(self.fuzzer_queue):
             fuzzer = self.fuzzer_queue.popleft()
             fuzzer.timeout = len(self.fuzzer_queue) > 0
