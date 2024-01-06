@@ -98,13 +98,6 @@ def rmtree_if_exists(dir: str):
         shutil.rmtree(dir)
 
 
-def force_afl_autoresume():
-    """Force AFL_AUTORESUME to be set to 1."""
-    if "AFL_AUTORESUME" not in os.environ:
-        print("AFL_AUTORESUME needs to be set to 1, setting it now")
-        os.environ["AFL_AUTORESUME"] = "1"
-
-
 # Experimental
 def is_inline_table_wrong(target_binary: str, args: List[str]):
     """Check whether the inline table is wrong."""
@@ -314,13 +307,13 @@ class EnsembleFuzzer:
 
     def run(self):
         """Run the fuzzer ensemble. If a fuzzer fails, it is removed from the queue. If one fuzzer remains, it is run without a timeout."""
-        force_afl_autoresume()
         while len(self.fuzzer_queue):
             fuzzer = self.fuzzer_queue.popleft()
             fuzzer.timeout = len(self.fuzzer_queue) > 0
             fuzzer.run()
             if fuzzer.run_err is None:
                 self.fuzzer_queue.append(fuzzer)
+            os.environ["AFL_AUTORESUME"] = "1"
         raise RuntimeError("No fuzzer left in the queue, this should not happen")
 
 
