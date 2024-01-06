@@ -174,12 +174,12 @@ class AFLFuzzer(AbstractFuzzer):
         output_dirs = [self.output_dir, os.path.join(self.output_dir, "default")]
         for lock in get_locks():
             for output_dir in output_dirs:
-                if os.path.samefile(lock.path, output_dir) and lock.pid not in killed_processes:
-                    try:
+                try:
+                    if os.path.samefile(lock.path, output_dir) and lock.pid not in killed_processes:
                         os.kill(lock.pid, signal.SIGKILL)
                         killed_processes.add(lock.pid)
-                    except OSError as e:
-                        self.log_err(f"Failed to kill process {lock.pid}: {e}")
+                except OSError as e:
+                    self.log_err(f"Failed to kill process {lock.pid}: {e}")
 
     def unlock_output_dir(self):
         """Unlock the output directory."""
