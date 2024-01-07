@@ -1379,7 +1379,7 @@ int main(int argc, char **argv_orig, char **envp) {
   }
 
   if (afl->is_main_node == 1 && afl->schedule != FAST &&
-      afl->schedule != EXPLORE) {
+      afl->schedule != EXPLORE && afl->schedule != WD_SCHEDULER) {
 
     FATAL("-M is compatible only with fast and explore -p power schedules");
 
