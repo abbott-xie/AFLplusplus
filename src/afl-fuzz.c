@@ -2811,58 +2811,58 @@ int main(int argc, char **argv_orig, char **envp) {
 
     do {
 
-      if (likely(!afl->old_seed_selection)) {
-        if (likely(afl->schedule == WD_SCHEDULER)) {
-          create_alias_table_wd_scheduler(afl);
-          afl->current_entry = select_next_queue_entry_wd_scheduler(afl);
-          afl->queue_cur = afl->queue_buf[afl->current_entry];
-        } else {
-          if (likely(afl->pending_favored && afl->smallest_favored >= 0)) {
+      if (likely(afl->schedule == WD_SCHEDULER)) {
+        create_alias_table_wd_scheduler(afl);
+        afl->current_entry = select_next_queue_entry_wd_scheduler(afl);
+        afl->queue_cur = afl->queue_buf[afl->current_entry];
+      }
 
-            afl->current_entry = afl->smallest_favored;
+      if (unlikely(afl->schedule != WD_SCHEDULER) && likely(!afl->old_seed_selection)) {
+        if (likely(afl->pending_favored && afl->smallest_favored >= 0)) {
 
-            /*
+          afl->current_entry = afl->smallest_favored;
 
-                      } else {
+          /*
 
-                        for (s32 iter = afl->queued_items - 1; iter >= 0; --iter)
-              {
+                    } else {
 
-                          if (unlikely(afl->queue_buf[iter]->favored &&
-                                      !afl->queue_buf[iter]->was_fuzzed)) {
+                      for (s32 iter = afl->queued_items - 1; iter >= 0; --iter)
+            {
 
-                            afl->current_entry = iter;
-                            break;
+                        if (unlikely(afl->queue_buf[iter]->favored &&
+                                    !afl->queue_buf[iter]->was_fuzzed)) {
 
-                          }
+                          afl->current_entry = iter;
+                          break;
 
                         }
 
-            */
+                      }
 
-            afl->queue_cur = afl->queue_buf[afl->current_entry];
+          */
 
-          } else {
+          afl->queue_cur = afl->queue_buf[afl->current_entry];
 
-            if (unlikely(prev_queued_items < afl->queued_items ||
-                        afl->reinit_table)) {
+        } else {
 
-              // we have new queue entries since the last run, recreate alias
-              // table
-              prev_queued_items = afl->queued_items;
-              create_alias_table(afl);
+          if (unlikely(prev_queued_items < afl->queued_items ||
+                      afl->reinit_table)) {
 
-            }
-
-            do {
-
-              afl->current_entry = select_next_queue_entry(afl);
-
-            } while (unlikely(afl->current_entry >= afl->queued_items));
-
-            afl->queue_cur = afl->queue_buf[afl->current_entry];
+            // we have new queue entries since the last run, recreate alias
+            // table
+            prev_queued_items = afl->queued_items;
+            create_alias_table(afl);
 
           }
+
+          do {
+
+            afl->current_entry = select_next_queue_entry(afl);
+
+          } while (unlikely(afl->current_entry >= afl->queued_items));
+
+          afl->queue_cur = afl->queue_buf[afl->current_entry];
+
         }
       }
 
