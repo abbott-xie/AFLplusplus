@@ -36,6 +36,7 @@ import argparse
 import fcntl
 import glob
 import json
+import logging
 import os
 import shutil
 import signal
@@ -61,15 +62,57 @@ TMOUT_STRAT_GEOM_MULT = 2 # double after each run
 TMOUT_STRAT_CONST = 60 * 60 # 1 hour
 TMOUT_STRAT = "geom"
 
+
 Lock = namedtuple('Lock', ['command', 'pid', 'type', 'size', 'mode', 'm', 'start', 'end', 'path'])
+
 
 def get_locks():
     """Get the current locks."""
     try:
         ret = subprocess.run(['lslocks', '-J'], capture_output=True, text=True, check=True).stdout
-    except (subprocess.CalledProcessError, FileNotFoundError):
+    except subprocess.CalledProcessError as e:
+        logging.warning("lslocks failed: {e}")
+        return []
+    except FileNotFoundError as e:
+        logging.warning(f"lslocks not found: {e}")
         return []
     return [Lock(**lock) for lock in json.loads(ret)['locks']] if len(ret) > 0 else []
+
+
+def kill_locking_processes(path: str):
+    """Kill any locking processes."""
+    killed_processes = set()
+    for lock in get_locks():
+        try:
+            if lock.path and os.path.samefile(lock.path, path) and lock.pid and lock.pid not in killed_processes:
+                os.kill(lock.pid, signal.SIGKILL)
+                killed_processes.add(lock.pid)
+        except OSError as e:
+            logging.warning(f"Failed to kill process {lock.pid} corresponding to lock {str(lock)}: {e}")
+
+
+def unlock_dir(path: str):
+    """Unlock the output directory."""
+    try:
+        fd = os.open(path, os.O_RDONLY)
+    except OSError as e:
+        logging.warning(f"Failed to open directory {path}: {e}")
+        return
+    try:
+        fcntl.flock(fd, fcntl.LOCK_UN)
+    except OSError as e:
+        logging.warning(f"Failed to unlock directory {path}: {e}")
+    os.close(fd)
+
+
+def replace_dir(path: str):
+    """Replace the directory with a new one."""
+    new_output_dir = path + "_new"
+    try:
+        shutil.move(path, new_output_dir)
+        shutil.move(new_output_dir, path)
+    except OSError as e:
+        logging.warning(f"Failed to replace output directory: {e}")
 
 
 def kill_dangling_processes(target_binary: str):
@@ -118,7 +161,6 @@ class AbstractFuzzer:
     dicts: List[str]
     target_binary: str
     args: List[str]
-    run_log_path: str
 
     def run(self):
         raise NotImplementedError()
@@ -127,9 +169,6 @@ class AbstractFuzzer:
         raise NotImplementedError()
 
     def get_timeout(self):
-        raise NotImplementedError()
-
-    def log_run(self):
         raise NotImplementedError()
 
 
@@ -146,8 +185,6 @@ class AFLFuzzer(AbstractFuzzer):
         self.dicts = dicts
         self.target_binary = target_binary
         self.args = args
-        self.run_log_path = os.path.join(self.output_dir, "run_log");
-        self.err_log_path = os.path.join(self.output_dir, "err_log");
         self.timeout = False
         self.command = None
         self.run_err = None
@@ -161,72 +198,37 @@ class AFLFuzzer(AbstractFuzzer):
             self.command += ['-x', dict]
         self.command += ['-i', self.corpus_dir, '-o', self.output_dir, '-M', self.name, '--', self.target_binary] + self.args + [INT_MAX]
 
-    def kill_locking_processes(self):
-        """Kill any locking processes."""
-        killed_processes = set()
-        for lock in get_locks():
-            try:
-                if os.path.samefile(lock.path, self.output_dir) and lock.pid not in killed_processes:
-                    os.kill(lock.pid, signal.SIGKILL)
-                    killed_processes.add(lock.pid)
-            except OSError as e:
-                self.log_err(f"Failed to kill process {lock.pid} corresponding to lock {str(lock)}: {e}")
-
-    def unlock_output_dir(self):
-        """Unlock the output directory."""
-        try:
-            fd = os.open(self.output_dir, os.O_RDONLY)
-        except OSError as e:
-            self.log_err(f"Failed to open output directory {self.output_dir}: {e}")
-            return
-        try:
-            fcntl.flock(fd, fcntl.LOCK_UN)
-        except OSError as e:
-            self.log_err(f"Failed to unlock output directory {self.output_dir}: {e}")
-        finally:
-            os.close(fd)
-
-    def replace_output_dir(self):
-        """Replace the output directory with a new one."""
-        new_output_dir = self.output_dir + "_new"
-        try:
-            shutil.move(self.output_dir, new_output_dir)
-            shutil.move(new_output_dir, self.output_dir)
-        except OSError as e:
-            self.log_err(f"Failed to replace output directory: {e}")
-
     def do_run(self):
         """Run the fuzzer. If it fails with a CalledProcessError, try to recover. If it fails again, give up."""
         try:
             return run_command(self.command)
         except subprocess.CalledProcessError as e:
-            self.log_err(f"Run failed with error {e}, attempting to recover by killing locking processes")
-            self.kill_locking_processes()
+            logging.warning(f"Run failed with error {e}, attempting to recover by killing locking processes")
+            kill_locking_processes(self.output_dir)
         try:
             return run_command(self.command)
         except subprocess.CalledProcessError as e:
-            self.log_err(f"Run failed with error {e}, attempting to recover by unlocking the output directory")
-            self.unlock_output_dir()
+            logging.warning(f"Run failed with error {e}, attempting to recover by unlocking the output directory")
+            unlock_dir(self.output_dir)
         try:
             return run_command(self.command)
         except subprocess.CalledProcessError as e:
-            self.log_err(f"Run failed with error {e}, attempting to recover by replacing the output directory")
-            self.replace_output_dir()
+            logging.warning(f"Run failed with error {e}, attempting to recover by replacing the output directory")
+            replace_dir(self.output_dir)
         try:
             return run_command(self.command)
         except subprocess.CalledProcessError as e:
-            self.log_err(f"Run failed with error {e}, unable to recover")
-            raise e
+            logging.error(f"Run failed with error {e}, unable to recover")
+            self.run_err = e
 
     def do_run_timed(self):
         """Run the fuzzer, time it, and save the error if it fails."""
         self.time_start = get_cur_time_s()
         try:
             self.do_run()
-        except subprocess.CalledProcessError as e:
-            self.run_err = e
         except Exception as e:
-            self.log_err(f"Unexpected error while running the fuzzer: {e}")
+            logging.error(f"Unexpected error while running the fuzzer")
+            logging.exception(e)
             self.run_err = e
         self.time_end = get_cur_time_s()
 
@@ -237,27 +239,21 @@ class AFLFuzzer(AbstractFuzzer):
         """Run the fuzzer and log the result."""
         self.build_command()
         self.do_run_timed()
-        self.log_run()
+        logging.info(self.get_run_info())
         # if FUZZBENCH_RUN:
             # self.kill_dangling_processes()
         self.run_cnt += 1
 
-    def init_run_log(self):
-        """Initialize the log file."""
-        with open(self.run_log_path, "w") as f:
-            f.write("time_start, time_end, fuzzer, run_cnt, command, err\n")
-
-    def log_run(self):
-        """Log the result of a run."""
-        if not os.path.exists(self.run_log_path):
-            self.init_run_log()
-        with open(self.run_log_path, "a") as f:
-            f.write(f"{self.time_start}, {self.time_end}, {self.name}, {self.run_cnt}, {' '.join(self.command)}, {self.run_err}\n")
-
-    def log_err(self, msg: str):
-        """Log an error."""
-        with open(self.err_log_path, "a") as f:
-            f.write(f"{self.name}: {msg}\n")
+    def get_run_info(self):
+        """Get the run info as a JSON string."""
+        return json.dumps({
+            'name': self.name,
+            'run_cnt': self.run_cnt,
+            'time_start': self.time_start,
+            'time_end': self.time_end,
+            'command': self.command,
+            'run_err': str(self.run_err)
+        })
 
     def get_timeout(self):
         """Get the timeout for a run."""
@@ -325,8 +321,10 @@ def parse_args():
     parser.add_argument("--cmplog_target_binary", type=str, default=None, help="Path to the cmplog-instrumented target binary, if not provided, will be set to [target_binary]_cmplog")
     # Experimental
     parser.add_argument("--strat", type=str, default="const-start", choices=["geom-cov", "const-start"], help="Timeout strategy, can be one of: geom-cov, const-start")
-    args = parser.parse_args()
+    return parser.parse_args()
 
+
+def main(args):
     if args.cmplog_target_binary is None:
         args.cmplog_target_binary = f"{args.target_binary}_cmplog"
     if args.fox_target_binary is None:
@@ -343,10 +341,9 @@ def parse_args():
         CMPLOG_FUZZ_BIN_NAME = f"{CMPLOG_FUZZ_BIN_NAME}_start"
         FOX_FUZZ_BIN_NAME = f"{FOX_FUZZ_BIN_NAME}_start"
 
-    return args
+    os.makedirs(args.output_dir, exist_ok=True)
+    logging.basicConfig(filename=os.path.join(args.output_dir, "ensemble_runner.log"), level=logging.DEBUG)
 
-
-def main(args):
     fuzzer = EnsembleFuzzer(args.corpus_dir, args.output_dir, args.dicts, args.target_binary, args.cmplog_target_binary, args.fox_target_binary, args.args)
     try:
         fuzzer.run()
