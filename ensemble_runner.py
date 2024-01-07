@@ -161,36 +161,30 @@ class AFLFuzzer(AbstractFuzzer):
             self.command += ['-x', dict]
         self.command += ['-i', self.corpus_dir, '-o', self.output_dir, '-M', self.name, '--', self.target_binary] + self.args + [INT_MAX]
 
-    def output_dirs(self):
-        """Get the output directories."""
-        return self.output_dir, os.path.join(self.output_dir, "default")
-
     def kill_locking_processes(self):
         """Kill any locking processes."""
         killed_processes = set()
         for lock in get_locks():
-            for output_dir in self.output_dirs():
-                try:
-                    if os.path.samefile(lock.path, output_dir) and lock.pid not in killed_processes:
-                        os.kill(lock.pid, signal.SIGKILL)
-                        killed_processes.add(lock.pid)
-                except OSError as e:
-                    self.log_err(f"Failed to kill process {lock.pid} corresponding to lock {str(lock)}: {e}")
+            try:
+                if os.path.samefile(lock.path, self.output_dir) and lock.pid not in killed_processes:
+                    os.kill(lock.pid, signal.SIGKILL)
+                    killed_processes.add(lock.pid)
+            except OSError as e:
+                self.log_err(f"Failed to kill process {lock.pid} corresponding to lock {str(lock)}: {e}")
 
     def unlock_output_dir(self):
         """Unlock the output directory."""
-        for output_dir in self.output_dirs():
-            try:
-                fd = os.open(output_dir, os.O_RDONLY)
-            except OSError as e:
-                self.log_err(f"Failed to open output directory {output_dir}: {e}")
-                continue
-            try:
-                fcntl.flock(fd, fcntl.LOCK_UN)
-            except OSError as e:
-                self.log_err(f"Failed to unlock output directory {output_dir}: {e}")
-            finally:
-                os.close(fd)
+        try:
+            fd = os.open(self.output_dir, os.O_RDONLY)
+        except OSError as e:
+            self.log_err(f"Failed to open output directory {self.output_dir}: {e}")
+            return
+        try:
+            fcntl.flock(fd, fcntl.LOCK_UN)
+        except OSError as e:
+            self.log_err(f"Failed to unlock output directory {self.output_dir}: {e}")
+        finally:
+            os.close(fd)
 
     def replace_output_dir(self):
         """Replace the output directory with a new one."""
