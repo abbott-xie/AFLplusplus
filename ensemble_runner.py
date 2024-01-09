@@ -182,6 +182,7 @@ class AFLFuzzer(AbstractFuzzer):
         self.run_cnt = 0
         self.corpus_dir = corpus_dir
         self.output_dir = output_dir
+        self.sync_output_dir = os.path.join(self.output_dir, self.name)
         self.dicts = dicts
         self.target_binary = target_binary
         self.args = args
@@ -204,17 +205,17 @@ class AFLFuzzer(AbstractFuzzer):
             return run_command(self.command)
         except subprocess.CalledProcessError as e:
             logging.warning(f"Run failed with error {e}, attempting to recover by killing locking processes")
-            kill_locking_processes(self.output_dir)
+            kill_locking_processes(self.sync_output_dir)
         try:
             return run_command(self.command)
         except subprocess.CalledProcessError as e:
             logging.warning(f"Run failed with error {e}, attempting to recover by unlocking the output directory")
-            unlock_dir(self.output_dir)
+            unlock_dir(self.sync_output_dir)
         try:
             return run_command(self.command)
         except subprocess.CalledProcessError as e:
             logging.warning(f"Run failed with error {e}, attempting to recover by replacing the output directory")
-            replace_dir(self.output_dir)
+            replace_dir(self.sync_output_dir)
         try:
             return run_command(self.command)
         except subprocess.CalledProcessError as e:
