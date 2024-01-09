@@ -1961,18 +1961,7 @@ static void handle_existing_out_dir(afl_state_t *afl) {
 
 #ifndef __sun
 
-  if (flock(afl->fsrv.out_dir_fd, LOCK_EX | LOCK_NB) && errno == EWOULDBLOCK) {
-
-    SAYF("\n" cLRD "[-] " cRST
-         "Looks like the job output directory is being actively used by "
-         "another\n"
-         "    instance of afl-fuzz. You will need to choose a different %s\n"
-         "    or stop the other process first.\n",
-         afl->sync_id ? "fuzzer ID" : "output location");
-
-    FATAL("Directory '%s' is in use", afl->out_dir);
-
-  }
+  flock(afl->fsrv.out_dir_fd, LOCK_EX | LOCK_NB);
 
 #endif                                                            /* !__sun */
 
