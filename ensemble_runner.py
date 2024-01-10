@@ -155,8 +155,8 @@ class EnsembleFuzzer:
     def __init__(self, corpus_dir: str, output_dir: str, dicts: List[str], target_binary: str, cmplog_target_binary: str, fox_target_binary: str, args: List[str]):
         self.output_dir = os.path.join(output_dir, "ensemble_fuzzer")
         self.fuzzer_queue = deque([
-            CmplogFuzzer(corpus_dir, output_dir, dicts, target_binary, cmplog_target_binary, args),
-            FoxFuzzer(corpus_dir, output_dir, dicts, fox_target_binary, args)
+            CmplogFuzzer(corpus_dir, self.output_dir, dicts, target_binary, cmplog_target_binary, args),
+            FoxFuzzer(corpus_dir, self.output_dir, dicts, fox_target_binary, args)
         ])
 
     def run(self):
