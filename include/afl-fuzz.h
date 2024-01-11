@@ -637,7 +637,8 @@ typedef struct afl_state {
   u64 line_search_count,
       wd_scheduler_total_cal_us,
       wd_scheduler_total_cal_cycles,
-      wd_scheduler_avg_us;
+      wd_scheduler_avg_us,
+      last_cov_time;
   s64 diff_l1_norm;
   line_search_stats_t line_stats;
   handler_stats_t     handler_stats;
@@ -1316,6 +1317,8 @@ void   check_cpu_governor(afl_state_t *);
 void   get_core_count(afl_state_t *);
 void   fix_up_sync(afl_state_t *);
 void   load_fox_metadata(afl_state_t *);
+void   save_fox_metadata(afl_state_t *);
+void   save_top_rated_seed_ids(afl_state_t *);
 void   check_asan_opts(afl_state_t *);
 void   check_binary(afl_state_t *, u8 *);
 void   check_if_tty(afl_state_t *);

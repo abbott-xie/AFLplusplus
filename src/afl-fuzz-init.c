@@ -940,6 +940,146 @@ void load_fox_metadata(afl_state_t *afl) {
   }
   free(line);
   fclose(fp);
+
+  if (!afl->in_place_resume)
+    return;
+
+  u8 *fox_metadata_dir = alloc_printf("%s/fox_metadata", afl->out_dir);
+  DIR *d = opendir(fox_metadata_dir);
+  if (!d) {
+    WARNF("Unable to open directory '%s', cannot resume from FOX metadata", fox_metadata_dir);
+    ck_free(fox_metadata_dir);
+    return;
+  }
+  closedir(d);
+
+  u8 *tmp = alloc_printf("%s/spent_time_us", fox_metadata_dir);
+  if ((fp = fopen(tmp, "rb"))) {
+    fread(afl->fsrv.spent_time_us, sizeof(u64), afl->fox_map_size, fp);
+    fclose(fp);
+  } else {
+    WARNF("spent_time_us open failed");
+  }
+  ck_free(tmp);
+
+  tmp = alloc_printf("%s/productive_time_us", fox_metadata_dir);
+  if ((fp = fopen(tmp, "rb"))) {
+    fread(afl->fsrv.productive_time_us, sizeof(u64), afl->fox_map_size, fp);
+    fclose(fp);
+  } else {
+    WARNF("productive_time_us open failed");
+  }
+  ck_free(tmp);
+
+  tmp = alloc_printf("%s/added_seeds", fox_metadata_dir);
+  if ((fp = fopen(tmp, "rb"))) {
+    fread(afl->fsrv.added_seeds, sizeof(u32), afl->fox_map_size, fp);
+    fclose(fp);
+  } else {
+    WARNF("added_seeds open failed");
+  }
+  ck_free(tmp);
+
+  tmp = alloc_printf("%s/br_cov", fox_metadata_dir);
+  if ((fp = fopen(tmp, "rb"))) {
+    fread(afl->fsrv.br_cov, sizeof(u8), afl->fox_total_border_edge_cnt, fp);
+    fclose(fp);
+  } else {
+    WARNF("br_cov open failed");
+  }
+  ck_free(tmp);
+
+  tmp = alloc_printf("%s/size_gradient_checked", fox_metadata_dir);
+  if ((fp = fopen(tmp, "rb"))) {
+    fread(afl->fsrv.size_gradient_checked, sizeof(u8), afl->fox_total_border_edge_cnt, fp);
+    fclose(fp);
+  } else {
+    WARNF("size_gradient_checked open failed");
+  }
+  ck_free(tmp);
+
+  tmp = alloc_printf("%s/fallthrough_line_search", fox_metadata_dir);
+  if ((fp = fopen(tmp, "rb"))) {
+    fread(afl->fsrv.fallthrough_line_search, sizeof(u8), afl->fox_total_border_edge_cnt, fp);
+    fclose(fp);
+  } else {
+    WARNF("fallthrough_line_search open failed");
+  }
+  ck_free(tmp);
+
+  ck_free(fox_metadata_dir);
+}
+
+
+void save_fox_metadata(afl_state_t *afl) {
+  int fd;
+  u8 *tmp;
+  FILE *f;
+
+  u8 *fox_metadata_dir = alloc_printf("%s/fox_metadata", afl->out_dir);
+  if (mkdir(fox_metadata_dir, 0700) && errno != EEXIST) { PFATAL("Unable to create '%s'", fox_metadata_dir); }
+
+  tmp = alloc_printf("%s/spent_time_us", fox_metadata_dir);
+  fd = open(tmp, O_WRONLY | O_CREAT | O_TRUNC, 0600);
+  if (fd < 0) { PFATAL("Unable to create '%s'", tmp); }
+  ck_free(tmp);
+  f = fdopen(fd, "wb");
+  if (!f) { PFATAL("fdopen() failed"); }
+
+  fwrite(afl->fsrv.spent_time_us, sizeof(u64), afl->fox_map_size, f);
+  fclose(f);
+
+  tmp = alloc_printf("%s/productive_time_us", fox_metadata_dir);
+  fd = open(tmp, O_WRONLY | O_CREAT | O_TRUNC, 0600);
+  if (fd < 0) { PFATAL("Unable to create '%s'", tmp); }
+  ck_free(tmp);
+  f = fdopen(fd, "wb");
+  if (!f) { PFATAL("fdopen() failed"); }
+
+  fwrite(afl->fsrv.productive_time_us, sizeof(u64), afl->fox_map_size, f);
+  fclose(f);
+
+  tmp = alloc_printf("%s/added_seeds", fox_metadata_dir);
+  fd = open(tmp, O_WRONLY | O_CREAT | O_TRUNC, 0600);
+  if (fd < 0) { PFATAL("Unable to create '%s'", tmp); }
+  ck_free(tmp);
+  f = fdopen(fd, "wb");
+  if (!f) { PFATAL("fdopen() failed"); }
+
+  fwrite(afl->fsrv.added_seeds, sizeof(u32), afl->fox_map_size, f);
+  fclose(f);
+
+  tmp = alloc_printf("%s/br_cov", fox_metadata_dir);
+  fd = open(tmp, O_WRONLY | O_CREAT | O_TRUNC, 0600);
+  if (fd < 0) { PFATAL("Unable to create '%s'", tmp); }
+  ck_free(tmp);
+  f = fdopen(fd, "wb");
+  if (!f) { PFATAL("fdopen() failed"); }
+
+  fwrite(afl->fsrv.br_cov, sizeof(u8), afl->fox_total_border_edge_cnt, f);
+  fclose(f);
+
+  tmp = alloc_printf("%s/size_gradient_checked", fox_metadata_dir);
+  fd = open(tmp, O_WRONLY | O_CREAT | O_TRUNC, 0600);
+  if (fd < 0) { PFATAL("Unable to create '%s'", tmp); }
+  ck_free(tmp);
+  f = fdopen(fd, "wb");
+  if (!f) { PFATAL("fdopen() failed"); }
+
+  fwrite(afl->fsrv.size_gradient_checked, sizeof(u8), afl->fox_total_border_edge_cnt, f);
+  fclose(f);
+
+  tmp = alloc_printf("%s/fallthrough_line_search", fox_metadata_dir);
+  fd = open(tmp, O_WRONLY | O_CREAT | O_TRUNC, 0600);
+  if (fd < 0) { PFATAL("Unable to create '%s'", tmp); }
+  ck_free(tmp);
+  f = fdopen(fd, "wb");
+  if (!f) { PFATAL("fdopen() failed"); }
+
+  fwrite(afl->fsrv.fallthrough_line_search, sizeof(u8), afl->fox_total_border_edge_cnt, f);
+  fclose(f);
+
+  ck_free(fox_metadata_dir);
 }
 
 
@@ -1827,18 +1967,7 @@ static void handle_existing_out_dir(afl_state_t *afl) {
 
 #ifndef __sun
 
-  if (flock(afl->fsrv.out_dir_fd, LOCK_EX | LOCK_NB) && errno == EWOULDBLOCK) {
-
-    SAYF("\n" cLRD "[-] " cRST
-         "Looks like the job output directory is being actively used by "
-         "another\n"
-         "    instance of afl-fuzz. You will need to choose a different %s\n"
-         "    or stop the other process first.\n",
-         afl->sync_id ? "fuzzer ID" : "output location");
-
-    FATAL("Directory '%s' is in use", afl->out_dir);
-
-  }
+  flock(afl->fsrv.out_dir_fd, LOCK_EX | LOCK_NB);
 
 #endif                                                            /* !__sun */
 
@@ -2328,7 +2457,7 @@ void setup_dirs_fds(afl_state_t *afl) {
 
   int fd;
   tmp = alloc_printf("%s/wd_scheduler_log", afl->out_dir);
-  fd = open(tmp, O_WRONLY | O_CREAT | O_EXCL, 0600);
+  fd = open(tmp, O_WRONLY | O_CREAT, DEFAULT_PERMISSION);
   if (fd < 0) PFATAL("Unable to create '%s'", tmp);
   ck_free(tmp);
 
@@ -2337,7 +2466,7 @@ void setup_dirs_fds(afl_state_t *afl) {
 
 #ifdef FOX_INTROSPECTION
   tmp = alloc_printf("%s/fox_debug_log_file", afl->out_dir);
-  fd = open(tmp, O_WRONLY | O_CREAT | O_EXCL, 0600);
+  fd = open(tmp, O_WRONLY | O_CREAT, DEFAULT_PERMISSION);
   if (fd < 0) PFATAL("Unable to create '%s'", tmp);
   ck_free(tmp);
 
