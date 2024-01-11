@@ -553,13 +553,8 @@ void show_stats_normal(afl_state_t *afl) {
 
   if (afl->most_time_key) {
 
-#define TIME_SINCE_START_STRAT
-
-#ifdef TIME_SINCE_START_STRAT
     if (afl->most_time * 1000 < cur_ms - afl->start_time) {
-#else
-    if (afl->most_time * 1000 < cur_ms - afl->last_cov_time) {
-#endif
+
       afl->most_time_key = 2;
       afl->stop_soon = 2;
 

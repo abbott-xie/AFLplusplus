@@ -638,7 +638,6 @@ typedef struct afl_state {
       wd_scheduler_total_cal_us,
       wd_scheduler_total_cal_cycles,
       wd_scheduler_avg_us,
-      last_cov_time;
   s64 diff_l1_norm;
   line_search_stats_t line_stats;
   handler_stats_t     handler_stats;
