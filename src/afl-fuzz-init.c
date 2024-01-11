@@ -954,52 +954,58 @@ void load_fox_metadata(afl_state_t *afl) {
   closedir(d);
 
   u8 *tmp = alloc_printf("%s/spent_time_us", fox_metadata_dir);
-  fp = fopen(tmp, "r");
-  if (!fp) { WARNF("spent_time_us open failed"); }
+  if ((fp = fopen(tmp, "rb"))) {
+    fread(afl->fsrv.spent_time_us, sizeof(u64), afl->fox_map_size, fp);
+    fclose(fp);
+  } else {
+    WARNF("spent_time_us open failed");
+  }
   ck_free(tmp);
-
-  fread(afl->fsrv.spent_time_us, sizeof(u64), afl->fox_map_size, fp);
-  fclose(fp);
 
   tmp = alloc_printf("%s/productive_time_us", fox_metadata_dir);
-  fp = fopen(tmp, "r");
-  if (!fp) { WARNF("productive_time_us open failed"); }
+  if ((fp = fopen(tmp, "rb"))) {
+    fread(afl->fsrv.productive_time_us, sizeof(u64), afl->fox_map_size, fp);
+    fclose(fp);
+  } else {
+    WARNF("productive_time_us open failed");
+  }
   ck_free(tmp);
-
-  fread(afl->fsrv.productive_time_us, sizeof(u64), afl->fox_map_size, fp);
-  fclose(fp);
 
   tmp = alloc_printf("%s/added_seeds", fox_metadata_dir);
-  fp = fopen(tmp, "r");
-  if (!fp) { WARNF("added_seeds open failed"); }
+  if ((fp = fopen(tmp, "rb"))) {
+    fread(afl->fsrv.added_seeds, sizeof(u32), afl->fox_map_size, fp);
+    fclose(fp);
+  } else {
+    WARNF("added_seeds open failed");
+  }
   ck_free(tmp);
-
-  fread(afl->fsrv.added_seeds, sizeof(u32), afl->fox_map_size, fp);
-  fclose(fp);
 
   tmp = alloc_printf("%s/br_cov", fox_metadata_dir);
-  fp = fopen(tmp, "r");
-  if (!fp) { WARNF("br_cov open failed"); }
+  if ((fp = fopen(tmp, "rb"))) {
+    fread(afl->fsrv.br_cov, sizeof(u8), afl->fox_total_border_edge_cnt, fp);
+    fclose(fp);
+  } else {
+    WARNF("br_cov open failed");
+  }
   ck_free(tmp);
-
-  fread(afl->fsrv.br_cov, sizeof(u8), afl->fox_total_border_edge_cnt, fp);
-  fclose(fp);
 
   tmp = alloc_printf("%s/size_gradient_checked", fox_metadata_dir);
-  fp = fopen(tmp, "r");
-  if (!fp) { WARNF("size_gradient_checked open failed"); }
+  if ((fp = fopen(tmp, "rb"))) {
+    fread(afl->fsrv.size_gradient_checked, sizeof(u8), afl->fox_total_border_edge_cnt, fp);
+    fclose(fp);
+  } else {
+    WARNF("size_gradient_checked open failed");
+  }
   ck_free(tmp);
-
-  fread(afl->fsrv.size_gradient_checked, sizeof(u8), afl->fox_total_border_edge_cnt, fp);
-  fclose(fp);
 
   tmp = alloc_printf("%s/fallthrough_line_search", fox_metadata_dir);
-  fp = fopen(tmp, "r");
-  if (!fp) { WARNF("fallthrough_line_search open failed"); }
+  if ((fp = fopen(tmp, "rb"))) {
+    fread(afl->fsrv.fallthrough_line_search, sizeof(u8), afl->fox_total_border_edge_cnt, fp);
+    fclose(fp);
+  } else {
+    WARNF("fallthrough_line_search open failed");
+  }
   ck_free(tmp);
-
-  fread(afl->fsrv.fallthrough_line_search, sizeof(u8), afl->fox_total_border_edge_cnt, fp);
-  fclose(fp);
 
   ck_free(fox_metadata_dir);
 }
@@ -1017,7 +1023,7 @@ void save_fox_metadata(afl_state_t *afl) {
   fd = open(tmp, O_WRONLY | O_CREAT | O_TRUNC, 0600);
   if (fd < 0) { PFATAL("Unable to create '%s'", tmp); }
   ck_free(tmp);
-  f = fdopen(fd, "w");
+  f = fdopen(fd, "wb");
   if (!f) { PFATAL("fdopen() failed"); }
 
   fwrite(afl->fsrv.spent_time_us, sizeof(u64), afl->fox_map_size, f);
@@ -1027,7 +1033,7 @@ void save_fox_metadata(afl_state_t *afl) {
   fd = open(tmp, O_WRONLY | O_CREAT | O_TRUNC, 0600);
   if (fd < 0) { PFATAL("Unable to create '%s'", tmp); }
   ck_free(tmp);
-  f = fdopen(fd, "w");
+  f = fdopen(fd, "wb");
   if (!f) { PFATAL("fdopen() failed"); }
 
   fwrite(afl->fsrv.productive_time_us, sizeof(u64), afl->fox_map_size, f);
@@ -1037,7 +1043,7 @@ void save_fox_metadata(afl_state_t *afl) {
   fd = open(tmp, O_WRONLY | O_CREAT | O_TRUNC, 0600);
   if (fd < 0) { PFATAL("Unable to create '%s'", tmp); }
   ck_free(tmp);
-  f = fdopen(fd, "w");
+  f = fdopen(fd, "wb");
   if (!f) { PFATAL("fdopen() failed"); }
 
   fwrite(afl->fsrv.added_seeds, sizeof(u32), afl->fox_map_size, f);
@@ -1047,7 +1053,7 @@ void save_fox_metadata(afl_state_t *afl) {
   fd = open(tmp, O_WRONLY | O_CREAT | O_TRUNC, 0600);
   if (fd < 0) { PFATAL("Unable to create '%s'", tmp); }
   ck_free(tmp);
-  f = fdopen(fd, "w");
+  f = fdopen(fd, "wb");
   if (!f) { PFATAL("fdopen() failed"); }
 
   fwrite(afl->fsrv.br_cov, sizeof(u8), afl->fox_total_border_edge_cnt, f);
@@ -1057,7 +1063,7 @@ void save_fox_metadata(afl_state_t *afl) {
   fd = open(tmp, O_WRONLY | O_CREAT | O_TRUNC, 0600);
   if (fd < 0) { PFATAL("Unable to create '%s'", tmp); }
   ck_free(tmp);
-  f = fdopen(fd, "w");
+  f = fdopen(fd, "wb");
   if (!f) { PFATAL("fdopen() failed"); }
 
   fwrite(afl->fsrv.size_gradient_checked, sizeof(u8), afl->fox_total_border_edge_cnt, f);
@@ -1067,7 +1073,7 @@ void save_fox_metadata(afl_state_t *afl) {
   fd = open(tmp, O_WRONLY | O_CREAT | O_TRUNC, 0600);
   if (fd < 0) { PFATAL("Unable to create '%s'", tmp); }
   ck_free(tmp);
-  f = fdopen(fd, "w");
+  f = fdopen(fd, "wb");
   if (!f) { PFATAL("fdopen() failed"); }
 
   fwrite(afl->fsrv.fallthrough_line_search, sizeof(u8), afl->fox_total_border_edge_cnt, f);
