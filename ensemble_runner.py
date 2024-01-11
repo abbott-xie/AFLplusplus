@@ -33,7 +33,8 @@ CMPLOG_FUZZ_BIN_NAME = "./cmplog_4.09c_hybrid_start"
 FOX_FUZZ_BIN_NAME = "./fox_4.09c_hybrid_start"
 
 # Timeout strategies
-TMOUT = 60 * 60 # 1 hour
+TMOUT_CMPLOG = 60 * 60 # 1 hour
+TMOUT_FOX = 2 * 60 * 60 # 2 hours
 
 
 def time_s():
@@ -80,14 +81,14 @@ class AFLFuzzer(AbstractFuzzer):
         self.target_binary = target_binary
         self.args = args
         self.run_cnt = 0
-        self.timeout = False
         self.command = None
+        self.timeout = False
         self.run_err = None
 
     def add_common_args(self):
         """Add the common arguments to the command."""
         if self.timeout:
-            self.command += ['-V', str(TMOUT)]
+            self.command += ['-V', self.get_timeout()]
         self.command += COMMON_ARGS
         for dict in self.dicts:
             self.command += ['-x', dict]
@@ -138,6 +139,9 @@ class CmplogFuzzer(AFLFuzzer):
         self.command = [CMPLOG_FUZZ_BIN_NAME, '-c', self.cmplog_target_binary]
         self.add_common_args()
 
+    def get_timeout(self):
+        return str(TMOUT_CMPLOG)
+
 
 class FoxFuzzer(AFLFuzzer):
 
@@ -148,6 +152,9 @@ class FoxFuzzer(AFLFuzzer):
         self.command = [FOX_FUZZ_BIN_NAME, '-k', '-p', 'wd_scheduler']
         self.add_common_args()
 
+    def get_timeout(self):
+        return str(TMOUT_FOX)
+
 class EnsembleFuzzer:
     output_dir: str
     fuzzer_queue: Deque[AFLFuzzer]
@@ -155,8 +162,8 @@ class EnsembleFuzzer:
     def __init__(self, corpus_dir: str, output_dir: str, dicts: List[str], target_binary: str, cmplog_target_binary: str, fox_target_binary: str, args: List[str]):
         self.output_dir = os.path.join(output_dir, "ensemble_fuzzer")
         self.fuzzer_queue = deque([
-            CmplogFuzzer(corpus_dir, self.output_dir, dicts, target_binary, cmplog_target_binary, args),
-            FoxFuzzer(corpus_dir, self.output_dir, dicts, fox_target_binary, args)
+            FoxFuzzer(corpus_dir, self.output_dir, dicts, fox_target_binary, args),
+            CmplogFuzzer(corpus_dir, self.output_dir, dicts, target_binary, cmplog_target_binary, args)
         ])
 
     def run(self):
