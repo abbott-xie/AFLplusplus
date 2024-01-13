@@ -33,8 +33,8 @@ CMPLOG_FUZZ_BIN_NAME = "./cmplog_4.09c_hybrid_start"
 FOX_FUZZ_BIN_NAME = "./fox_4.09c_hybrid_start"
 
 # Timeout strategies
-TMOUT_CMPLOG = 60 * 60 # 60 minutes
-TMOUT_FOX = 60 * 60 # 60 minutes
+TMOUT_CMPLOG = 90 * 60 # 90 minutes
+TMOUT_FOX = 120 * 60 # 120 minutes
 
 
 def time_s():
