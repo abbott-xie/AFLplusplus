@@ -90,7 +90,7 @@ def inline_counter_table_init(filename, bin_name, func_name_inline_offset = None
         sys.exit("ERR")
     return inline_table
 
-def build_sancov_set(ll_file, func_name_dict = None):
+def build_sancov_set(ll_file):
 
     global debug_tmp_cnt
     global debug_tmp_cnt2
@@ -107,17 +107,13 @@ def build_sancov_set(ll_file, func_name_dict = None):
             enter_func = 0
 
         if line.startswith('define '): # check if function declaration
+            enter_func = 1
             fun_name_strt = line.find('@')
             fun_name_end = line.find('(', fun_name_strt)
             fun_name = line[fun_name_strt+1 : fun_name_end]
             if fun_name not in internal_func_list:
                 i += 1
                 continue
-            if (func_name_dict != None):
-                if fun_name not in func_name_dict:
-                    i += 1
-                    continue
-            enter_func = 1
 
         if enter_func and line.find(' @__sancov_gen_') != -1:
             if "__sancov_gen_" in line:
@@ -175,14 +171,14 @@ def construct_graph_init(ll_file, inline_table):
             enter_func = 0
 
         if line.startswith('define '): # check if function declaration
+            enter_func = 1
+            sancov_found = 0
             fun_name_strt = line.find('@')
             fun_name_end = line.find('(', fun_name_strt)
             fun_name = line[fun_name_strt+1 : fun_name_end]
             if fun_name not in internal_func_list:
                 i += 1
                 continue
-            enter_func = 1
-            sancov_found = 0
 
         node_name_end = ll_file_r[i].find(':')
         if enter_func and node_name_end != -1:
