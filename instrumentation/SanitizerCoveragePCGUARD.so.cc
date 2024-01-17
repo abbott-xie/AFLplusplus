@@ -1225,6 +1225,9 @@ void ModuleSanitizerCoverageAFL::instrumentFunction(
           tmp_val_list.push_back(op2->getSExtValue());
         }
 	if (tmp_val_list.empty()) {
+            case_target_list.push_back(NULL);
+            int_val_list.push_back(0);
+            case_val_list.push_back(NULL);
             continue;
         }
         int max_int = *max_element(tmp_val_list.begin(), tmp_val_list.end());
@@ -1839,10 +1842,6 @@ void ModuleSanitizerCoverageAFL::OptfuzzInjectTraceForSwitch(Function &F, ArrayR
       // handle default case: choose a target value for defacut case
       
       caseCnt+=1;
-      if (case_val_list.size() == caseCnt) {
-           errs()<< "\n[LOG] skip to instrument an empty switch.\n";
-           continue;
-       }
       Value* op2 = case_val_list[caseCnt]; // default case value   
       
       if (!op2){
