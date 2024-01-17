@@ -346,7 +346,7 @@ void create_alias_table_wd_scheduler(afl_state_t *afl) {
   afl->wd_scheduler_stats.frontier_discovery_time_min = total_frontier_discovery_time_us / 60000000;
 
   // update wd scheduler log
-  fprintf(afl->fsrv.wd_scheduler_log_file, "%llu %u %u %f %f %u %f %u %f %u %u %u %u %llu\n",
+  fprintf(afl->fsrv.wd_scheduler_log_file, "%llu %u %u %f %f %u %f %u %f %u %u %u %u %llu %u\n",
       ((afl->prev_run_time + get_cur_time() - afl->start_time) / 1000),
       afl->wd_scheduler_selected_border_edge_idx,
       wd_scheduler_top_rated[afl->wd_scheduler_selected_border_edge_idx]->id,
@@ -360,7 +360,8 @@ void create_alias_table_wd_scheduler(afl_state_t *afl) {
       handler_edge_cnt,
       skipped_edge_cnt,
       shared_mode,
-      total_frontier_discovery_time_us);
+      total_frontier_discovery_time_us,
+      afl->queued_items);
   fflush(afl->fsrv.wd_scheduler_log_file);
 
   save_fox_metadata(afl);
