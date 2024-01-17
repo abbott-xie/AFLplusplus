@@ -377,7 +377,16 @@ bool ModuleSanitizerCoverageAFL::instrumentModule(
     Module &M, DomTreeCallback DTCallback, PostDomTreeCallback PDTCallback) {
   
   int InstrumentCnt = 0;
-  FILE* file_lock = fopen("/dev/shm/mylock", "w");
+  // get the log path from the environment variable
+  char *log_path = getenv("AFL_LLVM_LOG_PATH");
+  // if not set,then the path is /dev/shm
+  if (log_path == NULL)
+    log_path = (char *)"/dev/shm/";
+  // the lock file path is the path+mylock
+  char *lock_file_path = (char *)malloc(strlen(log_path) + 7);
+  strcpy(lock_file_path, log_path);
+  strcat(lock_file_path, "mylock");
+  FILE* file_lock = fopen(lock_file_path, "w");
   if (file_lock == NULL)
       perror("open lock file failed");
 
@@ -388,7 +397,11 @@ bool ModuleSanitizerCoverageAFL::instrumentModule(
   if (flock(lock_fd, LOCK_EX) == -1)
       perror("Failed to acquire the lock");
  
-  ifstream ifile("/dev/shm/instrument_cnt"); 
+  // the instument_cnt file path is also the path+instrument_cnt
+  char *instrument_cnt_file_path = (char *)malloc(strlen(log_path) + 16);
+  strcpy(instrument_cnt_file_path, log_path);
+  strcat(instrument_cnt_file_path, "instrument_cnt");
+  ifstream ifile(instrument_cnt_file_path); 
   if(ifile.fail()) 
     InstrumentCnt = 0;  
   else{ 
@@ -400,7 +413,11 @@ bool ModuleSanitizerCoverageAFL::instrumentModule(
   
   
   // gllvm would instrument a unit for multiple time, we maintain a instrument_site=>instrument_id hash map to elimaite the duplicated cases. 
-  ifstream hashFile("/dev/shm/instrument_history");
+  // the instrument_history file is the path+instrument_history
+  char *instrument_history_file_path = (char *)malloc(strlen(log_path) + 21);
+  strcpy(instrument_history_file_path, log_path);
+  strcat(instrument_history_file_path, "instrument_history");
+  ifstream hashFile(instrument_history_file_path);
   if (!hashFile.fail()) {
     string line, key;
     int id, line_cnt = 0;
@@ -415,11 +432,19 @@ bool ModuleSanitizerCoverageAFL::instrumentModule(
     }
     hashFile.close();
   }
+  // the strcmp_err_log file is the path+strcmp_err_log
+  char *strcmp_err_log_file_path = (char *)malloc(strlen(log_path) + 21);
+  strcpy(strcmp_err_log_file_path, log_path);
+  strcat(strcmp_err_log_file_path, "strcmp_err_log");
   ofstream errlog;
-  errlog.open("/dev/shm/strcmp_err_log", ios::app);
+  errlog.open(strcmp_err_log_file_path, ios::app);
   
+  // the instrument_meta_data file is the path+instrument_meta_data
+  char *instrument_meta_data_file_path = (char *)malloc(strlen(log_path) + 25);
+  strcpy(instrument_meta_data_file_path, log_path);
+  strcat(instrument_meta_data_file_path, "instrument_meta_data");
   ofstream datalog;
-  datalog.open("/dev/shm/instrument_meta_data", ios::app);
+  datalog.open(instrument_meta_data_file_path, ios::app);
 
   setvbuf(stdout, NULL, _IONBF, 0);
 
@@ -613,6 +638,11 @@ bool ModuleSanitizerCoverageAFL::instrumentModule(
                  "' should not be declared by the user");
     flock(lock_fd, LOCK_UN);
     fclose(file_lock);
+    free(lock_file_path);
+    free(instrument_cnt_file_path);
+    free(instrument_history_file_path);
+    free(strcmp_err_log_file_path);
+    free(instrument_meta_data_file_path);
     return true;
 
   }
@@ -672,7 +702,7 @@ bool ModuleSanitizerCoverageAFL::instrumentModule(
   datalog.flush(); 
   datalog.close();
 
-  ofstream ofile("/dev/shm/instrument_cnt");
+  ofstream ofile(instrument_cnt_file_path);
   if (ofile.is_open())
   {
     ofile << InstrumentCnt << "\n";
@@ -680,7 +710,7 @@ bool ModuleSanitizerCoverageAFL::instrumentModule(
     ofile.close();
   }
 
-  ofstream ohashFile("/dev/shm/instrument_history");
+  ofstream ohashFile(instrument_history_file_path);
   if (ohashFile.is_open()) {
     for (auto & tup : id_assigned) {
       ohashFile << tup.first << "\n";
@@ -691,7 +721,11 @@ bool ModuleSanitizerCoverageAFL::instrumentModule(
   }
   flock(lock_fd, LOCK_UN);
   fclose(file_lock);
-
+  free(lock_file_path);
+  free(instrument_cnt_file_path);
+  free(instrument_history_file_path);
+  free(strcmp_err_log_file_path);
+  free(instrument_meta_data_file_path);
   return true;
 
 }
@@ -1814,26 +1848,6 @@ void ModuleSanitizerCoverageAFL::OptfuzzInjectTraceForSwitch(Function &F, ArrayR
           else
             *InstrumentCntPtr = instrument_id + 1;
         }
-        
-        std::string mapping;
-        mapping = to_string(instrument_id);
-        mapping += " ";
-        mapping += CurModule->getSourceFileName();
-        mapping += " ";
-        mapping += F.getName();
-        mapping += " ";
-        if (I->getDebugLoc()) {
-          mapping += to_string(I->getDebugLoc().getLine());
-          mapping += " ";
-          mapping += to_string(I->getDebugLoc().getCol());
-        }
-
-        ofstream br_src_map("/dev/shm/br_src_map", ios::app);
-        if (br_src_map.is_open()) {
-          br_src_map << mapping << "\n";
-          br_src_map.flush();
-          br_src_map.close();
-        }
       }
     
       // handle default case: choose a target value for defacut case
@@ -1904,27 +1918,6 @@ void ModuleSanitizerCoverageAFL::OptfuzzInjectTraceForSwitch(Function &F, ArrayR
         else
           *InstrumentCntPtr = instrument_id + 1;
       }
-      
-      std::string mapping;
-      mapping = to_string(instrument_id);
-      mapping += " ";
-      mapping += CurModule->getSourceFileName();
-      mapping += " ";
-      mapping += F.getName();
-      mapping += " ";
-      if (I->getDebugLoc()) {
-        mapping += to_string(I->getDebugLoc().getLine());
-        mapping += " ";
-        mapping += to_string(I->getDebugLoc().getCol());
-      }
-
-      ofstream br_src_map("/dev/shm/br_src_map", ios::app);
-      if (br_src_map.is_open()) {
-        br_src_map << mapping << "\n";
-        br_src_map.flush();
-        br_src_map.close();
-      }
-
     }
   }
 }
@@ -2116,26 +2109,6 @@ void ModuleSanitizerCoverageAFL::OptfuzzInjectTraceForCmp(
         else
           *InstrumentCntPtr = instrument_id + 1;
       }
-
-      std::string mapping;
-      mapping = to_string(instrument_id);
-      mapping += " ";
-      mapping += CurModule->getSourceFileName();
-      mapping += " ";
-      mapping += F.getName();
-      mapping += " ";
-      if (I->getDebugLoc()) {
-        mapping += to_string(I->getDebugLoc().getLine());
-        mapping += " ";
-        mapping += to_string(I->getDebugLoc().getCol());
-      }
-
-      ofstream br_src_map("/dev/shm/br_src_map", ios::app);
-      if (br_src_map.is_open()) {
-        br_src_map << mapping << "\n";
-        br_src_map.flush();
-        br_src_map.close();
-      }
     }
   }
 }
@@ -2267,26 +2240,6 @@ void ModuleSanitizerCoverageAFL::OptfuzzInjectTraceForCmpNonTerminator(
           *InstrumentCntPtr = instrument_id + 2;
         else
           *InstrumentCntPtr = instrument_id + 1;
-      }
-
-      std::string mapping;
-      mapping = to_string(instrument_id);
-      mapping += " ";
-      mapping += CurModule->getSourceFileName();
-      mapping += " ";
-      mapping += F.getName();
-      mapping += " ";
-      if (SelectInstArray[selectCnt]->getDebugLoc()) {
-        mapping += to_string(SelectInstArray[selectCnt]->getDebugLoc().getLine());
-        mapping += " ";
-        mapping += to_string(SelectInstArray[selectCnt]->getDebugLoc().getCol());
-      }
-
-      ofstream br_src_map("/dev/shm/br_src_map", ios::app);
-      if (br_src_map.is_open()) {
-        br_src_map << mapping << "\n";
-        br_src_map.flush();
-        br_src_map.close();
       }
     }
   }
@@ -2453,26 +2406,6 @@ void ModuleSanitizerCoverageAFL::OptfuzzInjectTraceForStrcmp(
       if (!duplicated){
         id_assigned[key] = instrument_id;
         *InstrumentCntPtr = instrument_id + ((int)ceil(((float)(num_constant_byte+1))/4));
-      }
-
-      std::string mapping;
-      mapping = to_string(instrument_id);
-      mapping += " ";
-      mapping += CurModule->getSourceFileName();
-      mapping += " ";
-      mapping += F.getName();
-      mapping += " ";
-      if (I->getDebugLoc()) {
-        mapping += to_string(I->getDebugLoc().getLine());
-        mapping += " ";
-        mapping += to_string(I->getDebugLoc().getCol());
-      }
-
-      ofstream br_src_map("/dev/shm/br_src_map", ios::app);
-      if (br_src_map.is_open()) {
-        br_src_map << mapping << "\n";
-        br_src_map.flush();
-        br_src_map.close();
       }
     }
   }
