@@ -1259,6 +1259,9 @@ void ModuleSanitizerCoverageAFL::instrumentFunction(
           tmp_val_list.push_back(op2->getSExtValue());
         }
 	if (tmp_val_list.empty()) {
+          case_target_list.push_back(NULL);
+          int_val_list.push_back(0);
+          case_val_list.push_back(NULL);
             continue;
         }
         int max_int = *max_element(tmp_val_list.begin(), tmp_val_list.end());
