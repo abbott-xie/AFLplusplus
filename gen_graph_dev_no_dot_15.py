@@ -3,7 +3,7 @@ import sys
 import subprocess
 from collections import defaultdict
 import re
-
+import json
 dummy_id_2_local_table = {}
 orig_dummy_id_2_local_table = {}
 covered_node = []
@@ -63,7 +63,7 @@ for ele in nm_ret:
     internal_func_list.add(fun_name)
 
 # ir file + bin file
-def inline_counter_table_init(filename, bin_name):
+def inline_counter_table_init(filename, bin_name, func_name_inline_offset = None):
     output = subprocess.check_output('grep "section \\\"__sancov_guards\\\"" ' + filename, shell=True, encoding='utf-8')[:-1]
     lines = [line for line in output.split('\n')]
     ans = {}
@@ -74,19 +74,23 @@ def inline_counter_table_init(filename, bin_name):
             ordered_key.append(data.split()[0])
 
     tmp_sum = 0
-    for key in ordered_key:
+    if (func_name_inline_offset != None):
+      for key in ordered_key:
+        inline_table[key] = func_name_inline_offset[sancov_2_func[key]]
+        tmp_sum = func_name_inline_offset[sancov_2_func[key]] + ans[key]
+    else:
+      for key in ordered_key:
         inline_table[key] = tmp_sum
-#        print(sancov_2_func[key], tmp_sum)
         tmp_sum += ans[key]
+
 
     tokens = subprocess.check_output('llvm-nm ' + bin_name + ' |grep sancov_guards', shell=True, encoding='utf-8').split()
     if tmp_sum != ((int('0x'+ tokens[3], 0) - int('0x' + tokens[0], 0))/4):
         print("BUGG: inline table wrong, try to fix...")
         sys.exit("ERR")
-
     return inline_table
 
-def build_sancov_set(ll_file):
+def build_sancov_set(ll_file, func_name_dict = None):
 
     global debug_tmp_cnt
     global debug_tmp_cnt2
@@ -98,31 +102,35 @@ def build_sancov_set(ll_file):
     i = 0
     while i < len(ll_file_r):
         line = ll_file_r[i]
-        
+
         if line.startswith('}'):
             enter_func = 0
 
         if line.startswith('define '): # check if function declaration
-            enter_func = 1
-            sancov_found = 0
             fun_name_strt = line.find('@')
             fun_name_end = line.find('(', fun_name_strt)
             fun_name = line[fun_name_strt+1 : fun_name_end]
             if fun_name not in internal_func_list:
                 i += 1
                 continue
-        
+            if (func_name_dict != None):
+                if fun_name not in func_name_dict:
+                    i += 1
+                    continue
+            enter_func = 1
+
         if enter_func and line.find(' @__sancov_gen_') != -1:
             if "__sancov_gen_" in line:
                 for subinst in line.split():
                     if "__sancov_gen_" in subinst:
                         if "," not in subinst:
                             sancov_set.add(subinst)
+                            sancov_2_func[subinst] = fun_name
                         elif subinst.endswith(","):
                             sancov_set.add(subinst[:-1])
-        
+                            sancov_2_func[subinst[:-1]] = fun_name
         i += 1
-    
+
     return
 
 def construct_graph_init(ll_file, inline_table):
@@ -167,15 +175,15 @@ def construct_graph_init(ll_file, inline_table):
             enter_func = 0
 
         if line.startswith('define '): # check if function declaration
-            enter_func = 1
-            sancov_found = 0
             fun_name_strt = line.find('@')
             fun_name_end = line.find('(', fun_name_strt)
             fun_name = line[fun_name_strt+1 : fun_name_end]
             if fun_name not in internal_func_list:
                 i += 1
                 continue
-        
+            enter_func = 1
+            sancov_found = 0
+
         node_name_end = ll_file_r[i].find(':')
         if enter_func and node_name_end != -1:
             func_node_id = fun_name + "_%" + line[:node_name_end]
@@ -183,7 +191,7 @@ def construct_graph_init(ll_file, inline_table):
                 graph[func_node_id] = []
             if func_node_id not in reverse_graph:
                 reverse_graph[func_node_id] = []
-            
+
             src_node_loc = ll_file_r[i].find('; preds = ')
             if (src_node_loc != -1):
                 src_node_list = ll_file_r[i][src_node_loc + 10:].split(", ")
@@ -198,9 +206,9 @@ def construct_graph_init(ll_file, inline_table):
                     else:
                         if src_node not in reverse_graph[func_node_id]:
                             reverse_graph[func_node_id].append(src_node)
-                
+
             inst_strt = 1
-        
+
         inst_ind = i + 1
         while (enter_func and inst_strt):
             inst_entered = 1
@@ -237,7 +245,7 @@ def construct_graph_init(ll_file, inline_table):
             #         loc_end = inst.find(",", loc_strt)
             #         dst_node = fun_name + "_" + inst[loc_strt+6:loc_end]
             #         loc_strt = loc_end
-                
+
             #         if dst_node not in graph[src_node]:
             #             graph[src_node].append(dst_node)
             #         if dst_node not in reverse_graph:
@@ -267,7 +275,7 @@ def construct_graph_init(ll_file, inline_table):
             #             if src_node not in reverse_graph[dst_node]:
             #                 reverse_graph[dst_node].append(src_node)
             inst_ind += 1
-    
+
         if enter_func and inst_entered and sancov_found:
             # three cases for first/second node checking:
             # 1. bb with first_node
@@ -327,7 +335,7 @@ def construct_graph_init(ll_file, inline_table):
                     select_node_global_edge = int(int(select_node_local_edge)/4) + inline_table[local_table] # "global edge" is our custom edge id
                     local_select_node.append((last_global_edge, select_node_global_edge))
                     global_select_node[last_global_edge].append(select_node_global_edge)
-        
+
             found_select = 0
             found_the_first_node = 0
             found_the_second_node = 0
@@ -351,7 +359,7 @@ def construct_graph_init(ll_file, inline_table):
                             print("BUG: parse local table error!")
                         else:
                             dummy_id_2_local_table[dummy_id] = local_table
-        
+
         i += 1
         list_inst = []
         if line.startswith('}'):
@@ -438,7 +446,7 @@ def construct_graph_init(ll_file, inline_table):
             if total_node != len(new_graph):
                 missing_cnt[0] += 1
                 #print("!!!BUG", my_func_name, total_node, len(new_graph), missing_cnt[0])
-    
+
             graph, reverse_graph = {}, {}
             non_sancov_nodes = []
             sw_caseval_2_dummy_id = {}
@@ -492,12 +500,20 @@ def recognize_strcmp_subtype(instruction):
 
 
 if __name__ == '__main__':
-    build_sancov_set(sys.argv[1])
-    # check if there is discrepency between llvm IR symbol table and binary's symbol table
-    inline_table = inline_counter_table_init(sys.argv[1], sys.argv[2])
-    
+    if (len(sys.argv) > 4):
+        func_name_dict = None
+        with open(sys.argv[4], 'r') as file:
+            func_name_dict = json.load(file)
+        build_sancov_set(sys.argv[1], func_name_dict)
+        inline_table = inline_counter_table_init(sys.argv[1], sys.argv[2], func_name_dict)
+    else:
+        build_sancov_set(sys.argv[1])
+
+        # check if there is discrepency between llvm IR symbol table and binary's symbol table
+        inline_table = inline_counter_table_init(sys.argv[1], sys.argv[2])
+
     construct_graph_init(sys.argv[1], inline_table)
-    
+
     border_edges = []
     select_border_edges = []
     # 0x00 build a map from br_dist_edge_id to local_edge_table(base number)
