@@ -321,6 +321,40 @@ static void locate_diffs(u8 *ptr1, u8 *ptr2, u32 len, s32 *first, s32 *last) {
 
 #endif                                                     /* !IGNORE_FINDS */
 
+#ifdef FOX_INTROSPECTION
+
+enum {
+  /* 00 */ MIDPOINT_NONCONVEX,
+  /* 01 */ MIDPOINT_CONVEX,
+
+  MIDPOINT_CONVEXITY_CHECK_FAILED
+};
+
+u8 midpoint_convexity_check(afl_state_t *afl, u8 *out_buf, u32 len, u8 *x1,
+    u8 *x2, s64 y1, s64 y2, u32 *diff_idx, u32 num_diff, u32 br_dist_edge_id) {
+
+  // replace diff bytes with their midpoint: (x1 + x2) / 2
+  u8 *orig_val = ck_alloc(sizeof(u8) * num_diff);
+  if (!orig_val) { PFATAL("alloc"); }
+  for (u32 i = 0; i < num_diff; i++) {
+    u32 loc = diff_idx[i];
+    orig_val[i] = out_buf[loc];
+    out_buf[loc] = (x1[loc] + x2[loc]) / 2;
+  }
+
+  if (common_fuzz_stuff(afl, out_buf, len)) { return MIDPOINT_CONVEXITY_CHECK_FAILED; }
+
+  // restore original values
+  for (u32 i = 0; i < num_diff; i++)
+    out_buf[diff_idx[i]] = orig_val[i];
+  ck_free(orig_val);
+
+  // check if midpoint is not in the convex set: f((x_1 + x_2) / 2) > (y1 + y2) / 2
+  s64 y_mid = afl->fsrv.br_bits[br_dist_edge_id];
+  return y_mid > (y1 + y2) / 2 ? MIDPOINT_CONVEX : MIDPOINT_NONCONVEX;
+}
+
+#endif
 
 static inline u8 s32_to_u8_checked(s32 v, bool *overflow) {
  if (v < 0 || v > 255) {
@@ -534,6 +568,13 @@ u8 fuzz_one_original(afl_state_t *afl) {
   u32 *border_edge_parent_first_id = afl->fsrv.border_edge_parent_first_id;
   u32 *border_edge_2_str_len = afl->fsrv.border_edge_2_str_len;
   u32 *num_of_children = afl->fsrv.num_of_children;
+
+#ifdef FOX_INTROSPECTION
+  u64 *reached_before_step = afl->fsrv.reached_before_step;
+  u64 *reached_after_step = afl->fsrv.reached_after_step;
+  u64 *midpoint_convex_before_step = afl->fsrv.midpoint_convex_before_step;
+  u64 *midpoint_convex_after_step = afl->fsrv.midpoint_convex_after_step;
+#endif
 
   out_buf = afl_realloc(AFL_BUF_PARAM(out), len);
   if (unlikely(!out_buf)) { PFATAL("alloc"); }
@@ -3900,6 +3941,13 @@ handler_fuzz_failure:
         out_buf = afl_realloc(AFL_BUF_PARAM(out), temp_len);
         memcpy(out_buf, start_x, temp_len);
 
+#ifdef FOX_INTROSPECTION
+        reached_before_step[parent]++;
+        u8 is_convex = midpoint_convexity_check(afl, out_buf, temp_len, x, x_prime, y, y_prime, diff_idx, num_diff, br_dist_edge_id);
+        if (is_convex == MIDPOINT_CONVEXITY_CHECK_FAILED) { goto abandon_entry; }
+        midpoint_convex_before_step[parent] += is_convex;
+#endif
+
         // AS: scale = ((y or y_prime) - flip_boundary) / (y_prime - y)
         double scale = (start_y - flip_boundary) / (double)diff;
 
@@ -3930,6 +3978,12 @@ handler_fuzz_failure:
 
         if (cur_mutant_reached(parent, trace_bits)) {
           afl->line_stats.reached++;
+#ifdef FOX_INTROSPECTION
+          reached_after_step[parent]++;
+          u8 is_convex = midpoint_convexity_check(afl, out_buf, temp_len, x, out_buf, y, base_y, diff_idx, num_diff, br_dist_edge_id);
+          if (is_convex == MIDPOINT_CONVEXITY_CHECK_FAILED) { goto abandon_entry; }
+          midpoint_convex_before_step[parent] += is_convex;
+#endif
           if (llabs(base_y) < llabs(start_y)) {
             afl->line_stats.progress++;
             if (llabs(base_y) < prev_global_br_dist_abs)
@@ -4059,6 +4113,13 @@ handler_fuzz_failure:
         out_buf = afl_realloc(AFL_BUF_PARAM(out), temp_len);
         memcpy(out_buf, start_x, temp_len);
 
+#ifdef FOX_INTROSPECTION
+        reached_before_step[parent]++;
+        u8 is_convex = midpoint_convexity_check(afl, out_buf, temp_len, x, x_prime, y, y_prime, diff_idx, num_diff, br_dist_edge_id);
+        if (is_convex == MIDPOINT_CONVEXITY_CHECK_FAILED) { goto abandon_entry; }
+        midpoint_convex_before_step[parent] += is_convex;
+#endif
+
         // scale = ((y or y_prime) - flip_boundary) / (y_prime - y)
         double scale = (start_y - flip_boundary) / (double)diff;
 
@@ -4085,6 +4146,12 @@ handler_fuzz_failure:
 
         if (cur_mutant_reached(parent, trace_bits)) {
           afl->line_stats.reached++;
+#ifdef FOX_INTROSPECTION
+          reached_after_step[parent]++;
+          u8 is_convex = midpoint_convexity_check(afl, out_buf, temp_len, x, out_buf, y, base_y, diff_idx, num_diff, br_dist_edge_id);
+          if (is_convex == MIDPOINT_CONVEXITY_CHECK_FAILED) { goto abandon_entry; }
+          midpoint_convex_after_step[parent] += is_convex;
+#endif
           if (llabs(base_y) < llabs(start_y)) {
             afl->line_stats.progress++;
             if (llabs(base_y) < prev_global_br_dist_abs)

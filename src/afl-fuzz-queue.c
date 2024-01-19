@@ -155,6 +155,75 @@ double calculate_score_wd_scheduler(afl_state_t *afl, struct queue_entry *q) {
 
 }
 
+#ifdef FOX_INTROSPECTION
+  void save_convexity_info(afl_state_t *afl) {
+    int fd;
+    u8 *tmp;
+    FILE *f;
+    u64 *reached_before_step = afl->fsrv.reached_before_step;
+    u64 *midpoint_convex_before_step = afl->fsrv.midpoint_convex_before_step;
+    u64 *reached_after_step = afl->fsrv.reached_after_step;
+    u64 *midpoint_convex_after_step = afl->fsrv.midpoint_convex_after_step;
+    u32 fox_map_size = afl->fox_map_size;
+
+    tmp = alloc_printf("%s/reached_before_step", afl->out_dir);
+    fd = open(tmp, O_WRONLY | O_CREAT | O_TRUNC, 0600);
+    if (fd < 0) { PFATAL("Unable to create '%s'", tmp); }
+    ck_free(tmp);
+
+    f = fdopen(fd, "w");
+    if (!f) { PFATAL("fdopen() failed"); }
+
+    for (u32 i = 0; i < fox_map_size; i++)
+      fprintf(f, "%llu\n", reached_before_step[i]);
+
+    fflush(f);
+    fclose(f);
+
+    tmp = alloc_printf("%s/midpoint_convex_before_step", afl->out_dir);
+    fd = open(tmp, O_WRONLY | O_CREAT | O_TRUNC, 0600);
+    if (fd < 0) { PFATAL("Unable to create '%s'", tmp); }
+    ck_free(tmp);
+
+    f = fdopen(fd, "w");
+    if (!f) { PFATAL("fdopen() failed"); }
+
+    for (u32 i = 0; i < fox_map_size; i++)
+      fprintf(f, "%llu\n", midpoint_convex_before_step[i]);
+
+    fflush(f);
+    fclose(f);
+
+    tmp = alloc_printf("%s/reached_after_step", afl->out_dir);
+    fd = open(tmp, O_WRONLY | O_CREAT | O_TRUNC, 0600);
+    if (fd < 0) { PFATAL("Unable to create '%s'", tmp); }
+    ck_free(tmp);
+
+    f = fdopen(fd, "w");
+    if (!f) { PFATAL("fdopen() failed"); }
+
+    for (u32 i = 0; i < fox_map_size; i++)
+      fprintf(f, "%llu\n", reached_after_step[i]);
+
+    fflush(f);
+    fclose(f);
+
+    tmp = alloc_printf("%s/midpoint_convex_after_step", afl->out_dir);
+    fd = open(tmp, O_WRONLY | O_CREAT | O_TRUNC, 0600);
+    if (fd < 0) { PFATAL("Unable to create '%s'", tmp); }
+    ck_free(tmp);
+
+    f = fdopen(fd, "w");
+    if (!f) { PFATAL("fdopen() failed"); }
+
+    for (u32 i = 0; i < fox_map_size; i++)
+      fprintf(f, "%llu\n", midpoint_convex_after_step[i]);
+
+    fflush(f);
+    fclose(f);
+  }
+#endif
+
 static inline struct queue_entry *get_least_scheduled_seed(struct queue_entry **seed_list, u32 len) {
   u64 min_exec_us = UINT64_MAX;
   struct queue_entry *min_seed = NULL;
@@ -365,6 +434,9 @@ void create_alias_table_wd_scheduler(afl_state_t *afl) {
   fflush(afl->fsrv.wd_scheduler_log_file);
 
   save_fox_metadata(afl);
+#ifdef FOX_INTROSPECTION
+  save_convexity_info(afl);
+#endif
 }
 
 static inline void add_capacity(struct queue_entry ***seed_list_p, u32 *capacity_p) {
