@@ -3555,7 +3555,7 @@ havoc_stage:
     // STRCMP handler
     // Assumptions:
     // x in out_buf
-    if (afl->fsrv.handler_candidate_cnt) {
+    if (likely(afl->line_search) && afl->fsrv.handler_candidate_cnt) {
       u32 cur_mutant_id = br_inc_winner[handler_candidate_dist_id[0]];
       u8 *mutant_x = mutant_buf[cur_mutant_id];
       u32 mutant_x_len = mutant_len[cur_mutant_id];
