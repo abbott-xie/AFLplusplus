@@ -1785,6 +1785,14 @@ void ModuleSanitizerCoverageAFL::OptfuzzInjectTraceForSwitch(Function &F, ArrayR
         target_str.erase(std::remove(target_str.begin(), target_str.end(), '\n'), target_str.cend());
         int instrument_id = *InstrumentCntPtr;
         int duplicated = 0;
+
+        key += "|";
+        key += ldInst_str;
+        key += "|";
+        key += cmp_str;
+        key += "|";
+        key += target_str;
+
         // Use old id if this is a duplicated case
         if (id_assigned.find(key) != id_assigned.end()){
           duplicated = 1;
@@ -1874,6 +1882,13 @@ void ModuleSanitizerCoverageAFL::OptfuzzInjectTraceForSwitch(Function &F, ArrayR
       int instrument_id = *InstrumentCntPtr;
       int duplicated = 0;
 
+      key += "|";
+      key += ldInst_str;
+      key += "|";
+      key += cmp_str;
+      key += "|";
+      key += target_str;
+      
       // Use old id if this is a duplicated case
       if (id_assigned.find(key) != id_assigned.end()){
         duplicated = 1;
@@ -2084,6 +2099,11 @@ void ModuleSanitizerCoverageAFL::OptfuzzInjectTraceForCmp(
       SancovForCmp[iter_cnt]->print(ldss);
       ldInst_str.erase(std::remove(ldInst_str.begin(), ldInst_str.end(), '\n'), ldInst_str.cend());
 
+      key += "|";
+      key += ldInst_str;
+      key += "|";
+      key += cmp_str;
+
       // Use old id if this is a duplicated case
       if (id_assigned.find(key) != id_assigned.end()){
         duplicated = 1;
@@ -2235,6 +2255,14 @@ void ModuleSanitizerCoverageAFL::OptfuzzInjectTraceForCmpNonTerminator(
       llvm::raw_string_ostream sltstr(select_str);
       SelectInstArray[selectCnt]->print(sltstr);
       select_str.erase(std::remove(select_str.begin(), select_str.end(), '\n'), select_str.cend());
+
+      key += "|";
+      key += ldInst_str;
+      key += "|";
+      key += cmp_str;
+      key += "|";
+      key += select_str;
+
       // Use old id if this is a duplicated case
       if (id_assigned.find(key) != id_assigned.end()){
         duplicated = 1;
@@ -2418,6 +2446,11 @@ void ModuleSanitizerCoverageAFL::OptfuzzInjectTraceForStrcmp(
       SancovForStrcmp[cmpCnt]->print(ldss);
       ldInst_str.erase(std::remove(ldInst_str.begin(), ldInst_str.end(), '\n'), ldInst_str.cend());
       
+      key += "|";
+      key += ldInst_str;
+      key += "|";
+      key += cmp_str;
+
       // Use old id if this is a duplicated case
       if (id_assigned.find(key) != id_assigned.end()){
         duplicated = 1;
