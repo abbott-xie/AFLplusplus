@@ -157,6 +157,10 @@ typedef struct afl_forkserver {
   FILE *wd_scheduler_log_file;          /* WD scheduler log file            */
 #ifdef FOX_INTROSPECTION
   FILE *fox_debug_log_file;             /* FOX debug log file               */
+  u64 *reached_before_step;             /* Reached before Newton step       */
+  u64 *reached_after_step;              /* Reached after Newton step        */
+  u64 *midpoint_convex_before_step;     /* Midpoint convex before Newton step */
+  u64 *midpoint_convex_after_step;      /* Midpoint convex after Newton step */
 #endif
 
   s32 fsrv_pid,                         /* PID of the fork server           */

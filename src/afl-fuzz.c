@@ -2244,6 +2244,12 @@ int main(int argc, char **argv_orig, char **envp) {
     afl->fsrv.cmp_type = (u8 *) ck_alloc(sizeof(u8) * afl->fox_map_size);
     afl->fsrv.border_edge_parent_first_id = (u32 *) ck_alloc(sizeof(u32) * afl->fox_map_size);
     afl->fsrv.num_of_children = (u32 *) ck_alloc(sizeof(u32) * afl->fox_map_size);
+#ifdef FOX_INTROSPECTION
+    afl->fsrv.reached_before_step = (u64 *) ck_alloc(sizeof(u64) * afl->fox_map_size);
+    afl->fsrv.reached_after_step = (u64 *) ck_alloc(sizeof(u64) * afl->fox_map_size);
+    afl->fsrv.midpoint_convex_before_step = (u64 *) ck_alloc(sizeof(u64) * afl->fox_map_size);
+    afl->fsrv.midpoint_convex_after_step = (u64 *) ck_alloc(sizeof(u64) * afl->fox_map_size);
+#endif
 
     // index: br_dist_edge_id, max number <= border_edge_cnt
     afl->fsrv.global_br_bits = (s64 *) ck_alloc(sizeof(s64) * afl->fox_total_border_edge_cnt);
