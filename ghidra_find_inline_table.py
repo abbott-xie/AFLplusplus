@@ -22,7 +22,7 @@ else:
                 function = getFunctionContaining(ref.getFromAddress())
                 if function is not None:
                     try:
-                        signature = function.getPrototypeString(False, False)
+                        signature = function.getName()
                         if signature in inline_table:
                             continue
                         else:
