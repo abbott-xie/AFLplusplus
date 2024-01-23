@@ -255,6 +255,7 @@ static inline s64 icmp_single_br_dist_le(s16 *br_dist_buf, s16 sw_len, bool *has
   u8 handler_candidate_ok = cur_num_diff < MAX_HANDLER_NUM_DIFF;
   u8 handler_candidate_icmp_ok = queue_cur && shared_mode ? this_exec_us * cur_num_diff < MAX_HANDLER_EXEC_TIME_US : 1;
   u8 not_dry_run = !afl->wd_scheduler_dry_run;
+  u8 line_search = afl->line_search;
 
   // Flag to check if the existing mutant decrease the global branch
   // distance for at least one branch while staying with estimated size boudns
@@ -378,7 +379,7 @@ static inline s64 icmp_single_br_dist_le(s16 *br_dist_buf, s16 sw_len, bool *has
           }
 
           // AS: only compute when tracing local search mutations and when the mutant hits the same horizon branch as the seed and when the mutant differs from the seed
-          if (br_trace_setting != BR_TRACE_LOCAL_SEARCH || !local_bits[cur_border_edge_id] || !cur_num_diff || !handler_candidate_ok)
+          if (!(line_search && br_trace_setting == BR_TRACE_LOCAL_SEARCH && local_bits[cur_border_edge_id] && cur_num_diff && handler_candidate_ok))
             continue;
 
           s16 seed_var_len = has_var_len ? this_local_br_bits[const_len] : (s16) const_len;
@@ -488,7 +489,7 @@ static inline s64 icmp_single_br_dist_le(s16 *br_dist_buf, s16 sw_len, bool *has
         }
 
         // AS: only compute when tracing local search mutations and when the mutant hits the same horizon branch as the seed and when the mutant differs from the seed
-        if (br_trace_setting != BR_TRACE_LOCAL_SEARCH || !local_bits[cur_border_edge_id] || !cur_num_diff)
+        if (!(line_search && br_trace_setting == BR_TRACE_LOCAL_SEARCH && local_bits[cur_border_edge_id] && cur_num_diff))
           continue;
 
         if (unlikely(local_bits[cur_border_edge_id] == 2)) { // fallthrough need update local bits
