@@ -647,6 +647,12 @@ if __name__ == '__main__':
         for parent, child, dummy_id, str_len in border_edges:
             f.write(str(parent+6) + " " + str(child+6) + " " + str(dummy_id) + " " + str(str_len) + "\n")
 
+    with open("max_border_edge_id", "w") as f:
+        f.write(str(len(border_edges)))
+
+    with open("max_br_dist_edge_id", "w") as f:
+        f.write(str(max(dummy_id + str_len for _, _, dummy_id, str_len in border_edges if dummy_id != -1)))
+
     parent_node_id_map = defaultdict(list)
     for key, val in enumerate(border_edges):
         parent_node_id_map[val[0]].append(key)

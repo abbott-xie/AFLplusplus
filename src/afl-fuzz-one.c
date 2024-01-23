@@ -520,18 +520,19 @@ u8 fuzz_one_original(afl_state_t *afl) {
   u8 *br_cov = afl->fsrv.br_cov;
   u8 *fallthrough_line_search = afl->fsrv.fallthrough_line_search;
   u32 fox_total_border_edge_cnt = afl->fox_total_border_edge_cnt;
+  u32 fox_total_br_dist_edge_cnt = afl->fox_total_br_dist_edge_cnt;
   u32 fox_br_candidate_capacity = afl->fsrv.fox_br_candidate_capacity;
   u32 fox_mutant_buf_capacity = afl->fsrv.fox_mutant_buf_capacity;
   u8 shared_mode = afl->wd_scheduler_shared_mode;
 
   memset(afl->fsrv.local_br_bits, 0, sizeof(s64) * fox_total_border_edge_cnt);
   memset(afl->fsrv.local_bits, 0, sizeof(u8) * fox_total_border_edge_cnt);
-  memset(br_inc, 0, sizeof(s64) * fox_total_border_edge_cnt);
-  memset(br_dec, 0, sizeof(s64) * fox_total_border_edge_cnt);
+  memset(br_inc, 0, sizeof(s64) * fox_total_br_dist_edge_cnt);
+  memset(br_dec, 0, sizeof(s64) * fox_total_br_dist_edge_cnt);
+  memset(br_inc_winner, 0, sizeof(u32) * fox_total_br_dist_edge_cnt);
+  memset(br_dec_winner, 0, sizeof(u32) * fox_total_br_dist_edge_cnt);
   memset(subgrad_inc, 0, sizeof(float) * fox_total_border_edge_cnt);
   memset(subgrad_dec, 0, sizeof(float) * fox_total_border_edge_cnt);
-  memset(br_inc_winner, 0, sizeof(u32) * fox_total_border_edge_cnt);
-  memset(br_dec_winner, 0, sizeof(u32) * fox_total_border_edge_cnt);
   memset(handler_candidate_id, 0, sizeof(u32) * fox_br_candidate_capacity);
   memset(handler_candidate_dist_id, 0, sizeof(u32) * fox_br_candidate_capacity);
   memset(mutant_buf, 0, sizeof(u8 *) * fox_mutant_buf_capacity);
@@ -2239,12 +2240,12 @@ havoc_stage:
     if (likely(afl->schedule == WD_SCHEDULER)) {
       memset(local_br_bits, 0, sizeof(s64) * fox_total_border_edge_cnt);
       memset(local_bits, 0, sizeof(u8) * fox_total_border_edge_cnt);
-      memset(br_inc, 0, sizeof(s64) * fox_total_border_edge_cnt);
-      memset(br_dec, 0, sizeof(s64) * fox_total_border_edge_cnt);
+      memset(br_inc, 0, sizeof(s64) * fox_total_br_dist_edge_cnt);
+      memset(br_dec, 0, sizeof(s64) * fox_total_br_dist_edge_cnt);
+      memset(br_inc_winner, 0, sizeof(u32) * fox_total_br_dist_edge_cnt);
+      memset(br_dec_winner, 0, sizeof(u32) * fox_total_br_dist_edge_cnt);
       memset(subgrad_inc, 0, sizeof(float) * fox_total_border_edge_cnt);
       memset(subgrad_dec, 0, sizeof(float) * fox_total_border_edge_cnt);
-      memset(br_inc_winner, 0, sizeof(u32) * fox_total_border_edge_cnt);
-      memset(br_dec_winner, 0, sizeof(u32) * fox_total_border_edge_cnt);
       memset(br_inc_id, 0, sizeof(u32) * fox_br_candidate_capacity);
       memset(br_inc_dist_id, 0, sizeof(u32) * fox_br_candidate_capacity);
       memset(br_dec_id, 0, sizeof(u32) * fox_br_candidate_capacity);
@@ -4163,12 +4164,12 @@ handler_fuzz_failure:
         ck_free(diff_val);
         ck_free(orig_val);
       }
-      memset(br_inc, 0, sizeof(s64) * fox_total_border_edge_cnt);
-      memset(br_dec, 0, sizeof(s64) * fox_total_border_edge_cnt);
+      memset(br_inc, 0, sizeof(s64) * fox_total_br_dist_edge_cnt);
+      memset(br_dec, 0, sizeof(s64) * fox_total_br_dist_edge_cnt);
+      memset(br_inc_winner, 0, sizeof(u32) * fox_total_br_dist_edge_cnt);
+      memset(br_dec_winner, 0, sizeof(u32) * fox_total_br_dist_edge_cnt);
       memset(subgrad_inc, 0, sizeof(float)* fox_total_border_edge_cnt);
       memset(subgrad_dec, 0, sizeof(float)* fox_total_border_edge_cnt);
-      memset(br_inc_winner, 0, sizeof(u32) * fox_total_border_edge_cnt);
-      memset(br_dec_winner, 0, sizeof(u32) * fox_total_border_edge_cnt);
       memset(br_inc_id, 0, sizeof(u32) * fox_br_candidate_capacity);
       memset(br_inc_dist_id, 0, sizeof(u32) * fox_br_candidate_capacity);
       memset(br_dec_id, 0, sizeof(u32) * fox_br_candidate_capacity);
@@ -4181,12 +4182,12 @@ handler_fuzz_failure:
   }
 
   if (likely(afl->line_search && afl->schedule == WD_SCHEDULER) && shared_mode) {
-    memset(br_inc, 0, sizeof(s64) * fox_total_border_edge_cnt);
-    memset(br_dec, 0, sizeof(s64) * fox_total_border_edge_cnt);
+    memset(br_inc, 0, sizeof(s64) * fox_total_br_dist_edge_cnt);
+    memset(br_dec, 0, sizeof(s64) * fox_total_br_dist_edge_cnt);
+    memset(br_inc_winner, 0, sizeof(u32) * fox_total_br_dist_edge_cnt);
+    memset(br_dec_winner, 0, sizeof(u32) * fox_total_br_dist_edge_cnt);
     memset(subgrad_inc, 0, sizeof(float)* fox_total_border_edge_cnt);
     memset(subgrad_dec, 0, sizeof(float)* fox_total_border_edge_cnt);
-    memset(br_inc_winner, 0, sizeof(u32) * fox_total_border_edge_cnt);
-    memset(br_dec_winner, 0, sizeof(u32) * fox_total_border_edge_cnt);
     memset(br_inc_id, 0, sizeof(u32) * fox_br_candidate_capacity);
     memset(br_inc_dist_id, 0, sizeof(u32) * fox_br_candidate_capacity);
     memset(br_dec_id, 0, sizeof(u32) * fox_br_candidate_capacity);
