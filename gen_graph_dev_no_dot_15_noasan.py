@@ -626,7 +626,11 @@ if __name__ == '__main__':
             f.write(str(parent+6) + " " + str(id_list[0]) + " " + str(id_list[-1] - id_list[0] + 1) + "\n")
             if (id_list[-1] - id_list[0] + 1) <= 1:
                 print("BUG: bug in 'border_edges_cache'")
+    with open("max_border_edge_id", "w") as f:
+        f.write(str(len(border_edges)))
 
+    with open("max_br_dist_edge_id", "w") as f:
+        f.write(str(max(dummy_id + str_len for _, _, dummy_id, str_len in border_edges if dummy_id != -1)))
     # border_edge_parent, boder_edge_child, border_edge_br_dist_id(i.e., dummy id), str_len
     #
     with open("select_border_edges", "w") as f:
