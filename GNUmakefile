@@ -135,6 +135,10 @@ ifdef INTROSPECTION
   $(info Compiling with introspection documentation)
   override CFLAGS_OPT += -DINTROSPECTION=1
 endif
+ifdef FOX_INTROSPECTION
+  $(info Compiling with introspection documentation)
+  override CFLAGS_OPT += -DFOX_INTROSPECTION=1
+endif
 
 ifneq "$(ARCH)" "x86_64"
  ifneq "$(patsubst i%86,i386,$(ARCH))" "i386"
