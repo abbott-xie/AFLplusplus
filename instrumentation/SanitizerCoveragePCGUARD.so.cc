@@ -9,6 +9,8 @@
 // Coverage instrumentation done on LLVM IR level, works with Sanitizers.
 //
 //===----------------------------------------------------------------------===//
+#include <sstream>
+#include <stddef.h>
 #include <unordered_set>
 #include "llvm/Transforms/Instrumentation/SanitizerCoverage.h"
 #include "llvm/ADT/ArrayRef.h"
@@ -176,17 +178,17 @@ class ModuleSanitizerCoverageAFL
   void instrumentFunction(Function &F, DomTreeCallback DTCallback,
                           PostDomTreeCallback PDTCallback, int* InstrumentCntPtr, ofstream &,  ofstream &);
   void InjectTraceForCmp(Function &F, ArrayRef<Instruction *> CmpTraceTargets);
-    void OptfuzzInjectTraceForCmp(Function &F, ArrayRef<Instruction *> CmpTraceTargets, ArrayRef<Instruction *> SancovForCmp,  int * InstrumentCntPtr,  ofstream &);
+    void OptfuzzInjectTraceForCmp(Function &F, ArrayRef<Instruction *> CmpTraceTargets, ArrayRef<Instruction *> SancovForCmp,  int * InstrumentCntPtr,  ofstream &, DenseMap<Instruction *, size_t> &SancovMapIndex);
   void OptfuzzInjectTraceForCmpNonTerminator(Function &F, ArrayRef<Instruction *> CmpTraceTargetsNonTerminator, ArrayRef<Instruction *> SancovForCmpNonTerminator, ArrayRef<Instruction *> SelectInstArray, int * InstrumentCntPtr, ofstream &errlog);
 
-  void OptfuzzInjectTraceForStrcmp(Function &F, ArrayRef<Instruction *> StrcmpTraceTargets,ArrayRef<Instruction *> SancovForStrcmp, int * InstrumentCntPtr,  ofstream &, ofstream &);
+  void OptfuzzInjectTraceForStrcmp(Function &F, ArrayRef<Instruction *> StrcmpTraceTargets,ArrayRef<Instruction *> SancovForStrcmp, int * InstrumentCntPtr,  ofstream &, ofstream &, DenseMap<Instruction *, size_t> &SancovMapIndex);
   void OptfuzzInjectTraceForStrcmpNonTerminator(Function &F, ArrayRef<Instruction *> StrcmpTraceTargetsNonTerminator, int * InstrumentCntPtr);
   
-  void OptfuzzInjectTraceForSwitch(Function &F, ArrayRef<Instruction *> SwitchTraceTargets, ArrayRef<Instruction *> SancovForSwitch, ArrayRef<Instruction *> case_target_list, ArrayRef<ConstantInt *> case_val_list, std::vector<int> int_val_list, int * InstrumentCntPtr,  ofstream &errlog);
+  void OptfuzzInjectTraceForSwitch(Function &F, ArrayRef<Instruction *> SwitchTraceTargets, ArrayRef<Instruction *> SancovForSwitch, ArrayRef<Instruction *> case_target_list, ArrayRef<ConstantInt *> case_val_list, std::vector<int> int_val_list, int * InstrumentCntPtr,  ofstream &errlog, DenseMap<Instruction *, size_t> &SancovMapIndex);
 
   void InjectTraceForSwitch(Function               &F,
                             ArrayRef<Instruction *> SwitchTraceTargets);
-  bool InjectCoverage(Function &F, ArrayRef<BasicBlock *> AllBlocks,
+  bool InjectCoverage(Function &F, ArrayRef<BasicBlock *> AllBlocks, DenseMap<Instruction *, size_t> &SancovMapIndex, DenseMap<BasicBlock *, size_t> &BBMapIndex,
                       bool IsLeafFunc = true);
   GlobalVariable *CreateFunctionLocalArrayInSection(size_t    NumElements,
                                                     Function &F, Type *Ty,
@@ -194,7 +196,7 @@ class ModuleSanitizerCoverageAFL
   GlobalVariable *CreatePCArray(Function &F, ArrayRef<BasicBlock *> AllBlocks);
   void CreateFunctionLocalArrays(Function &F, ArrayRef<BasicBlock *> AllBlocks,
                                  uint32_t special);
-  void InjectCoverageAtBlock(Function &F, BasicBlock &BB, size_t Idx,
+  void InjectCoverageAtBlock(Function &F, BasicBlock &BB, size_t Idx, DenseMap<Instruction *, size_t> &SancovMapIndex,
                              bool IsLeafFunc = true);
   Function *CreateInitCallsForSections(Module &M, const char *CtorName,
                                        const char *InitFunctionName, Type *Ty,
@@ -244,7 +246,6 @@ class ModuleSanitizerCoverageAFL
   SanitizerCoverageOptions Options;
 
   uint32_t        instr = 0, selects = 0, unhandled = 0;
-  unordered_map<string, int> id_assigned;
   GlobalVariable *AFLMapPtr = NULL;
   GlobalVariable *BrCovMapPtr = NULL;
   ConstantInt    *One = NULL;
@@ -377,16 +378,7 @@ bool ModuleSanitizerCoverageAFL::instrumentModule(
     Module &M, DomTreeCallback DTCallback, PostDomTreeCallback PDTCallback) {
   
   int InstrumentCnt = 0;
-  // get the log path from the environment variable
-  char *log_path = getenv("AFL_LLVM_LOG_PATH");
-  // if not set,then the path is /dev/shm
-  if (log_path == NULL)
-    log_path = (char *)"/dev/shm/";
-  // the lock file path is the path+mylock
-  char *lock_file_path = (char *)malloc(strlen(log_path) + 7);
-  strcpy(lock_file_path, log_path);
-  strcat(lock_file_path, "mylock");
-  FILE* file_lock = fopen(lock_file_path, "w");
+  FILE* file_lock = fopen("/dev/shm/mylock", "w");
   if (file_lock == NULL)
       perror("open lock file failed");
 
@@ -397,11 +389,7 @@ bool ModuleSanitizerCoverageAFL::instrumentModule(
   if (flock(lock_fd, LOCK_EX) == -1)
       perror("Failed to acquire the lock");
  
-  // the instument_cnt file path is also the path+instrument_cnt
-  char *instrument_cnt_file_path = (char *)malloc(strlen(log_path) + 16);
-  strcpy(instrument_cnt_file_path, log_path);
-  strcat(instrument_cnt_file_path, "instrument_cnt");
-  ifstream ifile(instrument_cnt_file_path); 
+  ifstream ifile("/dev/shm/instrument_cnt"); 
   if(ifile.fail()) 
     InstrumentCnt = 0;  
   else{ 
@@ -411,40 +399,11 @@ bool ModuleSanitizerCoverageAFL::instrumentModule(
     ifile.close(); 
   }
   
-  
-  // gllvm would instrument a unit for multiple time, we maintain a instrument_site=>instrument_id hash map to elimaite the duplicated cases. 
-  // the instrument_history file is the path+instrument_history
-  char *instrument_history_file_path = (char *)malloc(strlen(log_path) + 21);
-  strcpy(instrument_history_file_path, log_path);
-  strcat(instrument_history_file_path, "instrument_history");
-  ifstream hashFile(instrument_history_file_path);
-  if (!hashFile.fail()) {
-    string line, key;
-    int id, line_cnt = 0;
-    while (getline(hashFile, line)) {
-      if (line_cnt % 2 == 0)
-        key = line;
-      else {
-        id = stoi(line);
-        id_assigned[key] = id;
-      }
-      line_cnt += 1;
-    }
-    hashFile.close();
-  }
-  // the strcmp_err_log file is the path+strcmp_err_log
-  char *strcmp_err_log_file_path = (char *)malloc(strlen(log_path) + 21);
-  strcpy(strcmp_err_log_file_path, log_path);
-  strcat(strcmp_err_log_file_path, "strcmp_err_log");
   ofstream errlog;
-  errlog.open(strcmp_err_log_file_path, ios::app);
+  errlog.open("/dev/shm/strcmp_err_log", ios::app);
   
-  // the instrument_meta_data file is the path+instrument_meta_data
-  char *instrument_meta_data_file_path = (char *)malloc(strlen(log_path) + 25);
-  strcpy(instrument_meta_data_file_path, log_path);
-  strcat(instrument_meta_data_file_path, "instrument_meta_data");
   ofstream datalog;
-  datalog.open(instrument_meta_data_file_path, ios::app);
+  datalog.open("/dev/shm/instrument_meta_data", ios::app);
 
   setvbuf(stdout, NULL, _IONBF, 0);
 
@@ -638,11 +597,6 @@ bool ModuleSanitizerCoverageAFL::instrumentModule(
                  "' should not be declared by the user");
     flock(lock_fd, LOCK_UN);
     fclose(file_lock);
-    free(lock_file_path);
-    free(instrument_cnt_file_path);
-    free(instrument_history_file_path);
-    free(strcmp_err_log_file_path);
-    free(instrument_meta_data_file_path);
     return true;
 
   }
@@ -702,30 +656,19 @@ bool ModuleSanitizerCoverageAFL::instrumentModule(
   datalog.flush(); 
   datalog.close();
 
-  ofstream ofile(instrument_cnt_file_path);
+  ofstream ofile("/dev/shm/instrument_cnt");
   if (ofile.is_open())
   {
     ofile << InstrumentCnt << "\n";
     ofile.flush();
     ofile.close();
-  }
-
-  ofstream ohashFile(instrument_history_file_path);
-  if (ohashFile.is_open()) {
-    for (auto & tup : id_assigned) {
-      ohashFile << tup.first << "\n";
-      ohashFile << tup.second << "\n";
-    }
-    ohashFile.flush();
-    ohashFile.close();
+  } else
+  {
+    perror("open file failed");
   }
   flock(lock_fd, LOCK_UN);
   fclose(file_lock);
-  free(lock_file_path);
-  free(instrument_cnt_file_path);
-  free(instrument_history_file_path);
-  free(strcmp_err_log_file_path);
-  free(instrument_meta_data_file_path);
+
   return true;
 
 }
@@ -911,6 +854,9 @@ void ModuleSanitizerCoverageAFL::instrumentFunction(
   SmallVector<Instruction*, 128>      case_target_list;  // target BB: load @sancov_gen
   std::vector<int>                    int_val_list;
 
+  DenseMap<Instruction *, size_t>     SancovMapIndex;
+  DenseMap<BasicBlock*, size_t> BBMapIndex;
+
   const DominatorTree     *DT = DTCallback(F);
   const PostDominatorTree *PDT = PDTCallback(F);
   bool                     IsLeafFunc = true;
@@ -946,7 +892,8 @@ void ModuleSanitizerCoverageAFL::instrumentFunction(
 
   }
 
-  InjectCoverage(F, BlocksToInstrument, IsLeafFunc);
+
+  InjectCoverage(F, BlocksToInstrument, SancovMapIndex, BBMapIndex, IsLeafFunc);
   // InjectTraceForCmp(F, CmpTraceTargets);
   // InjectTraceForSwitch(F, SwitchTraceTargets);
 
@@ -1337,12 +1284,12 @@ void ModuleSanitizerCoverageAFL::instrumentFunction(
   //OptfuzzInjectTraceForCmpNonTerminator(F, CmpTraceTargetsNonTerminator, SancovForCmpNonTerminator,  SelectInstArray,  InstrumentCntPtr, datalog);
 
   //cmp
-  OptfuzzInjectTraceForCmp(F, CmpTraceTargets, SancovForCmp, InstrumentCntPtr, datalog);
+  OptfuzzInjectTraceForCmp(F, CmpTraceTargets, SancovForCmp, InstrumentCntPtr, datalog, SancovMapIndex);
   //strcmp
-  OptfuzzInjectTraceForStrcmp(F, StrcmpTraceTargets, SancovForStrcmp, InstrumentCntPtr, errlog, datalog);
+  OptfuzzInjectTraceForStrcmp(F, StrcmpTraceTargets, SancovForStrcmp, InstrumentCntPtr, errlog, datalog, SancovMapIndex);
   
   //switch
-  OptfuzzInjectTraceForSwitch(F, SwitchTraceTargets, SancovForSwitch, case_target_list, case_val_list, int_val_list, InstrumentCntPtr, datalog);
+  OptfuzzInjectTraceForSwitch(F, SwitchTraceTargets, SancovForSwitch, case_target_list, case_val_list, int_val_list, InstrumentCntPtr, datalog, SancovMapIndex);
 
 }
 
@@ -1433,7 +1380,7 @@ void ModuleSanitizerCoverageAFL::CreateFunctionLocalArrays(
 }
 
 bool ModuleSanitizerCoverageAFL::InjectCoverage(
-    Function &F, ArrayRef<BasicBlock *> AllBlocks, bool IsLeafFunc) {
+    Function &F, ArrayRef<BasicBlock *> AllBlocks, DenseMap<Instruction *, size_t> &SancovMapIndex, DenseMap<BasicBlock*, size_t> &BBMapIndex, bool IsLeafFunc) {
 
   if (AllBlocks.empty()) return false;
 
@@ -1665,6 +1612,7 @@ bool ModuleSanitizerCoverageAFL::InjectCoverage(
 #endif
         {
 
+          // fprintf(stderr, "UNHANDLED: %u\n", t->getTypeID());
           unhandled++;
           continue;
 
@@ -1761,13 +1709,47 @@ bool ModuleSanitizerCoverageAFL::InjectCoverage(
 
   if (!AllBlocks.empty())
     for (size_t i = 0, N = AllBlocks.size(); i < N; i++)
-      InjectCoverageAtBlock(F, *AllBlocks[i], i, IsLeafFunc);
+    {
+      BBMapIndex[AllBlocks[i]] = i;
+      InjectCoverageAtBlock(F, *AllBlocks[i], i,SancovMapIndex, IsLeafFunc);
+    }
+      
+
+  if (!AllBlocks.empty())
+    for (size_t i = 0, N = AllBlocks.size(); i < N; i++){
+      // for all succs of BB, record the edge
+      BasicBlock *BB = AllBlocks[i];
+      size_t pred_index = i;
+      IRBuilder<> Builder(*C);
+      for (auto *Succ : successors(BB)){
+        // first check Succ is in AllBlocks
+        if (std::find(AllBlocks.begin(), AllBlocks.end(), Succ) != AllBlocks.end()){
+          size_t succ_index = BBMapIndex[Succ];
+          Type *PtrType = Int32Ty->getPointerTo();
+          StructType* MyStructType = StructType::get(*C, {PtrType, PtrType});
+          Constant *PredPtr = ConstantExpr::getGetElementPtr(FunctionGuardArray->getValueType(), FunctionGuardArray, ArrayRef<Constant*>({Builder.getInt32(0), Builder.getInt32(pred_index)}));
+          Constant *SuccPtr = ConstantExpr::getGetElementPtr(FunctionGuardArray->getValueType(), FunctionGuardArray, ArrayRef<Constant*>({Builder.getInt32(0), Builder.getInt32(succ_index)}));
+          Constant* StructInit = ConstantStruct::get(MyStructType, {PredPtr, SuccPtr});
+          GlobalVariable* MyStructGlobal = new GlobalVariable(*CurModule, MyStructType, true, GlobalValue::InternalLinkage, StructInit, "pred_succ_edge");
+          
+          MyStructGlobal->setSection(".cfg_log_section");
+          if (TargetTriple.supportsCOMDAT() && (TargetTriple.isOSBinFormatELF() || !F.isInterposable()))
+            if (auto Comdat = getOrCreateFunctionComdat(F, TargetTriple))
+                MyStructGlobal->setComdat(Comdat);
+          
+          if (MyStructGlobal->hasComdat())
+            GlobalsToAppendToCompilerUsed.push_back(MyStructGlobal);
+          else
+            GlobalsToAppendToUsed.push_back(MyStructGlobal);
+        }
+      }
+    }
 
   return true;
 
 }
 
-void ModuleSanitizerCoverageAFL::OptfuzzInjectTraceForSwitch(Function &F, ArrayRef<Instruction *> SwitchTraceTargets, ArrayRef<Instruction *> SancovForSwitch, ArrayRef<Instruction *> case_target_list, ArrayRef<ConstantInt *> case_val_list, std::vector<int> int_val_list, int * InstrumentCntPtr,  ofstream &datalog) {
+void ModuleSanitizerCoverageAFL::OptfuzzInjectTraceForSwitch(Function &F, ArrayRef<Instruction *> SwitchTraceTargets, ArrayRef<Instruction *> SancovForSwitch, ArrayRef<Instruction *> case_target_list, ArrayRef<ConstantInt *> case_val_list, std::vector<int> int_val_list, int * InstrumentCntPtr,  ofstream &datalog, DenseMap<Instruction *, size_t> &SancovMapIndex) {
   int iter_cnt = -1;
   int caseCnt = -1;
   for (auto I : SwitchTraceTargets) {
@@ -1800,16 +1782,6 @@ void ModuleSanitizerCoverageAFL::OptfuzzInjectTraceForSwitch(Function &F, ArrayR
         SI->print(ss);
         str.erase(std::remove(str.begin(), str.end(), '\n'), str.cend());
         cmp_str = str;
-        str += " ";
-        str += CurModule->getSourceFileName();
-        str += " ";
-        str += F.getName();
-        str += " ";
-        // leave 0 for default case
-        str += to_string(i+1);
-        str += "|";
-        str += to_string(11);
-        key = str;
         
         std::string target_str;
         llvm::raw_string_ostream lds(target_str);
@@ -1818,25 +1790,33 @@ void ModuleSanitizerCoverageAFL::OptfuzzInjectTraceForSwitch(Function &F, ArrayR
         loadInst->print(lds);
         target_str.erase(std::remove(target_str.begin(), target_str.end(), '\n'), target_str.cend());
         int instrument_id = *InstrumentCntPtr;
-        int duplicated = 0;
 
-        key += "|";
-        key += ldInst_str;
-        key += "|";
-        key += cmp_str;
-        key += "|";
-        key += target_str;
-
-        // Use old id if this is a duplicated case
-        if (id_assigned.find(key) != id_assigned.end()){
-          duplicated = 1;
-          instrument_id = id_assigned.at(key);
-        }
         // br_dist_edge_id|inst: sancov id |inst: cmp/strcmp/sw| inst: select| case_val; inst: sw target
-        else{
-          datalog << "3|" << instrument_id << "|" << ldInst_str << "|" << cmp_str << "| |"  << cur_case_val << ";" << target_str << "|" << TypeSize / 8 << "\n";
-        }
-        
+        // string concatination
+        std::ostringstream oss;
+        oss << "3|" << instrument_id << "|" << ldInst_str << "| | |"  << cur_case_val << ";" << target_str << "|" << TypeSize / 8 << "\n";
+        datalog << oss.str();
+
+      Instruction *SancovLoad = SancovForSwitch[iter_cnt];
+      size_t index = SancovMapIndex[SancovLoad];
+
+      // create one global variable for each switch case
+      Type *ElemPtrType = Int32Ty->getPointerTo();
+      IRBuilder<> Builder(*C);
+      Constant *ArrayElemPtr = ConstantExpr::getGetElementPtr(FunctionGuardArray->getValueType(), FunctionGuardArray, ArrayRef<Constant*>({Builder.getInt32(0), Builder.getInt32(index)}));
+      StructType* MyStructType = StructType::get(*C, {ElemPtrType, Int32Ty});
+      Constant* StructInit = ConstantStruct::get(MyStructType, {ArrayElemPtr, ConstantInt::get(Int32Ty, instrument_id)});
+      GlobalVariable* MyStructGlobal = new GlobalVariable(*CurModule, MyStructType, true, GlobalValue::InternalLinkage, StructInit, "san_cov_dummy_id");
+      if (TargetTriple.supportsCOMDAT() && (TargetTriple.isOSBinFormatELF() || !F.isInterposable()))
+        if (auto Comdat = getOrCreateFunctionComdat(F, TargetTriple))
+          MyStructGlobal->setComdat(Comdat);
+      
+      MyStructGlobal->setSection(".log_section");
+      if (MyStructGlobal->hasComdat())
+        GlobalsToAppendToCompilerUsed.push_back(MyStructGlobal);
+      else
+        GlobalsToAppendToUsed.push_back(MyStructGlobal);
+
         IRBuilder<> IRB(SI);
         Value* br_id =  ConstantInt::get(Int32Ty, instrument_id);
         auto *LoadBrCovMap = IRB.CreateLoad(PointerType::get(Int8Ty, 0), BrCovMapPtr);
@@ -1852,13 +1832,10 @@ void ModuleSanitizerCoverageAFL::OptfuzzInjectTraceForSwitch(Function &F, ArrayR
         IRBuilder<> ThenIRB(ThenTerm);
         ThenIRB.CreateCall(CallbackFunc, {br_id, op1, op2});
         // update global instrumentCnt if we instrument a new site, update hash map
-        if (!duplicated){
-          id_assigned[key] = instrument_id;
           if (TypeSize == 64)
             *InstrumentCntPtr = instrument_id + 2;
           else
             *InstrumentCntPtr = instrument_id + 1;
-        }
       }
     
       // handle default case: choose a target value for defacut case
@@ -1876,16 +1853,6 @@ void ModuleSanitizerCoverageAFL::OptfuzzInjectTraceForSwitch(Function &F, ArrayR
       SI->print(ss);
       str.erase(std::remove(str.begin(), str.end(), '\n'), str.cend());
       cmp_str = str;
-      str += " ";
-      str += CurModule->getSourceFileName();
-      str += " ";
-      str += F.getName();
-      str += " ";
-      // leave 0 for default case
-      str += to_string(0);
-      str += "|";
-      str += to_string(11);
-      key = str;
       
       std::string target_str;
       llvm::raw_string_ostream lds(target_str);
@@ -1894,23 +1861,29 @@ void ModuleSanitizerCoverageAFL::OptfuzzInjectTraceForSwitch(Function &F, ArrayR
       loadInst->print(lds);
       target_str.erase(std::remove(target_str.begin(), target_str.end(), '\n'), target_str.cend());
       int instrument_id = *InstrumentCntPtr;
-      int duplicated = 0;
-
-      key += "|";
-      key += ldInst_str;
-      key += "|";
-      key += cmp_str;
-      key += "|";
-      key += target_str;
       
-      // Use old id if this is a duplicated case
-      if (id_assigned.find(key) != id_assigned.end()){
-        duplicated = 1;
-        instrument_id = id_assigned.at(key);
-      }
-      else{
-        datalog << "3|" << instrument_id << "|" << ldInst_str << "|" << cmp_str << "| |"  << cur_case_val << ";" << target_str << "|" << TypeSize / 8 << "\n";
-      }
+      std::ostringstream oss;
+      oss << "3|" << instrument_id << "|" << ldInst_str << "| | |"  << cur_case_val << ";" << target_str << "|" << TypeSize / 8 << "\n";
+      datalog << oss.str();
+
+      Instruction *SancovLoad = SancovForSwitch[iter_cnt];
+      size_t index = SancovMapIndex[SancovLoad];
+      // create one global variable for each switch case
+      Type *ElemPtrType = Int32Ty->getPointerTo();
+      IRBuilder<> Builder(*C);
+      Constant *ArrayElemPtr = ConstantExpr::getGetElementPtr(FunctionGuardArray->getValueType(), FunctionGuardArray, ArrayRef<Constant*>({Builder.getInt32(0), Builder.getInt32(index)}));
+      StructType* MyStructType = StructType::get(*C, {ElemPtrType, Int32Ty});
+      Constant* StructInit = ConstantStruct::get(MyStructType, {ArrayElemPtr, ConstantInt::get(Int32Ty, instrument_id)});
+      GlobalVariable* MyStructGlobal = new GlobalVariable(*CurModule, MyStructType, true, GlobalValue::InternalLinkage, StructInit, "san_cov_dummy_id");
+      if (TargetTriple.supportsCOMDAT() && (TargetTriple.isOSBinFormatELF() || !F.isInterposable()))
+        if (auto Comdat = getOrCreateFunctionComdat(F, TargetTriple))
+          MyStructGlobal->setComdat(Comdat);
+      
+      MyStructGlobal->setSection(".log_section");
+      if (MyStructGlobal->hasComdat())
+        GlobalsToAppendToCompilerUsed.push_back(MyStructGlobal);
+      else
+        GlobalsToAppendToUsed.push_back(MyStructGlobal);
       
       IRBuilder<> IRB(SI);
       Value* br_id =  ConstantInt::get(Int32Ty, instrument_id);
@@ -1925,13 +1898,11 @@ void ModuleSanitizerCoverageAFL::OptfuzzInjectTraceForSwitch(Function &F, ArrayR
       auto ThenTerm =  SplitBlockAndInsertIfThen(IRB.CreateIsNull(Load), SI, false);
       IRBuilder<> ThenIRB(ThenTerm);
       ThenIRB.CreateCall(CallbackFunc, {br_id, op1, op2});
-      if (!duplicated){
-        id_assigned[key] = instrument_id;
+
         if (TypeSize == 64)
           *InstrumentCntPtr = instrument_id + 2;
         else
           *InstrumentCntPtr = instrument_id + 1;
-      }
     }
   }
 }
@@ -1993,7 +1964,7 @@ void ModuleSanitizerCoverageAFL::InjectTraceForSwitch(
 }
 
 void ModuleSanitizerCoverageAFL::OptfuzzInjectTraceForCmp(
-    Function &F, ArrayRef<Instruction *> CmpTraceTargets,  ArrayRef<Instruction *> SancovForCmp, int * InstrumentCntPtr , ofstream &datalog) {
+    Function &F, ArrayRef<Instruction *> CmpTraceTargets,  ArrayRef<Instruction *> SancovForCmp, int * InstrumentCntPtr , ofstream &datalog, DenseMap<Instruction *, size_t> &SancovMapIndex) {
 
   int iter_cnt = -1;
   for (auto I : CmpTraceTargets) {
@@ -2077,37 +2048,39 @@ void ModuleSanitizerCoverageAFL::OptfuzzInjectTraceForCmp(
       ICMP->print(ss);
       str.erase(std::remove(str.begin(), str.end(), '\n'), str.cend());
       cmp_str = str;
-      str += " ";
-      str += CurModule->getSourceFileName();
-      str += " ";
-      str += F.getName();
-      str += "|";
-      str += to_string(cmp_opcode);
-      key = str;
       
       int instrument_id = *InstrumentCntPtr;
-      int duplicated = 0;
       std::string ldInst_str;
       llvm::raw_string_ostream ldss(ldInst_str);
       SancovForCmp[iter_cnt]->print(ldss);
       ldInst_str.erase(std::remove(ldInst_str.begin(), ldInst_str.end(), '\n'), ldInst_str.cend());
 
-      key += "|";
-      key += ldInst_str;
-      key += "|";
-      key += cmp_str;
+      // type | br_dist_edge_id (dummy_id) | sancov ID (in raw load instruction)| cmp/strcmp/switch instruction | select(optional) | switch(optional) switch case value: target_bb_sancov ID (in raw load instruction) | strlen
+      // type: 1 (common binary cmp) (br_dist_edge_id <=> sancov); 2 (strcmp-like cmp) (br_dist_edge_id <=> sancov ); 3 (switch) (br_dist_dist_id <=>[sancov1, sancov2]); 4 (select) (br_dist_edge_id <=> [sancov1, sancov2]) 
+      std::ostringstream oss;
+      oss << "1|" << instrument_id << "| |" << cmp_str << "| | |" << TypeSize / 8 << "\n";
+      datalog << oss.str();
 
-      // Use old id if this is a duplicated case
-      if (id_assigned.find(key) != id_assigned.end()){
-        duplicated = 1;
-        instrument_id = id_assigned.at(key);
-      }
-      else {
-        // type | br_dist_edge_id (dummy_id) | sancov ID (in raw load instruction)| cmp/strcmp/switch instruction | select(optional) | switch(optional) switch case value: target_bb_sancov ID (in raw load instruction) | strlen
-        // type: 1 (common binary cmp) (br_dist_edge_id <=> sancov); 2 (strcmp-like cmp) (br_dist_edge_id <=> sancov ); 3 (switch) (br_dist_dist_id <=>[sancov1, sancov2]); 4 (select) (br_dist_edge_id <=> [sancov1, sancov2]) 
-        datalog << "1|" << instrument_id << "|" << ldInst_str << "|" << cmp_str << "| | |" << TypeSize / 8 << "\n";
-      } 
+      Instruction *SancovLoad = SancovForCmp[iter_cnt];
+      size_t index = SancovMapIndex[SancovLoad];
+      // create one global variable for each switch case
+      Type *ElemPtrType = Int32Ty->getPointerTo();
+      IRBuilder<> Builder(*C);
+      Constant *ArrayElemPtr = ConstantExpr::getGetElementPtr(FunctionGuardArray->getValueType(), FunctionGuardArray, ArrayRef<Constant*>({Builder.getInt32(0), Builder.getInt32(index)}));
+      StructType* MyStructType = StructType::get(*C, {ElemPtrType, Int32Ty});
+      Constant* StructInit = ConstantStruct::get(MyStructType, {ArrayElemPtr, ConstantInt::get(Int32Ty, instrument_id)});
+      GlobalVariable* MyStructGlobal = new GlobalVariable(*CurModule, MyStructType, true, GlobalValue::InternalLinkage, StructInit, "san_cov_dummy_id");
+      if (TargetTriple.supportsCOMDAT() && (TargetTriple.isOSBinFormatELF() || !F.isInterposable()))
+        if (auto Comdat = getOrCreateFunctionComdat(F, TargetTriple))
+          MyStructGlobal->setComdat(Comdat);
+      
+      MyStructGlobal->setSection(".log_section");
+      if (MyStructGlobal->hasComdat())
+        GlobalsToAppendToCompilerUsed.push_back(MyStructGlobal);
+      else
+        GlobalsToAppendToUsed.push_back(MyStructGlobal);
 
+      
       IRBuilder<> IRB(ICMP);
       Value* br_id =  ConstantInt::get(Int32Ty, instrument_id);
       auto *LoadBrCovMap = IRB.CreateLoad(PointerType::get(Int8Ty, 0), BrCovMapPtr);
@@ -2121,13 +2094,10 @@ void ModuleSanitizerCoverageAFL::OptfuzzInjectTraceForCmp(
       auto ThenTerm =  SplitBlockAndInsertIfThen(IRB.CreateIsNull(Load), ICMP, false);
       IRBuilder<> ThenIRB(ThenTerm);
       ThenIRB.CreateCall(CallbackFunc, {br_id, A0, A1 });
-      if (!duplicated){
-        id_assigned[key] = instrument_id;
-        if (TypeSize == 64)
-          *InstrumentCntPtr = instrument_id + 2;
-        else
-          *InstrumentCntPtr = instrument_id + 1;
-      }
+      if (TypeSize == 64)
+        *InstrumentCntPtr = instrument_id + 2;
+      else
+        *InstrumentCntPtr = instrument_id + 1;
     }
   }
 }
@@ -2208,16 +2178,8 @@ void ModuleSanitizerCoverageAFL::OptfuzzInjectTraceForCmpNonTerminator(
       ICMP->print(ss);
       str.erase(std::remove(str.begin(), str.end(), '\n'), str.cend());
       cmp_str = str;
-      str += " ";
-      str += CurModule->getSourceFileName();
-      str += " ";
-      str += F.getName();
-      str += "|";
-      str += to_string(cmp_opcode);
-      key = str;
       
       int instrument_id = *InstrumentCntPtr;
-      int duplicated = 0;
 
       std::string ldInst_str;
       llvm::raw_string_ostream ldss(ldInst_str);
@@ -2229,24 +2191,12 @@ void ModuleSanitizerCoverageAFL::OptfuzzInjectTraceForCmpNonTerminator(
       SelectInstArray[selectCnt]->print(sltstr);
       select_str.erase(std::remove(select_str.begin(), select_str.end(), '\n'), select_str.cend());
 
-      key += "|";
-      key += ldInst_str;
-      key += "|";
-      key += cmp_str;
-      key += "|";
-      key += select_str;
-
-      // Use old id if this is a duplicated case
-      if (id_assigned.find(key) != id_assigned.end()){
-        duplicated = 1;
-        instrument_id = id_assigned.at(key);
-      }
-      else{
         // type | br_dist_edge_id (dummy_id) | sancov ID (in raw load instruction)| cmp/strcmp/switch instruction | select(optional) | switch(optional) switch case value: target_bb_sancov ID (in raw load instruction) | strlen
         // type: 1 (common binary cmp) (br_dist_edge_id <=> sancov); 2 (strcmp-like cmp) (br_dist_edge_id <=> sancov ); 3 (switch) (br_dist_dist_id <=>[sancov1, sancov2]); 4 (select) (br_dist_edge_id <=> [sancov1, sancov2]) 
         // br_dist_edge_id|inst: sancov id |inst: cmp/strcmp/sw| inst: select| inst: sw target
-        datalog <<"4|" << instrument_id << "|" << ldInst_str << "|" << cmp_str << "|" << select_str << "| |" << TypeSize / 8 << "\n" ;
-      }
+        std::ostringstream oss;
+        oss <<"4|" << instrument_id << "|" << ldInst_str << "|" << cmp_str << "|" << select_str << "| |" << TypeSize / 8 << "\n" ;
+        datalog << oss.str();
       
       IRBuilder<> IRB(ICMP);
       Value* br_id =  ConstantInt::get(Int32Ty, instrument_id);
@@ -2261,13 +2211,10 @@ void ModuleSanitizerCoverageAFL::OptfuzzInjectTraceForCmpNonTerminator(
       auto ThenTerm =  SplitBlockAndInsertIfThen(IRB.CreateIsNull(Load), ICMP, false);
       IRBuilder<> ThenIRB(ThenTerm);
       ThenIRB.CreateCall(CallbackFunc, {br_id, A0, A1 });
-      if (!duplicated){
-        id_assigned[key] = instrument_id;
         if (TypeSize == 64)
           *InstrumentCntPtr = instrument_id + 2;
         else
           *InstrumentCntPtr = instrument_id + 1;
-      }
     }
   }
 }
@@ -2276,7 +2223,7 @@ void ModuleSanitizerCoverageAFL::OptfuzzInjectTraceForCmpNonTerminator(
 
 
 void ModuleSanitizerCoverageAFL::OptfuzzInjectTraceForStrcmp(
-    Function &F, ArrayRef<Instruction *> StrcmpTraceTargets, ArrayRef<Instruction *> SancovForStrcmp, int* InstrumentCntPtr, ofstream &errlog, ofstream &datalog) {
+    Function &F, ArrayRef<Instruction *> StrcmpTraceTargets, ArrayRef<Instruction *> SancovForStrcmp, int* InstrumentCntPtr, ofstream &errlog, ofstream &datalog, DenseMap<Instruction *, size_t> &SancovMapIndex) {
 
   unordered_set<string> isStrcmp{"strcmp", "xmlStrcmp", "xmlStrEqual", "g_strcmp0", "curl_strequal", "strcsequal", "strcasecmp", "stricmp", "ap_cstr_casecmp", "OPENSSL_strcasecmp", "xmlStrcasecmp", "g_strcasecmp", "g_ascii_strcasecmp", "Curl_strcasecompare",                     "Curl_safe_strcasecompare", "cmsstrcasecmp"};
   unordered_set<string> isMemcmp{"memcmp", "bcmp", "CRYPTO_memcmp", "OPENSSL_memcmp", "memcmp_const_time", "memcmpct"};
@@ -2383,37 +2330,40 @@ void ModuleSanitizerCoverageAFL::OptfuzzInjectTraceForStrcmp(
       callInst->print(ss);
       str.erase(std::remove(str.begin(), str.end(), '\n'), str.cend());
       cmp_str = str;
-      str += " ";
-      str += CurModule->getSourceFileName();
-      str += " ";
-      str += F.getName();
-      str += "|";
 
-      key = str;
-      
       int instrument_id = *InstrumentCntPtr;
-      int duplicated = 0;
 
       std::string ldInst_str;
       llvm::raw_string_ostream ldss(ldInst_str);
       SancovForStrcmp[cmpCnt]->print(ldss);
       ldInst_str.erase(std::remove(ldInst_str.begin(), ldInst_str.end(), '\n'), ldInst_str.cend());
-      
-      key += "|";
-      key += ldInst_str;
-      key += "|";
-      key += cmp_str;
 
-      // Use old id if this is a duplicated case
-      if (id_assigned.find(key) != id_assigned.end()){
-        duplicated = 1;
-        instrument_id = id_assigned.at(key);
-      }
-      else{
-        // br_dist_edge_id|inst: sancov id |inst: cmp/strcmp/sw| inst: select| inst: sw target
-        datalog <<"2|" << instrument_id << "|" << ldInst_str << "|" << cmp_str << "| | |" << num_constant_byte <<"\n";
-      }
-  
+      // br_dist_edge_id|inst: sancov id |inst: cmp/strcmp/sw| inst: select| inst: sw target
+      std::ostringstream oss;
+      oss <<"2|" << instrument_id << "| |" << cmp_str << "| | |" << num_constant_byte <<"\n";
+      datalog << oss.str();
+
+
+      Instruction *SancovLoad = SancovForStrcmp[cmpCnt];
+      size_t index = SancovMapIndex[SancovLoad];
+      // create one global variable for each switch case
+      Type *ElemPtrType = Int32Ty->getPointerTo();
+      IRBuilder<> Builder(*C);
+      Constant *ArrayElemPtr = ConstantExpr::getGetElementPtr(FunctionGuardArray->getValueType(), FunctionGuardArray, ArrayRef<Constant*>({Builder.getInt32(0), Builder.getInt32(index)}));
+      StructType* MyStructType = StructType::get(*C, {ElemPtrType, Int32Ty});
+      Constant* StructInit = ConstantStruct::get(MyStructType, {ArrayElemPtr, ConstantInt::get(Int32Ty, instrument_id)});
+      GlobalVariable* MyStructGlobal = new GlobalVariable(*CurModule, MyStructType, true, GlobalValue::InternalLinkage, StructInit, "san_cov_dummy_id");
+      if (TargetTriple.supportsCOMDAT() && (TargetTriple.isOSBinFormatELF() || !F.isInterposable()))
+        if (auto Comdat = getOrCreateFunctionComdat(F, TargetTriple))
+          MyStructGlobal->setComdat(Comdat);
+      
+      MyStructGlobal->setSection(".log_section");
+      if (MyStructGlobal->hasComdat())
+        GlobalsToAppendToCompilerUsed.push_back(MyStructGlobal);
+      else
+        GlobalsToAppendToUsed.push_back(MyStructGlobal);
+
+
       Value* br_id =  ConstantInt::get(Int32Ty, instrument_id);
       IRBuilder<> IRB(callInst);
       auto *LoadBrCovMap = IRB.CreateLoad(PointerType::get(Int8Ty, 0), BrCovMapPtr);
@@ -2435,10 +2385,7 @@ void ModuleSanitizerCoverageAFL::OptfuzzInjectTraceForStrcmp(
         SmallVector<Value* > Args =  {br_id, A0, A1, ConstantInt::get(Int64Ty, num_constant_byte)};
         ThenIRB.CreateCall(CallbackFunc, Args);
       }
-      if (!duplicated){
-        id_assigned[key] = instrument_id;
-        *InstrumentCntPtr = instrument_id + ((int)ceil(((float)(num_constant_byte+1))/4));
-      }
+      *InstrumentCntPtr = instrument_id + ((int)ceil(((float)(num_constant_byte+1))/4));
     }
   }
 }
@@ -2489,6 +2436,7 @@ void ModuleSanitizerCoverageAFL::InjectTraceForCmp(
 void ModuleSanitizerCoverageAFL::InjectCoverageAtBlock(Function   &F,
                                                        BasicBlock &BB,
                                                        size_t      Idx,
+                                                       DenseMap<Instruction *, size_t> &SancovMapIndex, 
                                                        bool        IsLeafFunc) {
 
   BasicBlock::iterator IP = BB.getFirstInsertionPt();
@@ -2532,13 +2480,13 @@ void ModuleSanitizerCoverageAFL::InjectCoverageAtBlock(Function   &F,
     */
 
     /* Get CurLoc */
-
     Value *GuardPtr = IRB.CreateIntToPtr(
         IRB.CreateAdd(IRB.CreatePointerCast(FunctionGuardArray, IntptrTy),
                       ConstantInt::get(IntptrTy, Idx * 4)),
         Int32PtrTy);
 
     LoadInst *CurLoc = IRB.CreateLoad(IRB.getInt32Ty(), GuardPtr);
+    SancovMapIndex[CurLoc] = Idx;
     ModuleSanitizerCoverageAFL::SetNoSanitizeMetadata(CurLoc);
 
     /* Load SHM pointer */
