@@ -525,7 +525,7 @@ u8 fuzz_one_original(afl_state_t *afl) {
   u32 fox_mutant_buf_capacity = afl->fsrv.fox_mutant_buf_capacity;
   u8 shared_mode = afl->wd_scheduler_shared_mode;
 
-  memset(afl->fsrv.local_br_bits, 0, sizeof(s64) * fox_total_border_edge_cnt);
+  memset(afl->fsrv.local_br_bits, 0, sizeof(s64) * fox_total_br_dist_edge_cnt);
   memset(afl->fsrv.local_bits, 0, sizeof(u8) * fox_total_border_edge_cnt);
   memset(br_inc, 0, sizeof(s64) * fox_total_br_dist_edge_cnt);
   memset(br_dec, 0, sizeof(s64) * fox_total_br_dist_edge_cnt);
@@ -2238,7 +2238,7 @@ havoc_stage:
     afl->stage_short = "splice";
 
     if (likely(afl->schedule == WD_SCHEDULER)) {
-      memset(local_br_bits, 0, sizeof(s64) * fox_total_border_edge_cnt);
+      memset(local_br_bits, 0, sizeof(s64) * fox_total_br_dist_edge_cnt);
       memset(local_bits, 0, sizeof(u8) * fox_total_border_edge_cnt);
       memset(br_inc, 0, sizeof(s64) * fox_total_br_dist_edge_cnt);
       memset(br_dec, 0, sizeof(s64) * fox_total_br_dist_edge_cnt);
