@@ -102,6 +102,13 @@ static u8  __afl_area_initial[MAP_INITIAL_SIZE];
 static u8 *__afl_area_ptr_dummy = __afl_area_initial;
 static u8 *__afl_area_ptr_backup = __afl_area_initial;
 
+static s64  __afl_br_dist_initial[MAP_INITIAL_SIZE];                                      
+static u8  __afl_br_hit_initial[MAP_INITIAL_SIZE];                                      
+static u8  __br_cov_initial[MAP_INITIAL_SIZE]; 
+s64 *__afl_br_dist = __afl_br_dist_initial;                                        
+u8 *__afl_br_hit = __afl_br_hit_initial;                                        
+u8 *__br_cov_ptr = __br_cov_initial;
+
 u8        *__afl_area_ptr = __afl_area_initial;
 u8        *__afl_dictionary;
 u8        *__afl_fuzz_ptr;
@@ -671,6 +678,40 @@ static void __afl_map_shm(void) {
       }
 
     }
+
+  }
+
+  id_str = getenv("AFL_BR_DIST");                                                         
+  if (id_str) {                                                                           
+                                                                                          
+     u32 shm_id = atoi(id_str);                                                           
+                                                                                          
+     __afl_br_dist = shmat(shm_id, NULL, 0);                                              
+                                                                                          
+                                                                                          
+     if (__afl_br_dist == (void *)-1) _exit(1);                                           
+   }                                                                                      
+                                                                                          
+  id_str = getenv("AFL_BR_COV");                                                          
+  if (id_str) {                                                                           
+                                                                                          
+     u32 shm_id = atoi(id_str);                                                           
+                                                                                          
+     __br_cov_ptr = shmat(shm_id, NULL, 0);                                               
+                                                                                          
+                                                                                          
+     if (__br_cov_ptr == (void *)-1) _exit(1);                                            
+   }
+
+  id_str = getenv("AFL_BR_HIT");                                                          
+  if (id_str) {                                                                           
+                                                                                          
+     u32 shm_id = atoi(id_str);                                                           
+                                                                                          
+     __afl_br_hit = shmat(shm_id, NULL, 0);                                               
+                                                                                          
+                                                                                          
+     if (__afl_br_hit == (void *)-1) _exit(1);
 
   }
 
@@ -2953,4 +2994,221 @@ void __afl_injection_xss(u8 *buf) {
 }
 
 #undef write_error
+
+void log_br8(int addr, s8 op1, s8 op2) {
+    if (__afl_br_hit[addr]) return;
+    __afl_br_hit[addr] = 1;
+    __afl_br_dist[addr] = ((s64)(op1)) - ((s64)(op2));
+    return;
+}
+void log_br16(int addr, s16 op1, s16 op2) {
+    if (__afl_br_hit[addr]) return;
+    __afl_br_hit[addr] = 1;
+    __afl_br_dist[addr] = ((s64)(op1)) - ((s64)(op2));
+    return;
+}
+void log_br32(int addr, s32 op1, s32 op2) {
+    if (__afl_br_hit[addr]) return;
+    __afl_br_hit[addr] = 1;
+    __afl_br_dist[addr] = ((s64)(op1)) - ((s64)(op2));
+    return;
+}
+void log_br64(int addr, s64 op1, s64 op2) {
+    if (__afl_br_hit[addr]) return;
+    __afl_br_hit[addr] = 1;
+    __afl_br_dist[addr] = ((s64)(op1)) - ((s64)(op2));
+    return;
+}
+
+void log_br8_unsign(int addr, u8 op1, u8 op2) {
+    if (__afl_br_hit[addr]) return;
+    __afl_br_hit[addr] = 1;
+    __afl_br_dist[addr] = ((s64)(op1)) - ((s64)(op2));
+    return;
+}
+void log_br16_unsign(int addr, u16 op1, u16 op2) {
+    if (__afl_br_hit[addr]) return;
+    __afl_br_hit[addr] = 1;
+    __afl_br_dist[addr] = ((s64)(op1)) - ((s64)(op2));
+    return;
+}
+void log_br32_unsign(int addr, u32 op1, u32 op2) {
+    if (__afl_br_hit[addr]) return;
+    __afl_br_hit[addr] = 1;
+    __afl_br_dist[addr] = ((s64)(op1)) - ((s64)(op2));
+    return;
+}
+void log_br64_unsign(int addr, u64 op1, u64 op2) {
+    if (__afl_br_hit[addr]) return;
+    __afl_br_hit[addr] = 1;
+    __afl_br_dist[addr] = ((s64)(op1)) - ((s64)(op2));
+    return;
+}
+
+
+void log_br8_r(int addr, s8 op1, s8 op2) {
+    if (__afl_br_hit[addr]) return;
+    __afl_br_hit[addr] = 1;
+    __afl_br_dist[addr] = ((s64)(op1)) - ((s64)(op2));
+    return;
+}
+void log_br16_r(int addr, s16 op1, s16 op2) {
+    if (__afl_br_hit[addr]) return;
+    __afl_br_hit[addr] = 1;
+    __afl_br_dist[addr] = ((s64)(op1)) - ((s64)(op2));
+    return;
+}
+void log_br32_r(int addr, s32 op1, s32 op2) {
+    if (__afl_br_hit[addr]) return;
+    __afl_br_hit[addr] = 1;
+    __afl_br_dist[addr] = ((s64)(op1)) - ((s64)(op2));
+    return;
+}
+void log_br64_r(int addr, s64 op1, s64 op2) {
+    if (__afl_br_hit[addr]) return;
+    __afl_br_hit[addr] = 1;
+    __afl_br_dist[addr] = ((s64)(op1)) - ((s64)(op2));
+    return;
+}
+
+void log_br8_unsign_r(int addr, u8 op1, u8 op2) {
+    if (__afl_br_hit[addr]) return;
+    __afl_br_hit[addr] = 1;
+    __afl_br_dist[addr] = ((s64)(op1)) - ((s64)(op2));
+    return;
+}
+void log_br16_unsign_r(int addr, u16 op1, u16 op2) {
+    if (__afl_br_hit[addr]) return;
+    __afl_br_hit[addr] = 1;
+    __afl_br_dist[addr] = ((s64)(op1)) - ((s64)(op2));
+    return;
+}
+void log_br32_unsign_r(int addr, u32 op1, u32 op2) {
+    if (__afl_br_hit[addr]) return;
+    __afl_br_hit[addr] = 1;
+    __afl_br_dist[addr] = ((s64)(op1)) - ((s64)(op2));
+    return;
+}
+void log_br64_unsign_r(int addr, u64 op1, u64 op2) {
+    if (__afl_br_hit[addr]) return;
+    __afl_br_hit[addr] = 1;
+    __afl_br_dist[addr] = ((s64)(op1)) - ((s64)(op2));
+    return;
+}
+
+
+
+void eq_log_br8(int addr, s8 op1, s8 op2) {
+    if (__afl_br_hit[addr]) return;
+    __afl_br_hit[addr] = 1;
+    __afl_br_dist[addr] = ((s64)(op1)) - ((s64)(op2));
+    return;
+}
+void eq_log_br16(int addr, s16 op1, s16 op2) {
+    if (__afl_br_hit[addr]) return;
+    __afl_br_hit[addr] = 1;
+    __afl_br_dist[addr] = ((s64)(op1)) - ((s64)(op2));
+    return;
+}
+void eq_log_br32(int addr, s32 op1, s32 op2) {
+    if (__afl_br_hit[addr]) return;
+    __afl_br_hit[addr] = 1;
+    __afl_br_dist[addr] = ((s64)(op1)) - ((s64)(op2));
+    return;
+}
+void eq_log_br64(int addr, s64 op1, s64 op2) {
+    if (__afl_br_hit[addr]) return;
+    __afl_br_hit[addr] = 1;
+    __afl_br_dist[addr] = ((s64)(op1)) - ((s64)(op2));
+    return;
+}
+
+void sw_log_br8(int addr, s8 op1, s8 op2) {
+    if (__afl_br_hit[addr]) return;
+    __afl_br_hit[addr] = 1;
+    __afl_br_dist[addr] = ((s64)(op1)) - ((s64)(op2));
+    return;
+}
+void sw_log_br16(int addr, s16 op1, s16 op2) {
+    if (__afl_br_hit[addr]) return;
+    __afl_br_hit[addr] = 1;
+    __afl_br_dist[addr] = ((s64)(op1)) - ((s64)(op2));
+    return;
+}
+void sw_log_br32(int addr, s32 op1, s32 op2) {
+    if (__afl_br_hit[addr]) return;
+    __afl_br_hit[addr] = 1;
+    __afl_br_dist[addr] = ((s64)(op1)) - ((s64)(op2));
+    return;
+}
+void sw_log_br64(int addr, s64 op1, s64 op2) {
+    if (__afl_br_hit[addr]) return;
+    __afl_br_hit[addr] = 1;
+    __afl_br_dist[addr] = ((s64)(op1)) - ((s64)(op2));
+    return;
+}
+
+void strcmp_log(int addr, u8* op1, u8* op2, unsigned long str_len) {
+  if(op1 == NULL || op2 == NULL) return;
+  if (__afl_br_hit[addr]) return;
+    __afl_br_hit[addr] = 1;
+  u8 var_str_terminated = 0;
+  __afl_br_dist[addr] = 0;
+  for (int i = 0; i < str_len; i++) { // strlen including the null terminator
+    if (!var_str_terminated && !op2[i])
+      var_str_terminated = 1;
+
+    if (var_str_terminated)
+      __afl_br_dist[addr] += ((s64)(op1[i]));
+    else
+      __afl_br_dist[addr] += ((s64)(op1[i])) - ((s64)(op2[i]));  
+  }
+}
+
+// str_len is the argument from strncmp()
+void strncmp_log(int addr, u8* op1, u8* op2, unsigned long str_len) {
+  if(op1 == NULL || op2 == NULL) return;
+  if (__afl_br_hit[addr]) return;
+    __afl_br_hit[addr] = 1;
+  u8 var_str_terminated = 0;
+  __afl_br_dist[addr] = 0;
+  for (int i = 0; i < str_len; i++) { // strlen including the null terminator
+    if (!var_str_terminated && !op2[i])
+      var_str_terminated = 1;
+
+    if (var_str_terminated)
+      __afl_br_dist[addr] += ((s64)(op1[i]));
+    else
+      __afl_br_dist[addr] += ((s64)(op1[i])) - ((s64)(op2[i]));  
+  }
+}
+
+// str_len is the constant length of arguement
+void strstr_log(int addr, u8* op1, u8* op2, unsigned long str_len) {
+  if(op1 == NULL || op2 == NULL) return;
+  if (__afl_br_hit[addr]) return;
+    __afl_br_hit[addr] = 1;
+  u8 var_str_terminated = 0;
+  __afl_br_dist[addr] = 0;
+  for (int i = 0; i < str_len; i++) { // strlen including the null terminator
+    if (!var_str_terminated && !op2[i])
+      var_str_terminated = 1;
+
+    if (var_str_terminated)
+      __afl_br_dist[addr] += ((s64)(op1[i]));
+    else
+      __afl_br_dist[addr] += ((s64)(op1[i])) - ((s64)(op2[i]));  
+  }
+}
+
+void memcmp_log(int addr, u8* op1, u8* op2, unsigned long str_len) {
+  if(op1 == NULL || op2 == NULL) return;
+  if (__afl_br_hit[addr]) return;
+    __afl_br_hit[addr] = 1;
+  u8 var_str_terminated = 0;
+  __afl_br_dist[addr] = 0;
+  for (int i = 0; i < str_len; i++) {
+      __afl_br_dist[addr] += ((s64)(op1[i])) - ((s64)(op2[i]));  
+  }
+}
 
