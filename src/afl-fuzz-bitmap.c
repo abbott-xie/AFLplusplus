@@ -448,6 +448,8 @@ void write_crash_readme(afl_state_t *afl) {
 
 }
 
+ void increment_hit_bits(afl_state_t *afl) {
+ }
 /* Check if the result of an execve() during routine fuzzing is interesting,
    save or queue the input test case for further analysis if so. Returns 1 if
    entry is saved, 0 otherwise. */
@@ -500,6 +502,8 @@ save_if_interesting(afl_state_t *afl, void *mem, u32 len, u8 fault) {
   }
 
   if (likely(fault == afl->crash_mode)) {
+
+    increment_hit_bits(afl);
 
     /* Keep only if there are new bits in the map, add to queue for
        future fuzzing, etc. */
