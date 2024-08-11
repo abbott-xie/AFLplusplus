@@ -1837,10 +1837,8 @@ void ModuleSanitizerCoverageAFL::OptfuzzInjectTraceForSwitch(Function &F, ArrayR
         IRBuilder<> ThenIRB(ThenTerm);
         ThenIRB.CreateCall(CallbackFunc, {br_id, op1, op2});
         // update global instrumentCnt if we instrument a new site, update hash map
-          if (TypeSize == 64)
-            *InstrumentCntPtr = instrument_id + 2;
-          else
-            *InstrumentCntPtr = instrument_id + 1;
+
+        *InstrumentCntPtr = instrument_id + 1;
       }
     
       // handle default case: choose a target value for defacut case
@@ -1904,10 +1902,7 @@ void ModuleSanitizerCoverageAFL::OptfuzzInjectTraceForSwitch(Function &F, ArrayR
       IRBuilder<> ThenIRB(ThenTerm);
       ThenIRB.CreateCall(CallbackFunc, {br_id, op1, op2});
 
-        if (TypeSize == 64)
-          *InstrumentCntPtr = instrument_id + 2;
-        else
-          *InstrumentCntPtr = instrument_id + 1;
+      *InstrumentCntPtr = instrument_id + 1;
     }
   }
 }
@@ -2098,10 +2093,7 @@ void ModuleSanitizerCoverageAFL::OptfuzzInjectTraceForCmp(
       auto ThenTerm =  SplitBlockAndInsertIfThen(IRB.CreateIsNull(Load), ICMP, false);
       IRBuilder<> ThenIRB(ThenTerm);
       ThenIRB.CreateCall(CallbackFunc, {br_id, A0, A1 });
-      if (TypeSize == 64)
-        *InstrumentCntPtr = instrument_id + 2;
-      else
-        *InstrumentCntPtr = instrument_id + 1;
+      *InstrumentCntPtr = instrument_id + 1;
     }
   }
 }
@@ -2215,10 +2207,7 @@ void ModuleSanitizerCoverageAFL::OptfuzzInjectTraceForCmpNonTerminator(
       auto ThenTerm =  SplitBlockAndInsertIfThen(IRB.CreateIsNull(Load), ICMP, false);
       IRBuilder<> ThenIRB(ThenTerm);
       ThenIRB.CreateCall(CallbackFunc, {br_id, A0, A1 });
-        if (TypeSize == 64)
-          *InstrumentCntPtr = instrument_id + 2;
-        else
-          *InstrumentCntPtr = instrument_id + 1;
+      *InstrumentCntPtr = instrument_id + 1;
     }
   }
 }
@@ -2389,7 +2378,7 @@ void ModuleSanitizerCoverageAFL::OptfuzzInjectTraceForStrcmp(
         SmallVector<Value* > Args =  {br_id, A0, A1, ConstantInt::get(Int64Ty, num_constant_byte)};
         ThenIRB.CreateCall(CallbackFunc, Args);
       }
-      *InstrumentCntPtr = instrument_id + ((int)ceil(((float)(num_constant_byte+1))/4));
+      *InstrumentCntPtr = instrument_id + 1;
     }
   }
 }
