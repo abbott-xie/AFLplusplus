@@ -129,6 +129,9 @@ void afl_shm_deinit(sharedmem_t *shm) {
 
 #else
   shmctl(shm->shm_id, IPC_RMID, NULL);
+  shmctl(shm->shm_id1, IPC_RMID, NULL);
+  shmctl(shm->shm_id2, IPC_RMID, NULL);
+  shmctl(shm->shm_id3, IPC_RMID, NULL);
   if (shm->cmplog_mode) { shmctl(shm->cmplog_shm_id, IPC_RMID, NULL); }
 #endif
 
@@ -311,6 +314,43 @@ u8 *afl_shm_init(sharedmem_t *shm, size_t map_size,
     setenv(SHM_ENV_VAR, shm_str, 1);
 
     ck_free(shm_str);
+
+    // shared mem to save branch distance, the index is dummy idx, need to convert dummy idx to border edge idx using border_edge_2_br_dist[]
+    // TODO: cut the map_size to the number of actual size
+    shm->shm_id1 =
+        shmget(IPC_PRIVATE, map_size*8,
+               IPC_CREAT | IPC_EXCL | DEFAULT_PERMISSION);
+
+    if (shm->shm_id1 < 0) { PFATAL("shmget() failed, try running afl-system-config"); }
+
+    shm_str = alloc_printf("%d", shm->shm_id1);
+    setenv("AFL_BR_DIST", shm_str, 1);
+    ck_free(shm_str);
+    shm->br_map = shmat(shm->shm_id1, NULL, 0);
+
+    // shared mem to store br_cov. A branch is fully covered when all its children nodes are covered, and set as 1; else 0. The index is same as dummy ID.
+    shm->shm_id2 =
+        shmget(IPC_PRIVATE, map_size,
+               IPC_CREAT | IPC_EXCL | DEFAULT_PERMISSION);
+
+    if (shm->shm_id2 < 0) { PFATAL("shmget() failed, try running afl-system-config"); }
+
+    shm_str = alloc_printf("%d", shm->shm_id2);
+    setenv("AFL_BR_COV", shm_str, 1);
+    ck_free(shm_str);
+    shm->br_cov = shmat(shm->shm_id2, NULL, 0);
+
+    // shared mem to store __afl_br_hit. A branch is fully covered when all its children nodes are covered, and set as 1; else 0. The index is same as dummy ID.
+    shm->shm_id3 =
+        shmget(IPC_PRIVATE, map_size,
+               IPC_CREAT | IPC_EXCL | DEFAULT_PERMISSION);
+
+    if (shm->shm_id3 < 0) { PFATAL("shmget() failed, try running afl-system-config"); }
+
+    shm_str = alloc_printf("%d", shm->shm_id3);
+    setenv("AFL_BR_HIT", shm_str, 1);
+    ck_free(shm_str);
+    shm->br_hit = shmat(shm->shm_id3, NULL, 0);
 
   }
 
