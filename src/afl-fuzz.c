@@ -2250,6 +2250,10 @@ int main(int argc, char **argv_orig, char **envp) {
   afl->fsrv.trace_bits =
       afl_shm_init(&afl->shm, afl->fsrv.map_size, afl->non_instrumented_mode);
 
+  afl->fsrv.br_bits = afl->shm.br_map;
+  afl->fsrv.br_cov = afl->shm.br_cov;
+  afl->fsrv.br_hit = afl->shm.br_hit;
+
   if (!afl->non_instrumented_mode && !afl->fsrv.qemu_mode &&
       !afl->unicorn_mode && !afl->fsrv.frida_mode && !afl->fsrv.cs_mode &&
       !afl->afl_env.afl_skip_bin_check) {
@@ -2301,6 +2305,9 @@ int main(int argc, char **argv_orig, char **envp) {
       afl->fsrv.map_size = new_map_size;
       afl->fsrv.trace_bits =
           afl_shm_init(&afl->shm, new_map_size, afl->non_instrumented_mode);
+      afl->fsrv.br_bits = afl->shm.br_map;
+      afl->fsrv.br_cov = afl->shm.br_cov;
+      afl->fsrv.br_hit = afl->shm.br_hit;
       setenv("AFL_NO_AUTODICT", "1", 1);  // loaded already
       afl_fsrv_start(&afl->fsrv, afl->argv, &afl->stop_soon,
                      afl->afl_env.afl_debug_child);
@@ -2381,6 +2388,9 @@ int main(int argc, char **argv_orig, char **envp) {
       setenv("AFL_NO_AUTODICT", "1", 1);  // loaded already
       afl->fsrv.trace_bits =
           afl_shm_init(&afl->shm, new_map_size, afl->non_instrumented_mode);
+      afl->fsrv.br_bits = afl->shm.br_map;
+      afl->fsrv.br_cov = afl->shm.br_cov;
+      afl->fsrv.br_hit = afl->shm.br_hit;
       afl->cmplog_fsrv.trace_bits = afl->fsrv.trace_bits;
       afl_fsrv_start(&afl->fsrv, afl->argv, &afl->stop_soon,
                      afl->afl_env.afl_debug_child);
