@@ -101,6 +101,10 @@ typedef struct afl_forkserver {
   /* a program that includes afl-forkserver needs to define these */
 
   u8 *trace_bits;                       /* SHM with instrumentation bitmap  */
+  /*Taint specific struct*/
+  s64 *br_bits;                         /* Branch bits                      */
+  u8 *br_cov;                           /* Branch coverage instrumentation is active */
+  u8 *br_hit;                           /* Branch hit instrumentation array */
 
   s32 fsrv_pid,                         /* PID of the fork server           */
       child_pid,                        /* PID of the fuzzed program        */
