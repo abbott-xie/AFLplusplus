@@ -2388,11 +2388,10 @@ havoc_stage:
 #ifdef INTROSPECTION
           snprintf(afl->m_tmp, sizeof(afl->m_tmp), " ARITH8+_%u", item);
           strcat(afl->mutation, afl->m_tmp);
-#endif
+#endif    
+          u32 off = rand_below(afl, temp_len);
           if (special_random) {
-            u32 off = getRandomIndex(taint_array, temp_len);
-          } else {
-            u32 off = rand_below(afl, temp_len);
+            off = getRandomIndex(taint_array, temp_len);
           }
           out_buf[off] += item;
           break;
