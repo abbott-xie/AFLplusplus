@@ -451,6 +451,8 @@ void write_crash_readme(afl_state_t *afl) {
  void increment_hit_bits(afl_state_t *afl) {
   u64 *cur_trace_bit_batch = (u64 *)afl->fsrv.trace_bits;
   u32 map_size_batched = (afl->fsrv.real_map_size + 7) >> 3;
+  u8 *virgin_bits = afl->virgin_bits;
+  u8 *trace_bits = afl->fsrv.trace_bits;
   u32 *num_of_children = afl->fsrv.num_of_children;
   u8 *cmp_type = afl->fsrv.cmp_type;
   u32 *border_edge_parent_first_id = afl->fsrv.border_edge_parent_first_id;
@@ -488,14 +490,14 @@ void write_crash_readme(afl_state_t *afl) {
 
       for (u32 cur_border_edge_id = base_border_edge_id; cur_border_edge_id < base_border_edge_id + cur_num_of_children; cur_border_edge_id++) {
           u32 child_node = border_edge_child[cur_border_edge_id];
-          u32 base_br_dist_edge_id = border_edge_2_br_dist[cur_border_edge_id];
+          u32 br_dist_edge_id = border_edge_2_br_dist[cur_border_edge_id];
 
-          if (br_cov[base_br_dist_edge_id])
+          if (br_cov[br_dist_edge_id])
             continue;
 
           if (!is_reached(child_node, virgin_bits, trace_bits)) {
             if (++branch_flip == 2)
-              br_cov[base_br_dist_edge_id] = 1;
+              br_cov[br_dist_edge_id] = 1;
             continue;
           }
 

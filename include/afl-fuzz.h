@@ -257,6 +257,28 @@ struct extra_data {
 
 };
 
+ enum {
+ /* 00 */  NOT_INSTRUMENTED,
+ /* 01 */  ICMP_UGT,
+ /* 02 */  ICMP_SGT,
+ /* 03 */  ICMP_EQ,
+ /* 04 */  ICMP_UGE,
+ /* 05 */  ICMP_SGE,
+ /* 06 */  ICMP_ULT,
+ /* 07 */  ICMP_SLT,
+ /* 08 */  ICMP_NE,
+ /* 09 */  ICMP_ULE,
+ /* 10 */  ICMP_SLE,
+ /* 11 */  STRCMP,
+ /* 12 */  STRNCMP,
+ /* 13 */  MEMCMP,
+ /* 14 */  STRSTR,
+ /* 15 */  SWITCH,
+
+  CMP_TYPES_MAX
+
+};
+
 struct auto_extra_data {
 
   u8  data[MAX_AUTO_EXTRA];             /* Dictionary token data            */

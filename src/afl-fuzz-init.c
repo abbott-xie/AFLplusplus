@@ -898,7 +898,6 @@ void load_metadata(afl_state_t *afl) {
 
     char *str_len_ptr = strtok(NULL, " ");
     int str_len = atoi(str_len_ptr);
-    afl->fsrv.border_edge_2_str_len[line_cnt] = str_len;
 
     afl->fsrv.border_edge_parent[line_cnt] = parent;
     afl->fsrv.border_edge_child[line_cnt] = child;
