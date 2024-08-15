@@ -102,6 +102,9 @@ typedef struct afl_forkserver {
 
   u8 *trace_bits;                       /* SHM with instrumentation bitmap  */
   /*Taint specific struct*/
+  u8 br_trace_setting;                  /* Branch trace setting             */
+  u8 taint_flag;                        /* Taint flag                       */
+  s64 *local_br_bits;                   /* Local branch bits                */
   s64 *br_bits;                         /* Branch bits                      */
   u8 *br_cov;                           /* Branch coverage instrumentation is active */
   u8 *br_hit;                           /* Branch hit instrumentation array */

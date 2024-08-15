@@ -2026,6 +2026,12 @@ havoc_stage:
 
   }
 
+  // taint trace
+  memset(local_br_bits, 0, sizeof(s64) * fox_total_br_dist_edge_cnt);
+  afl->fsrv.br_trace_setting = BR_TRACE_SEED_INPUT;
+  if (common_fuzz_stuff(afl, out_buf, temp_len)) { goto abandon_entry; }
+  afl->fsrv.br_trace_setting = BR_TRACE_DEFAULT;
+
   if (unlikely(afl->stage_max < HAVOC_MIN)) { afl->stage_max = HAVOC_MIN; }
 
   temp_len = len;
@@ -3275,7 +3281,11 @@ havoc_stage:
 
     }
 
+    afl->fsrv.taint_flag = 0;
     if (common_fuzz_stuff(afl, out_buf, temp_len)) { goto abandon_entry; }
+    if (afl->fsrv.taint_flag == 1) {
+      // find diff
+    }
 
     /* out_buf might have been mangled a bit, so let's restore it to its
        original size and shape. */

@@ -2321,6 +2321,8 @@ int main(int argc, char **argv_orig, char **envp) {
     afl->fsrv.border_edge_child = (u32 *) ck_alloc(sizeof(u32) * afl->fox_total_border_edge_cnt);
     afl->fsrv.border_edge_2_br_dist = (u32 *) ck_alloc(sizeof(u32) * afl->fox_total_border_edge_cnt);
 
+    afl->fsrv.local_br_bits = (s64 *) ck_alloc(sizeof(s64) * afl->fox_total_br_dist_edge_cnt);
+
 
     // only reinitialize if the map needs to be larger than what we have.
     if (map_size < new_map_size) {

@@ -435,6 +435,25 @@ typedef struct MOpt_globals {
 
 } MOpt_globals_t;
 
+enum {
+  /* 00 */ BR_TRACE_DEFAULT,
+  /* 01 */ BR_TRACE_SEED_INPUT
+};
+
+/* Taint-related helper functions */
+
+static inline u8 was_reached(u32 node, u8 *virgin_bits) {
+  return virgin_bits[node] != 0xff;
+}
+
+static inline u8 cur_mutant_reached(u32 node, u8 *trace_bits) {
+  return trace_bits[node];
+}
+
+static inline u8 is_reached(u32 child, u8 *virgin_bits, u8 *trace_bits) {
+  return !was_reached(child, virgin_bits) && !cur_mutant_reached(child, trace_bits);
+}
+
 extern char *power_names[POWER_SCHEDULES_NUM];
 
 typedef struct afl_env_vars {

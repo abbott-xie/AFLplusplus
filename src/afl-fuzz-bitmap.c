@@ -458,6 +458,9 @@ void write_crash_readme(afl_state_t *afl) {
   u32 *border_edge_2_br_dist = afl->fsrv.border_edge_2_br_dist;
   s64 *br_bits = afl->fsrv.br_bits;
   u8 *br_cov = afl->fsrv.br_cov;
+  u8 br_trace_setting = afl->fsrv.br_trace_setting;
+  s64 *local_br_bits = afl->fsrv.local_br_bits;
+  u8 taint_flag = afl->fsrv.taint_flag;
   
   // first get the horizon node
   for (u32 i = 0; i < map_size_batched; i++) {
@@ -495,6 +498,20 @@ void write_crash_readme(afl_state_t *afl) {
               br_cov[base_br_dist_edge_id] = 1;
             continue;
           }
+
+          s64 br_dist = br_bits[br_dist_edge_id];
+
+          if (br_trace_setting == BR_TRACE_SEED_INPUT) {
+            local_br_bits[br_dist_edge_id] = br_dist;
+            continue;
+          }
+
+          s64 local_br_dist = local_br_bits[br_dist_edge_id];
+          
+          if (local_br_dist == br_dist)
+            continue;
+          
+          afl->fsrv.taint_flag = 1;
       }
     }
   }
