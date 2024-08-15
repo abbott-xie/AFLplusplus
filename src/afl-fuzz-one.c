@@ -2351,7 +2351,7 @@ havoc_stage:
           snprintf(afl->m_tmp, sizeof(afl->m_tmp), " INTERESTING32BE_%u", item);
           strcat(afl->mutation, afl->m_tmp);
 #endif    
-          off = rand_below(afl, temp_len - 3);
+          u32 off = rand_below(afl, temp_len - 3);
           if (special_random) {
             off = getRandomIndex(taint_array, temp_len - 3);
           } 
