@@ -2240,7 +2240,12 @@ havoc_stage:
 
           /* Flip a single bit somewhere. Spooky! */
           u8  bit = rand_below(afl, 8);
-          u32 off = rand_below(afl, temp_len);
+          if (special_random) {
+            u32 off = getRandomIndex(taint_array, temp_len);
+          } else {
+            u32 off = rand_below(afl, temp_len);
+          }
+          
           out_buf[off] ^= 1 << bit;
 
 #ifdef INTROSPECTION
@@ -2260,7 +2265,12 @@ havoc_stage:
           snprintf(afl->m_tmp, sizeof(afl->m_tmp), " INTERESTING8_%u", item);
           strcat(afl->mutation, afl->m_tmp);
 #endif
-          out_buf[rand_below(afl, temp_len)] = interesting_8[item];
+          if (special_random) {
+            u32 off = getRandomIndex(taint_array, temp_len);
+          } else {
+            u32 off = rand_below(afl, temp_len);
+          }
+          out_buf[off] = interesting_8[item];
           break;
 
         }
@@ -2276,8 +2286,12 @@ havoc_stage:
           snprintf(afl->m_tmp, sizeof(afl->m_tmp), " INTERESTING16_%u", item);
           strcat(afl->mutation, afl->m_tmp);
 #endif
-
-          *(u16 *)(out_buf + rand_below(afl, temp_len - 1)) =
+          if (special_random) {
+            u32 off = getRandomIndex(taint_array, temp_len - 1);
+          } else {
+            u32 off = rand_below(afl, temp_len - 1);
+          }
+          *(u16 *)(out_buf + off) =
               interesting_16[item];
 
           break;
@@ -2295,7 +2309,12 @@ havoc_stage:
           snprintf(afl->m_tmp, sizeof(afl->m_tmp), " INTERESTING16BE_%u", item);
           strcat(afl->mutation, afl->m_tmp);
 #endif
-          *(u16 *)(out_buf + rand_below(afl, temp_len - 1)) =
+          if (special_random) {
+            u32 off = getRandomIndex(taint_array, temp_len - 1);
+          } else {
+            u32 off = rand_below(afl, temp_len - 1);
+          }
+          *(u16 *)(out_buf + off) =
               SWAP16(interesting_16[item]);
 
           break;
@@ -2313,8 +2332,13 @@ havoc_stage:
           snprintf(afl->m_tmp, sizeof(afl->m_tmp), " INTERESTING32_%u", item);
           strcat(afl->mutation, afl->m_tmp);
 #endif
+          if (special_random) {
+            u32 off = getRandomIndex(taint_array, temp_len - 3);
+          } else {
+            u32 off = rand_below(afl, temp_len - 3);
+          }
 
-          *(u32 *)(out_buf + rand_below(afl, temp_len - 3)) =
+          *(u32 *)(out_buf + off) =
               interesting_32[item];
 
           break;
@@ -2332,7 +2356,12 @@ havoc_stage:
           snprintf(afl->m_tmp, sizeof(afl->m_tmp), " INTERESTING32BE_%u", item);
           strcat(afl->mutation, afl->m_tmp);
 #endif
-          *(u32 *)(out_buf + rand_below(afl, temp_len - 3)) =
+          if (special_random) {
+            u32 off = getRandomIndex(taint_array, temp_len - 3);
+          } else {
+            u32 off = rand_below(afl, temp_len - 3);
+          }
+          *(u32 *)(out_buf + off) =
               SWAP32(interesting_32[item]);
 
           break;
@@ -2348,7 +2377,12 @@ havoc_stage:
           snprintf(afl->m_tmp, sizeof(afl->m_tmp), " ARITH8-_%u", item);
           strcat(afl->mutation, afl->m_tmp);
 #endif
-          out_buf[rand_below(afl, temp_len)] -= item;
+          if (special_random) {
+            u32 off = getRandomIndex(taint_array, temp_len);
+          } else {
+            u32 off = rand_below(afl, temp_len);
+          }
+          out_buf[off] -= item;
           break;
 
         }
@@ -2362,7 +2396,12 @@ havoc_stage:
           snprintf(afl->m_tmp, sizeof(afl->m_tmp), " ARITH8+_%u", item);
           strcat(afl->mutation, afl->m_tmp);
 #endif
-          out_buf[rand_below(afl, temp_len)] += item;
+          if (special_random) {
+            u32 off = getRandomIndex(taint_array, temp_len);
+          } else {
+            u32 off = rand_below(afl, temp_len);
+          }
+          out_buf[off] += item;
           break;
 
         }
@@ -2373,14 +2412,18 @@ havoc_stage:
 
           if (unlikely(temp_len < 2)) { break; }  // no retry
 
-          u32 pos = rand_below(afl, temp_len - 1);
+          if (special_random) {
+            u32 off = getRandomIndex(taint_array, temp_len - 1);
+          } else {
+            u32 off = rand_below(afl, temp_len - 1);
+          }
           item = 1 + rand_below(afl, ARITH_MAX);
 
 #ifdef INTROSPECTION
           snprintf(afl->m_tmp, sizeof(afl->m_tmp), " ARITH16-_%u", item);
           strcat(afl->mutation, afl->m_tmp);
 #endif
-          *(u16 *)(out_buf + pos) -= item;
+          *(u16 *)(out_buf + off) -= item;
 
           break;
 
@@ -2392,15 +2435,19 @@ havoc_stage:
 
           if (unlikely(temp_len < 2)) { break; }  // no retry
 
-          u32 pos = rand_below(afl, temp_len - 1);
+          if (special_random) {
+            u32 off = getRandomIndex(taint_array, temp_len - 1);
+          } else {
+            u32 off = rand_below(afl, temp_len - 1);
+          }
           u16 num = 1 + rand_below(afl, ARITH_MAX);
 
 #ifdef INTROSPECTION
           snprintf(afl->m_tmp, sizeof(afl->m_tmp), " ARITH16BE-_%u", num);
           strcat(afl->mutation, afl->m_tmp);
 #endif
-          *(u16 *)(out_buf + pos) =
-              SWAP16(SWAP16(*(u16 *)(out_buf + pos)) - num);
+          *(u16 *)(out_buf + off) =
+              SWAP16(SWAP16(*(u16 *)(out_buf + off)) - num);
 
           break;
 
@@ -2412,14 +2459,18 @@ havoc_stage:
 
           if (unlikely(temp_len < 2)) { break; }  // no retry
 
-          u32 pos = rand_below(afl, temp_len - 1);
+          if (special_random) {
+            u32 off = getRandomIndex(taint_array, temp_len - 1);
+          } else {
+            u32 off = rand_below(afl, temp_len - 1);
+          }
           item = 1 + rand_below(afl, ARITH_MAX);
 
 #ifdef INTROSPECTION
           snprintf(afl->m_tmp, sizeof(afl->m_tmp), " ARITH16+_%u", item);
           strcat(afl->mutation, afl->m_tmp);
 #endif
-          *(u16 *)(out_buf + pos) += item;
+          *(u16 *)(out_buf + off) += item;
 
           break;
 
@@ -2431,15 +2482,19 @@ havoc_stage:
 
           if (unlikely(temp_len < 2)) { break; }  // no retry
 
-          u32 pos = rand_below(afl, temp_len - 1);
+          if (special_random) {
+            u32 off = getRandomIndex(taint_array, temp_len - 1);
+          } else {
+            u32 off = rand_below(afl, temp_len - 1);
+          }
           u16 num = 1 + rand_below(afl, ARITH_MAX);
 
 #ifdef INTROSPECTION
           snprintf(afl->m_tmp, sizeof(afl->m_tmp), " ARITH16BE+__%u", num);
           strcat(afl->mutation, afl->m_tmp);
 #endif
-          *(u16 *)(out_buf + pos) =
-              SWAP16(SWAP16(*(u16 *)(out_buf + pos)) + num);
+          *(u16 *)(out_buf + off) =
+              SWAP16(SWAP16(*(u16 *)(out_buf + off)) + num);
 
           break;
 
@@ -2451,14 +2506,18 @@ havoc_stage:
 
           if (unlikely(temp_len < 4)) { break; }  // no retry
 
-          u32 pos = rand_below(afl, temp_len - 3);
+          if (special_random) {
+            u32 off = getRandomIndex(taint_array, temp_len - 3);
+          } else {
+            u32 off = rand_below(afl, temp_len - 3);
+          }
           item = 1 + rand_below(afl, ARITH_MAX);
 
 #ifdef INTROSPECTION
           snprintf(afl->m_tmp, sizeof(afl->m_tmp), " ARITH32-_%u", item);
           strcat(afl->mutation, afl->m_tmp);
 #endif
-          *(u32 *)(out_buf + pos) -= item;
+          *(u32 *)(out_buf + off) -= item;
 
           break;
 
@@ -2470,15 +2529,19 @@ havoc_stage:
 
           if (unlikely(temp_len < 4)) { break; }  // no retry
 
-          u32 pos = rand_below(afl, temp_len - 3);
+          if (special_random) {
+            u32 off = getRandomIndex(taint_array, temp_len - 3);
+          } else {
+            u32 off = rand_below(afl, temp_len - 3);
+          }
           u32 num = 1 + rand_below(afl, ARITH_MAX);
 
 #ifdef INTROSPECTION
           snprintf(afl->m_tmp, sizeof(afl->m_tmp), " ARITH32BE-_%u", num);
           strcat(afl->mutation, afl->m_tmp);
 #endif
-          *(u32 *)(out_buf + pos) =
-              SWAP32(SWAP32(*(u32 *)(out_buf + pos)) - num);
+          *(u32 *)(out_buf + off) =
+              SWAP32(SWAP32(*(u32 *)(out_buf + off)) - num);
 
           break;
 
@@ -2490,14 +2553,18 @@ havoc_stage:
 
           if (unlikely(temp_len < 4)) { break; }  // no retry
 
-          u32 pos = rand_below(afl, temp_len - 3);
+          if (special_random) {
+            u32 off = getRandomIndex(taint_array, temp_len - 3);
+          } else {
+            u32 off = rand_below(afl, temp_len - 3);
+          }
           item = 1 + rand_below(afl, ARITH_MAX);
 
 #ifdef INTROSPECTION
           snprintf(afl->m_tmp, sizeof(afl->m_tmp), " ARITH32+_%u", item);
           strcat(afl->mutation, afl->m_tmp);
 #endif
-          *(u32 *)(out_buf + pos) += item;
+          *(u32 *)(out_buf + off) += item;
 
           break;
 
@@ -2509,15 +2576,19 @@ havoc_stage:
 
           if (unlikely(temp_len < 4)) { break; }  // no retry
 
-          u32 pos = rand_below(afl, temp_len - 3);
+          if (special_random) {
+            u32 off = getRandomIndex(taint_array, temp_len - 3);
+          } else {
+            u32 off = rand_below(afl, temp_len - 3);
+          }
           u32 num = 1 + rand_below(afl, ARITH_MAX);
 
 #ifdef INTROSPECTION
           snprintf(afl->m_tmp, sizeof(afl->m_tmp), " ARITH32BE+_%u", num);
           strcat(afl->mutation, afl->m_tmp);
 #endif
-          *(u32 *)(out_buf + pos) =
-              SWAP32(SWAP32(*(u32 *)(out_buf + pos)) + num);
+          *(u32 *)(out_buf + off) =
+              SWAP32(SWAP32(*(u32 *)(out_buf + off)) + num);
 
           break;
 
@@ -2529,7 +2600,11 @@ havoc_stage:
              why not. We use XOR with 1-255 to eliminate the
              possibility of a no-op. */
 
-          u32 pos = rand_below(afl, temp_len);
+          if (special_random) {
+            u32 pos = getRandomIndex(taint_array, temp_len);
+          } else {
+            u32 pos = rand_below(afl, temp_len);
+          }
           item = 1 + rand_below(afl, 255);
 #ifdef INTROSPECTION
           snprintf(afl->m_tmp, sizeof(afl->m_tmp), " RAND8_%u",
@@ -2549,7 +2624,11 @@ havoc_stage:
 
             u32 clone_len = choose_block_len(afl, temp_len);
             u32 clone_from = rand_below(afl, temp_len - clone_len + 1);
-            u32 clone_to = rand_below(afl, temp_len);
+            if (special_random) {
+              u32 clone_to = getRandomIndex(taint_array, temp_len);
+            } else {
+              u32 clone_to = rand_below(afl, temp_len);
+            }
 
 #ifdef INTROSPECTION
             snprintf(afl->m_tmp, sizeof(afl->m_tmp), " CLONE-%s_%u_%u_%u",
@@ -2597,7 +2676,11 @@ havoc_stage:
             /* Insert a block of constant bytes (25%). */
 
             u32 clone_len = choose_block_len(afl, HAVOC_BLK_XL);
-            u32 clone_to = rand_below(afl, temp_len);
+            if (special_random) {
+              u32 clone_to = getRandomIndex(taint_array, temp_len);
+            } else {
+              u32 clone_to = rand_below(afl, temp_len);
+            }
             u32 strat = rand_below(afl, 2);
             u32 clone_from = clone_to ? clone_to - 1 : 0;
             item = strat ? rand_below(afl, 256) : out_buf[clone_from];
@@ -2653,7 +2736,12 @@ havoc_stage:
           do {
 
             copy_from = rand_below(afl, temp_len - copy_len + 1);
-            copy_to = rand_below(afl, temp_len - copy_len + 1);
+            if (special_random) {
+              copy_to = getRandomIndex(taint_array, temp_len - copy_len + 1);
+            } else {
+              copy_to = rand_below(afl, temp_len - copy_len + 1);
+            }
+            
 
           } while (unlikely(copy_from == copy_to));
 
@@ -2675,7 +2763,11 @@ havoc_stage:
           if (unlikely(temp_len < 2)) { break; }  // no retry
 
           u32 copy_len = choose_block_len(afl, temp_len - 1);
-          u32 copy_to = rand_below(afl, temp_len - copy_len + 1);
+          if (special_random) {
+            u32 copy_to = getRandomIndex(taint_array, temp_len - copy_len + 1);
+          } else {
+            u32 copy_to = rand_below(afl, temp_len - copy_len + 1);
+          }
           u32 strat = rand_below(afl, 2);
           u32 copy_from = copy_to ? copy_to - 1 : 0;
           item = strat ? rand_below(afl, 256) : out_buf[copy_from];
@@ -2700,7 +2792,12 @@ havoc_stage:
           snprintf(afl->m_tmp, sizeof(afl->m_tmp), " BYTEADD_");
           strcat(afl->mutation, afl->m_tmp);
 #endif
-          out_buf[rand_below(afl, temp_len)]++;
+          if (special_random) {
+            u32 off = getRandomIndex(taint_array, temp_len);
+          } else {
+            u32 off = rand_below(afl, temp_len);
+          }
+          out_buf[off]++;
           break;
 
         }
@@ -2713,7 +2810,12 @@ havoc_stage:
           snprintf(afl->m_tmp, sizeof(afl->m_tmp), " BYTESUB_");
           strcat(afl->mutation, afl->m_tmp);
 #endif
-          out_buf[rand_below(afl, temp_len)]--;
+          if (special_random) {
+            u32 off = getRandomIndex(taint_array, temp_len);
+          } else {
+            u32 off = rand_below(afl, temp_len);
+          }
+          out_buf[off]--;
           break;
 
         }
@@ -2726,7 +2828,12 @@ havoc_stage:
           snprintf(afl->m_tmp, sizeof(afl->m_tmp), " FLIP8_");
           strcat(afl->mutation, afl->m_tmp);
 #endif
-          out_buf[rand_below(afl, temp_len)] ^= 0xff;
+          if (special_random) {
+            u32 off = getRandomIndex(taint_array, temp_len);
+          } else {
+            u32 off = rand_below(afl, temp_len);
+          }
+          out_buf[off] ^= 0xff;
           break;
 
         }
@@ -2738,10 +2845,18 @@ havoc_stage:
           /* Switch bytes. */
 
           u32 to_end, switch_to, switch_len, switch_from;
-          switch_from = rand_below(afl, temp_len);
-          do {
+          if (special_random) {
+            switch_from = getRandomIndex(taint_array, temp_len);
+          } else {
+            switch_from = rand_below(afl, temp_len);
+          }
 
-            switch_to = rand_below(afl, temp_len);
+          do {
+            if (special_random) {
+              switch_to = getRandomIndex(taint_array, temp_len);
+            } else {
+              switch_to = rand_below(afl, temp_len);
+            }
 
           } while (unlikely(switch_from == switch_to));
 
@@ -2792,7 +2907,12 @@ havoc_stage:
           /* Don't delete too much. */
 
           u32 del_len = choose_block_len(afl, temp_len - 1);
-          u32 del_from = rand_below(afl, temp_len - del_len + 1);
+          if (special_random) {
+            u32 del_from = getRandomIndex(taint_array, temp_len - del_len + 1);
+          } else {
+            u32 del_from = rand_below(afl, temp_len - del_len + 1);
+          }
+
 
 #ifdef INTROSPECTION
           snprintf(afl->m_tmp, sizeof(afl->m_tmp), " DEL_%u_%u", del_from,
@@ -2815,7 +2935,12 @@ havoc_stage:
           if (unlikely(temp_len < 4)) { break; }  // no retry
 
           u32 len = choose_block_len(afl, temp_len - 1);
-          u32 off = rand_below(afl, temp_len - len + 1);
+          if (special_random) {
+            u32 off = getRandomIndex(taint_array, temp_len - len + 1);
+          } else {
+            u32 off = rand_below(afl, temp_len - len + 1);
+          }
+
 
 #ifdef INTROSPECTION
           snprintf(afl->m_tmp, sizeof(afl->m_tmp), " SHUFFLE_%u", len);
@@ -2850,7 +2975,12 @@ havoc_stage:
           /* Don't delete too much. */
 
           u32 del_len = 1;
-          u32 del_from = rand_below(afl, temp_len - del_len + 1);
+          if (special_random) {
+            u32 del_from = getRandomIndex(taint_array, temp_len - del_len + 1);
+          } else {
+            u32 del_from = rand_below(afl, temp_len - del_len + 1);
+          }
+
 
 #ifdef INTROSPECTION
           snprintf(afl->m_tmp, sizeof(afl->m_tmp), " DELONE_%u", del_from);
@@ -2870,7 +3000,11 @@ havoc_stage:
           if (unlikely(temp_len < 2)) { break; }  // no retry
 
           u32 clone_len = 1;
-          u32 clone_to = rand_below(afl, temp_len);
+          if (special_random) {
+            u32 clone_to = getRandomIndex(taint_array, temp_len);
+          } else {
+            u32 clone_to = rand_below(afl, temp_len);
+          }
           u32 strat = rand_below(afl, 2);
           u32 clone_from = clone_to ? clone_to - 1 : 0;
           item = strat ? rand_below(afl, 256) : out_buf[clone_from];
@@ -2909,6 +3043,11 @@ havoc_stage:
           if (unlikely(temp_len < 4)) { break; }  // no retry
 
           u32 off = rand_below(afl, temp_len), off2 = off, cnt = 0;
+          if (special_random) {
+            off = getRandomIndex(taint_array, temp_len);
+          } else {
+            off = rand_below(afl, temp_len);
+          }
 
           while (off2 + cnt < temp_len && !isdigit(out_buf[off2 + cnt])) {
 
@@ -3052,6 +3191,11 @@ havoc_stage:
 
           u32 len = 1 + rand_below(afl, 8);
           u32 pos = rand_below(afl, temp_len);
+          if (special_random) {
+            pos = getRandomIndex(taint_array, temp_len);
+          } else {
+            pos = rand_below(afl, temp_len);
+          }
           /* Insert ascii number. */
           if (unlikely(temp_len < pos + len)) {
 
@@ -3092,6 +3236,11 @@ havoc_stage:
           if (unlikely(extra_len > temp_len)) { goto retry_havoc_step; }
 
           u32 insert_at = rand_below(afl, temp_len - extra_len + 1);
+          if (special_random) {
+            insert_at = getRandomIndex(taint_array, temp_len - extra_len + 1);
+          } else {
+            insert_at = rand_below(afl, temp_len - extra_len + 1);
+          }
 #ifdef INTROSPECTION
           snprintf(afl->m_tmp, sizeof(afl->m_tmp), " EXTRA-OVERWRITE_%u_%u",
                    insert_at, extra_len);
@@ -3117,6 +3266,11 @@ havoc_stage:
 
           u8 *ptr = afl->extras[use_extra].data;
           u32 insert_at = rand_below(afl, temp_len + 1);
+          if (special_random) {
+            insert_at = getRandomIndex(taint_array, temp_len + 1);
+          } else {
+            insert_at = rand_below(afl, temp_len + 1);
+          }
 #ifdef INTROSPECTION
           snprintf(afl->m_tmp, sizeof(afl->m_tmp), " EXTRA-INSERT_%u_%u",
                    insert_at, extra_len);
@@ -3150,6 +3304,11 @@ havoc_stage:
           if (unlikely(extra_len > temp_len)) { goto retry_havoc_step; }
 
           u32 insert_at = rand_below(afl, temp_len - extra_len + 1);
+          if (special_random) {
+            insert_at = getRandomIndex(taint_array, temp_len - extra_len + 1);
+          } else {
+            insert_at = rand_below(afl, temp_len - extra_len + 1);
+          }
 #ifdef INTROSPECTION
           snprintf(afl->m_tmp, sizeof(afl->m_tmp),
                    " AUTO-EXTRA-OVERWRITE_%u_%u", insert_at, extra_len);
@@ -3175,6 +3334,11 @@ havoc_stage:
 
           u8 *ptr = afl->a_extras[use_extra].data;
           u32 insert_at = rand_below(afl, temp_len + 1);
+          if (special_random) {
+            insert_at = getRandomIndex(taint_array, temp_len + 1);
+          } else {
+            insert_at = rand_below(afl, temp_len + 1);
+          }
 #ifdef INTROSPECTION
           snprintf(afl->m_tmp, sizeof(afl->m_tmp), " AUTO-EXTRA-INSERT_%u_%u",
                    insert_at, extra_len);
@@ -3229,6 +3393,11 @@ havoc_stage:
 
           copy_from = rand_below(afl, new_len - copy_len + 1);
           copy_to = rand_below(afl, temp_len - copy_len + 1);
+          if (special_random) {
+            copy_to = getRandomIndex(taint_array, temp_len - copy_len + 1);
+          } else {
+            copy_to = rand_below(afl, temp_len - copy_len + 1);
+          }
 
 #ifdef INTROSPECTION
           snprintf(afl->m_tmp, sizeof(afl->m_tmp),
@@ -3279,6 +3448,11 @@ havoc_stage:
           clone_len = choose_block_len(afl, new_len);
           clone_from = rand_below(afl, new_len - clone_len + 1);
           clone_to = rand_below(afl, temp_len + 1);
+          if (special_random) {
+            clone_to = getRandomIndex(taint_array, temp_len + 1);
+          } else {
+            clone_to = rand_below(afl, temp_len + 1);
+          }
 
           u8 *temp_buf =
               afl_realloc(AFL_BUF_PARAM(out_scratch), temp_len + clone_len + 1);
