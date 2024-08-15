@@ -213,6 +213,23 @@ static u8 could_be_arith(u32 old_val, u32 new_val, u8 blen) {
 
 }
 
+u32 getRandomIndex(u32 taint_array[], u32 max) {
+    u32 *valid_indices = (u32 *)malloc(max * sizeof(u32));
+    u32 count = 0;
+    for (u32 i = 0; i < max; i++) {
+        if (taint_array[i] == 1) {
+            valid_indices[count++] = i;
+        }
+    }
+    if (count == 0) {
+        free(valid_indices);
+        return rand() % max;
+    }
+    u32 random_index = valid_indices[rand() % count];
+    free(valid_indices); 
+    return random_index;
+}
+
 /* Last but not least, a similar helper to see if insertion of an
    interesting integer is redundant given the insertions done for
    shorter blen. The last param (check_le) is set if the caller
@@ -2037,6 +2054,11 @@ havoc_stage:
   if (common_fuzz_stuff(afl, out_buf, temp_len)) { goto abandon_entry; }
   afl->fsrv.br_trace_setting = BR_TRACE_DEFAULT;
 
+  u32 *taint_array = (int *)malloc(len * sizeof(u32));
+  if (taint_array == NULL) { PFATAL("malloc failed"); }
+  memset(taint_array, 0, len * sizeof(u32));
+  u32 taint_diff_flag = 0;
+
   if (unlikely(afl->stage_max < HAVOC_MIN)) { afl->stage_max = HAVOC_MIN; }
 
   temp_len = len;
@@ -2154,6 +2176,13 @@ havoc_stage:
   // + (afl->extras_cnt ? 2 : 0) + (afl->a_extras_cnt ? 2 : 0);
 
   for (afl->stage_cur = 0; afl->stage_cur < afl->stage_max; ++afl->stage_cur) {
+    u32 special_random = 0;
+    if (taint_diff_flag) {
+      // 50% chance to use taint model
+      if (rand_below(afl, 100) < 50) {
+        special_random = 1;
+      }
+    }
 
     u32 use_stacking = 1 + rand_below(afl, stack_max);
 
@@ -3290,6 +3319,20 @@ havoc_stage:
     if (common_fuzz_stuff(afl, out_buf, temp_len)) { goto abandon_entry; }
     if (afl->fsrv.taint_flag == 1) {
       // find diff
+      taint_diff_flag = 1;
+      if (temp_len == len || temp_len > len) {
+        for (u32 i = 0; i < len; i++) {
+          if (out_buf[i] != in_buf[i]) {
+            taint_array[i] = 1;
+          }
+        }
+      } else {
+        for (u32 i = 0; i < temp_len; i++) {
+          if (out_buf[i] != in_buf[i]) {
+            taint_array[i] = 1;
+          }
+        }
+      }
     }
 
     /* out_buf might have been mangled a bit, so let's restore it to its
@@ -3337,6 +3380,8 @@ havoc_stage:
 #endif
 
   }
+
+  free(taint_array);
 
 #ifndef IGNORE_FINDS
 
