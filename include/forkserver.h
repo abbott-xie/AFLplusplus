@@ -105,6 +105,12 @@ typedef struct afl_forkserver {
   s64 *br_bits;                         /* Branch bits                      */
   u8 *br_cov;                           /* Branch coverage instrumentation is active */
   u8 *br_hit;                           /* Branch hit instrumentation array */
+  u32 *num_of_children;                 /* Number of children               */
+  u8 *cmp_type;                         /* Comparison type array            */
+  u32 *border_edge_parent_first_id;     /* Border edge parent first id      */
+  u32 *border_edge_child;               /* Border edge child                */
+  u32 *border_edge_parent;              /* Border edge parent               */
+  u32 *border_edge_2_br_dist;           /* Border edge to branch distance   */
 
   s32 fsrv_pid,                         /* PID of the fork server           */
       child_pid,                        /* PID of the fuzzed program        */

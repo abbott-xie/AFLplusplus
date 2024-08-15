@@ -423,6 +423,46 @@ static int stricmp(char const *a, char const *b) {
   }
 
 }
+void load_max_edge_cnts_fallback(afl_state_t *afl) {
+  FILE *f = fopen("border_edges", "r");
+  if (!f) { FATAL("Failed to open border_edges"); }
+
+  afl->fox_total_br_dist_edge_cnt = 0;
+  afl->fox_total_border_edge_cnt = 0;
+  size_t len;
+  char *line = NULL;
+  while (getline(&line, &len, f) != -1) {
+    strtok(line, " "); // parent
+    strtok(NULL, " "); // child
+    char *br_dist_id_ptr = strtok(NULL, " ");
+    int br_dist_id = atoi(br_dist_id_ptr);
+    char *str_len_ptr = strtok(NULL, " ");
+    int str_len = atoi(str_len_ptr);
+    u32 last_br_dist_id = (u32) (br_dist_id + str_len - 1);
+    if (br_dist_id >= 0 && last_br_dist_id > afl->fox_total_br_dist_edge_cnt)
+      afl->fox_total_br_dist_edge_cnt = last_br_dist_id;
+    afl->fox_total_border_edge_cnt++;
+  }
+  fclose(f);
+  free(line);
+}
+void load_max_edge_cnts(afl_state_t *afl) {
+  FILE *f = fopen("max_border_edge_id", "r");
+  if (!f) {
+    WARNF("Failed to open total_border_edge_cnt");
+    return load_max_edge_cnts_fallback(afl);
+  }
+  fscanf(f, "%u", &afl->fox_total_border_edge_cnt);
+  fclose(f);
+
+  f = fopen("max_br_dist_edge_id", "r");
+  if (!f) {
+    WARNF("Failed to open total_br_dist_edge_cnt");
+    return load_max_edge_cnts_fallback(afl);
+  }
+  fscanf(f, "%u", &afl->fox_total_br_dist_edge_cnt);
+  fclose(f);
+}
 
 static void fasan_check_afl_preload(char *afl_preload) {
 
@@ -2270,6 +2310,18 @@ int main(int argc, char **argv_orig, char **envp) {
     u32 new_map_size = afl_fsrv_get_mapsize(
         &afl->fsrv, afl->argv, &afl->stop_soon, afl->afl_env.afl_debug_child);
 
+    // TODO: better constrain total_border_edge_cnt
+    afl->fox_map_size = new_map_size + sizeof(u64);
+    load_max_edge_cnts(afl);
+    afl->fsrv.cmp_type = (u8 *) ck_alloc(sizeof(u8) * afl->fox_map_size);
+    afl->fsrv.border_edge_parent_first_id = (u32 *) ck_alloc(sizeof(u32) * afl->fox_map_size);
+    afl->fsrv.num_of_children = (u32 *) ck_alloc(sizeof(u32) * afl->fox_map_size);
+
+    afl->fsrv.border_edge_parent = (u32 *) ck_alloc(sizeof(u32) * afl->fox_total_border_edge_cnt);
+    afl->fsrv.border_edge_child = (u32 *) ck_alloc(sizeof(u32) * afl->fox_total_border_edge_cnt);
+    afl->fsrv.border_edge_2_br_dist = (u32 *) ck_alloc(sizeof(u32) * afl->fox_total_border_edge_cnt);
+
+
     // only reinitialize if the map needs to be larger than what we have.
     if (map_size < new_map_size) {
 
@@ -2451,6 +2503,8 @@ int main(int argc, char **argv_orig, char **envp) {
 
   memset(afl->virgin_tmout, 255, map_size);
   memset(afl->virgin_crash, 255, map_size);
+
+  load_metadata(afl);
 
   if (likely(!afl->afl_env.afl_no_startup_calibration)) {
 

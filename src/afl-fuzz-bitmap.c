@@ -449,6 +449,55 @@ void write_crash_readme(afl_state_t *afl) {
 }
 
  void increment_hit_bits(afl_state_t *afl) {
+  u64 *cur_trace_bit_batch = (u64 *)afl->fsrv.trace_bits;
+  u32 map_size_batched = (afl->fsrv.real_map_size + 7) >> 3;
+  u32 *num_of_children = afl->fsrv.num_of_children;
+  u8 *cmp_type = afl->fsrv.cmp_type;
+  u32 *border_edge_parent_first_id = afl->fsrv.border_edge_parent_first_id;
+  u32 *border_edge_child = afl->fsrv.border_edge_child;
+  u32 *border_edge_2_br_dist = afl->fsrv.border_edge_2_br_dist;
+  s64 *br_bits = afl->fsrv.br_bits;
+  u8 *br_cov = afl->fsrv.br_cov;
+  
+  // first get the horizon node
+  for (u32 i = 0; i < map_size_batched; i++) {
+    if (likely(!cur_trace_bit_batch[i]))
+      continue;
+
+    u8 *cur_trace_bit = (u8 *)(cur_trace_bit_batch + i);
+
+    for (u32 j = 0; j < 8; j++) {
+      if (!cur_trace_bit[j])
+        continue;
+
+      u32 parent = i * 8 + j;
+
+      u32 cur_num_of_children = num_of_children[parent];
+      u8 cmp_type_parent = cmp_type[parent];
+
+      if (cur_num_of_children < 2 || cmp_type_parent == NOT_INSTRUMENTED) {
+        continue;
+      }
+
+      u32 base_border_edge_id = border_edge_parent_first_id[parent];
+
+      u8 branch_flip = 0;
+
+      for (u32 cur_border_edge_id = base_border_edge_id; cur_border_edge_id < base_border_edge_id + cur_num_of_children; cur_border_edge_id++) {
+          u32 child_node = border_edge_child[cur_border_edge_id];
+          u32 base_br_dist_edge_id = border_edge_2_br_dist[cur_border_edge_id];
+
+          if (br_cov[base_br_dist_edge_id])
+            continue;
+
+          if (!is_reached(child_node, virgin_bits, trace_bits)) {
+            if (++branch_flip == 2)
+              br_cov[base_br_dist_edge_id] = 1;
+            continue;
+          }
+      }
+    }
+  }
  }
 /* Check if the result of an execve() during routine fuzzing is interesting,
    save or queue the input test case for further analysis if so. Returns 1 if
