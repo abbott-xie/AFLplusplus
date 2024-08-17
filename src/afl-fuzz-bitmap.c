@@ -496,7 +496,7 @@ void write_crash_readme(afl_state_t *afl) {
             continue;
 
           if (!is_reached(child_node, virgin_bits, trace_bits)) {
-            if (++branch_flip == 2)
+            if (++branch_flip == cur_num_of_children)
               br_cov[br_dist_edge_id] = 1;
             continue;
           }
