@@ -2717,11 +2717,11 @@ havoc_stage:
           do {
 
             copy_from = rand_below(afl, temp_len - copy_len + 1);
-            if (special_random) {
-              copy_to = getRandomIndex(taint_array, temp_len - copy_len + 1);
-            } else {
+            //if (special_random) {
+            //  copy_to = getRandomIndex(taint_array, temp_len - copy_len + 1);
+            //} else {
               copy_to = rand_below(afl, temp_len - copy_len + 1);
-            }
+            //}
             
 
           } while (unlikely(copy_from == copy_to));
@@ -2822,18 +2822,18 @@ havoc_stage:
           /* Switch bytes. */
 
           u32 to_end, switch_to, switch_len, switch_from;
-          if (special_random) {
-            switch_from = getRandomIndex(taint_array, temp_len);
-          } else {
+          //if (special_random) {
+          //  switch_from = getRandomIndex(taint_array, temp_len);
+          //} else {
             switch_from = rand_below(afl, temp_len);
-          }
+          //}
 
           do {
-            if (special_random) {
-              switch_to = getRandomIndex(taint_array, temp_len);
-            } else {
+            //if (special_random) {
+            //  switch_to = getRandomIndex(taint_array, temp_len);
+            //} else {
               switch_to = rand_below(afl, temp_len);
-            }
+            //}
 
           } while (unlikely(switch_from == switch_to));
 
