@@ -443,7 +443,7 @@ u8 fuzz_one_original(afl_state_t *afl) {
   
   // taint related
   s64 *local_br_bits = afl->fsrv.local_br_bits;
-  u32 fox_total_border_edge_cnt = afl->fox_total_border_edge_cnt;
+  //u32 fox_total_border_edge_cnt = afl->fox_total_border_edge_cnt;
   u32 fox_total_br_dist_edge_cnt = afl->fox_total_br_dist_edge_cnt;
 
   out_buf = afl_realloc(AFL_BUF_PARAM(out), len);

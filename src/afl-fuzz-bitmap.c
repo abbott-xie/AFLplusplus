@@ -462,7 +462,7 @@ void write_crash_readme(afl_state_t *afl) {
   u8 *br_cov = afl->fsrv.br_cov;
   u8 br_trace_setting = afl->fsrv.br_trace_setting;
   s64 *local_br_bits = afl->fsrv.local_br_bits;
-  u8 taint_flag = afl->fsrv.taint_flag;
+  //u8 taint_flag = afl->fsrv.taint_flag;
   
   // first get the horizon node
   for (u32 i = 0; i < map_size_batched; i++) {
