@@ -2192,7 +2192,7 @@ havoc_stage:
     snprintf(afl->mutation, sizeof(afl->mutation), "%s HAVOC-%u-%u",
              afl->queue_cur->fname, afl->queue_cur->is_ascii, use_stacking);
 #endif
-
+    afl->fsrv.filter_flag = 1;
     for (i = 0; i < use_stacking; ++i) {
 
       if (afl->custom_mutators_count) {
@@ -2600,7 +2600,7 @@ havoc_stage:
         }
 
         case MUT_CLONE_COPY: {
-
+          afl->fsrv.filter_flag = 0;
           if (likely(temp_len + HAVOC_BLK_XL < MAX_FILE)) {
 
             /* Clone bytes. */
@@ -2652,7 +2652,7 @@ havoc_stage:
         }
 
         case MUT_CLONE_FIXED: {
-
+          afl->fsrv.filter_flag = 0;
           if (likely(temp_len + HAVOC_BLK_XL < MAX_FILE)) {
 
             /* Insert a block of constant bytes (25%). */
@@ -2876,7 +2876,7 @@ havoc_stage:
         }
 
         case MUT_DEL: {
-
+          afl->fsrv.filter_flag = 0;
           /* Delete bytes. */
 
           if (unlikely(temp_len < 2)) { break; }  // no retry
@@ -2941,7 +2941,7 @@ havoc_stage:
         }
 
         case MUT_DELONE: {
-
+          afl->fsrv.filter_flag = 0;
           /* Delete bytes. */
 
           if (unlikely(temp_len < 2)) { break; }  // no retry
@@ -2969,7 +2969,7 @@ havoc_stage:
         }
 
         case MUT_INSERTONE: {
-
+          afl->fsrv.filter_flag = 0;
           if (unlikely(temp_len < 2)) { break; }  // no retry
 
           u32 clone_len = 1;
@@ -3011,7 +3011,7 @@ havoc_stage:
         }
 
         case MUT_ASCIINUM: {
-
+          afl->fsrv.filter_flag = 0;
           if (unlikely(temp_len < 4)) { break; }  // no retry
 
           u32 off = rand_below(afl, temp_len), off2 = off, cnt = 0;
@@ -3225,7 +3225,7 @@ havoc_stage:
         }
 
         case MUT_EXTRA_INSERT: {
-
+          afl->fsrv.filter_flag = 0;
           if (unlikely(!afl->extras_cnt)) { goto retry_havoc_step; }
 
           u32 use_extra = rand_below(afl, afl->extras_cnt);
@@ -3293,7 +3293,7 @@ havoc_stage:
         }
 
         case MUT_AUTO_EXTRA_INSERT: {
-
+          afl->fsrv.filter_flag = 0;
           if (unlikely(!afl->a_extras_cnt)) { goto retry_havoc_step; }
 
           u32 use_extra = rand_below(afl, afl->a_extras_cnt);
@@ -3384,7 +3384,7 @@ havoc_stage:
         }
 
         case MUT_SPLICE_INSERT: {
-
+          afl->fsrv.filter_flag = 0;
           if (unlikely(afl->ready_for_splicing_count <= 1)) {
 
             goto retry_havoc_step;
