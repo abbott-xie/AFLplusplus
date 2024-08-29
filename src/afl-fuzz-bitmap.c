@@ -469,6 +469,11 @@ void write_crash_readme(afl_state_t *afl) {
     return;
   }
 
+  u8 stack_flag = afl->fsrv.stack_flag;
+  if (stack_flag == 0 && br_trace_setting != BR_TRACE_SEED_INPUT) {
+    return;
+  }
+
   // first get the horizon node
   for (u32 i = 0; i < map_size_batched; i++) {
     if (likely(!cur_trace_bit_batch[i]))

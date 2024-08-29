@@ -2175,6 +2175,12 @@ havoc_stage:
 
   // + (afl->extras_cnt ? 2 : 0) + (afl->a_extras_cnt ? 2 : 0);
 
+  if (stack_max < 8) {
+    afl->fsrv.stack_flag = 1;
+  } else {
+    afl->fsrv.stack_flag = 0;
+  }
+
   for (afl->stage_cur = 0; afl->stage_cur < afl->stage_max; ++afl->stage_cur) {
     u32 special_random = 0;
     if (taint_diff_flag) {

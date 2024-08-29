@@ -105,6 +105,7 @@ typedef struct afl_forkserver {
   u8 br_trace_setting;                  /* Branch trace setting             */
   u8 taint_flag;                        /* Taint flag                       */
   u8 filter_flag;                       /* Filter flag                      */
+  u8 stack_flag;                        /* Stack flag                       */
   s64 *local_br_bits;                   /* Local branch bits                */
   s64 *br_bits;                         /* Branch bits                      */
   u8 *br_cov;                           /* Branch coverage instrumentation is active */
