@@ -28,7 +28,7 @@
 #include <limits.h>
 #include "cmplog.h"
 #include "afl-mutations.h"
-
+FILE *arrf;
 /* MOpt */
 
 static int select_algorithm(afl_state_t *afl, u32 max_algorithm) {
@@ -2180,8 +2180,10 @@ havoc_stage:
   } else {
     afl->fsrv.stack_flag = 0;
   }
-
+arrf = fopen(alloc_printf("%s/arr_log", afl->out_dir), "a");
+afl->stage_max = 10000;
   for (afl->stage_cur = 0; afl->stage_cur < afl->stage_max; ++afl->stage_cur) {
+    afl->stage_max = 10000;
     u32 special_random = 0;
     if (taint_diff_flag) {
       // 50% chance to use taint model
@@ -3532,7 +3534,14 @@ havoc_stage:
 #endif
 
   }
-
+int arr_cnt = 0;
+for (u32 i = 0; i < len; i++) {
+  fprintf(arrf, "%u", taint_array[i]); 
+  if (taint_array[i]) { arr_cnt++; }
+}
+fflush(arrf); 
+fprintf(arrf, "\n%d,%u,%u\n", arr_cnt, len, temp_len);
+fflush(arrf);
   free(taint_array);
 
 #ifndef IGNORE_FINDS
@@ -6429,4 +6438,5 @@ u8 fuzz_one(afl_state_t *afl) {
   return (key_val_lv_1 | key_val_lv_2);
 
 }
+
 
