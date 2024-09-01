@@ -2196,6 +2196,15 @@ afl->stage_max = 10000;
 
     afl->stage_cur_val = use_stacking;
 
+int arr_cnt = 0;
+for (u32 i = 0; i < len; i++) {
+  fprintf(arrf, "%u", taint_array[i]); 
+  if (taint_array[i]) { arr_cnt++; }
+}
+fflush(arrf); 
+fprintf(arrf, "\n%d,%u,%u\n", arr_cnt, len, temp_len);
+fflush(arrf);
+
 #ifdef INTROSPECTION
     snprintf(afl->mutation, sizeof(afl->mutation), "%s HAVOC-%u-%u",
              afl->queue_cur->fname, afl->queue_cur->is_ascii, use_stacking);
@@ -3514,7 +3523,10 @@ afl->stage_max = 10000;
     }
 
   }
-
+fclose(arrf);
+afl->force_ui_update = 1;
+show_stats(afl);
+FATAL("Over");
   new_hit_cnt = afl->queued_items + afl->saved_crashes;
 
   if (!splice_cycle) {
@@ -3534,14 +3546,6 @@ afl->stage_max = 10000;
 #endif
 
   }
-int arr_cnt = 0;
-for (u32 i = 0; i < len; i++) {
-  fprintf(arrf, "%u", taint_array[i]); 
-  if (taint_array[i]) { arr_cnt++; }
-}
-fflush(arrf); 
-fprintf(arrf, "\n%d,%u,%u\n", arr_cnt, len, temp_len);
-fflush(arrf);
   free(taint_array);
 
 #ifndef IGNORE_FINDS
