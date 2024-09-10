@@ -2051,7 +2051,7 @@ havoc_stage:
   // taint trace
   memset(local_br_bits, 0, sizeof(s64) * fox_total_br_dist_edge_cnt);
   afl->fsrv.br_trace_setting = BR_TRACE_SEED_INPUT;
-  if (common_fuzz_stuff(afl, out_buf, temp_len)) { goto abandon_entry; }
+  if (common_fuzz_stuff(afl, out_buf, len)) { goto abandon_entry; }
   afl->fsrv.br_trace_setting = BR_TRACE_DEFAULT;
 
   u32 *taint_array = (int *)malloc(len * sizeof(u32));
