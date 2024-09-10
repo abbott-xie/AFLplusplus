@@ -3482,20 +3482,44 @@ fflush(arrf);
     if (common_fuzz_stuff(afl, out_buf, temp_len)) { goto abandon_entry; }
     if (afl->fsrv.taint_flag == 1) {
       // find diff
+      u32 *diff_array = (int *)ck_alloc(len * sizeof(u32));
+      u8 *change_val = ck_alloc(sizeof(u8) * len);
+      u32 num_diff = 0;
       taint_diff_flag = 1;
       if (temp_len == len || temp_len > len) {
         for (u32 i = 0; i < len; i++) {
           if (out_buf[i] != in_buf[i]) {
-            taint_array[i] = 1;
+            diff_array[i] = 1;
+            change_val[i] = out_buf[i];
+            num_diff++;
           }
         }
       } else {
         for (u32 i = 0; i < temp_len; i++) {
           if (out_buf[i] != in_buf[i]) {
-            taint_array[i] = 1;
+            diff_array[i] = 1;
+            change_val[i] = out_buf[i];
+            num_diff++;
           }
         }
       }
+      u8 *orig_val = ck_alloc(sizeof(u8) * num_diff);
+      memcpy(out_buf, in_buf, len);
+
+      for (u32 i = 0; i < len; i++) {
+        if (diff_array[i] == 1) {
+          orig_val[i] = in_buf[i];
+          out_buf[i] = change_val[i];
+          afl->fsrv.taint_flag = 0;
+          if (common_fuzz_stuff(afl, out_buf, temp_len)) { goto abandon_entry; }
+          if (afl->fsrv.taint_flag == 1) {
+            taint_array[i] = 1;
+          }
+          out_buf[i] = orig_val[i];
+        }
+      }
+      free(diff_array);
+      free(orig_val);
     }
 
     /* out_buf might have been mangled a bit, so let's restore it to its
