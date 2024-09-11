@@ -29,6 +29,7 @@
 #include "cmplog.h"
 #include "afl-mutations.h"
 FILE *seedf;
+FILE *covlog;
 /* MOpt */
 
 static int select_algorithm(afl_state_t *afl, u32 max_algorithm) {
@@ -2181,9 +2182,14 @@ havoc_stage:
     afl->fsrv.stack_flag = 0;
   }
 seedf = fopen(alloc_printf("%s/seed_log", afl->out_dir), "a");
+covlog = fopen(alloc_printf("%s/cov_log", afl->out_dir), "a");
 afl->stage_max = 100000;
   for (afl->stage_cur = 0; afl->stage_cur < afl->stage_max; ++afl->stage_cur) {
     fprintf(seedf, "%u\n", afl->current_entry);
+    // edge
+    u32 t_bytes = count_non_255_bytes(afl, afl->virgin_bits);
+    // afl->stage_cur, edge
+    fprintf(covlog, "%u,%u\n", afl->stage_cur, t_bytes);
     if (afl->stage_cur % 10000 == 0) {
         afl->force_ui_update = 1;
         show_stats(afl);
