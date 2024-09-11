@@ -1,0 +1,16 @@
+[
+    {
+        "mode": "optfuzz",
+        "input": "/workspace/fuzzopt-eval/stack_seeds_100000/fuzzbench/libpng",
+        "target": "/workspace/fuzzopt-eval/fuzzdeployment/targets/libpng_read_fuzzer/binaries/optfuzz_build/libpng_read_fuzzer",
+        "cmdline": "",
+        "fuzztimeout": "3600",
+        "jobcount": 10,
+        "output": "/workspace/fuzzopt-eval/lab5_flip_100000_seeds_for+3/fuzzbench/libpng/output",
+        "fuzzer": "/workspace/OptFuzzer_flip_100000_seeds_for/afl-fuzz",
+        "afl_margs": "",
+        "env": {
+            "AFL_NO_UI": "1", "AFL_FAST_CAL": "1", "AFL_DISABLE_TRIM": "1"
+        }
+    }
+]
