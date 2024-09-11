@@ -1,0 +1,227 @@
+Target: bloaty
+exec_done: 4000, stack: 1, flip: 0
+exec_done: 8000, stack: 0, flip: 0
+exec_done: 16000, stack: 1, flip: 0
+exec_done: 32000, stack: 1, flip: 0
+Total: stack: 3, flip: 0
+
+Target: harfbuzz
+exec_done: 4000, stack: 1, flip: 1
+exec_done: 8000, stack: 1, flip: 0
+exec_done: 16000, stack: 1, flip: 0
+exec_done: 32000, stack: 1, flip: 0
+Total: stack: 4, flip: 1
+
+Target: lcms
+exec_done: 4000, stack: 0, flip: 0
+exec_done: 8000, stack: 0, flip: 0
+exec_done: 16000, stack: 0, flip: 0
+exec_done: 32000, stack: 0, flip: 0
+Total: stack: 0, flip: 0
+
+Target: libpcap
+exec_done: 4000, stack: 0, flip: 0
+exec_done: 8000, stack: 0, flip: 0
+exec_done: 16000, stack: 0, flip: 0
+exec_done: 32000, stack: 0, flip: 0
+Total: stack: 0, flip: 0
+
+Target: libxml
+exec_done: 4000, stack: 0, flip: 0
+exec_done: 8000, stack: 0, flip: 1
+exec_done: 16000, stack: 0, flip: 1
+exec_done: 32000, stack: 0, flip: 1
+Total: stack: 0, flip: 3
+
+Target: openh
+exec_done: 4000, stack: 0, flip: 0
+exec_done: 8000, stack: 0, flip: 0
+exec_done: 16000, stack: 0, flip: 0
+exec_done: 32000, stack: 0, flip: 0
+Total: stack: 0, flip: 0
+
+Target: re2
+exec_done: 4000, stack: 0, flip: 0
+exec_done: 8000, stack: 0, flip: 0
+exec_done: 16000, stack: 0, flip: 0
+exec_done: 32000, stack: 0, flip: 0
+Total: stack: 0, flip: 0
+
+Target: systemd
+exec_done: 4000, stack: 0, flip: 0
+exec_done: 8000, stack: 1, flip: 1
+exec_done: 16000, stack: 1, flip: 1
+exec_done: 32000, stack: 1, flip: 1
+Total: stack: 3, flip: 3
+
+Target: woff2
+exec_done: 4000, stack: 1, flip: 0
+exec_done: 8000, stack: 1, flip: 0
+exec_done: 16000, stack: 0, flip: 0
+exec_done: 32000, stack: 0, flip: 0
+Total: stack: 2, flip: 0
+
+Target: jsoncpp
+exec_done: 4000, stack: 1, flip: 1
+exec_done: 8000, stack: 0, flip: 1
+exec_done: 16000, stack: 0, flip: 1
+exec_done: 32000, stack: 0, flip: 0
+Total: stack: 1, flip: 3
+
+Target: libjpeg
+exec_done: 4000, stack: 0, flip: 0
+exec_done: 8000, stack: 0, flip: 0
+exec_done: 16000, stack: 1, flip: 0
+exec_done: 32000, stack: 0, flip: 0
+Total: stack: 1, flip: 0
+
+Target: libpng
+exec_done: 4000, stack: 1, flip: 0
+exec_done: 8000, stack: 0, flip: 0
+exec_done: 16000, stack: 0, flip: 0
+exec_done: 32000, stack: 0, flip: 0
+Total: stack: 1, flip: 0
+
+Target: openssl
+exec_done: 4000, stack: 0, flip: 0
+exec_done: 8000, stack: 0, flip: 0
+exec_done: 16000, stack: 1, flip: 0
+exec_done: 32000, stack: 0, flip: 0
+Total: stack: 1, flip: 0
+
+Target: stbi
+exec_done: 4000, stack: 0, flip: 0
+exec_done: 8000, stack: 1, flip: 0
+exec_done: 16000, stack: 1, flip: 0
+exec_done: 32000, stack: 0, flip: 0
+Total: stack: 2, flip: 0
+
+Target: vorbis
+exec_done: 4000, stack: 0, flip: 0
+exec_done: 8000, stack: 1, flip: 0
+exec_done: 16000, stack: 1, flip: 0
+exec_done: 32000, stack: 1, flip: 0
+Total: stack: 3, flip: 0
+
+Target: zlib
+exec_done: 4000, stack: 0, flip: 1
+exec_done: 8000, stack: 0, flip: 1
+exec_done: 16000, stack: 0, flip: 1
+exec_done: 32000, stack: 0, flip: 1
+Total: stack: 0, flip: 4
+
+Target: cflow
+exec_done: 4000, stack: 0, flip: 0
+exec_done: 8000, stack: 0, flip: 1
+exec_done: 16000, stack: 0, flip: 0
+exec_done: 32000, stack: 0, flip: 1
+Total: stack: 0, flip: 2
+
+Target: ffmpeg
+exec_done: 4000, stack: 1, flip: 0
+exec_done: 8000, stack: 1, flip: 0
+exec_done: 16000, stack: 1, flip: 0
+exec_done: 32000, stack: 1, flip: 0
+Total: stack: 4, flip: 0
+
+Target: infotocap
+exec_done: 4000, stack: 0, flip: 0
+exec_done: 8000, stack: 0, flip: 0
+exec_done: 16000, stack: 0, flip: 0
+exec_done: 32000, stack: 0, flip: 0
+Total: stack: 0, flip: 0
+
+Target: jq
+exec_done: 4000, stack: 0, flip: 0
+exec_done: 8000, stack: 1, flip: 0
+exec_done: 16000, stack: 1, flip: 0
+exec_done: 32000, stack: 1, flip: 0
+Total: stack: 3, flip: 0
+
+Target: mp3gain
+exec_done: 4000, stack: 1, flip: 0
+exec_done: 8000, stack: 1, flip: 0
+exec_done: 16000, stack: 1, flip: 1
+exec_done: 32000, stack: 1, flip: 1
+Total: stack: 4, flip: 2
+
+Target: mujs
+exec_done: 4000, stack: 1, flip: 0
+exec_done: 8000, stack: 1, flip: 0
+exec_done: 16000, stack: 0, flip: 0
+exec_done: 32000, stack: 0, flip: 0
+Total: stack: 2, flip: 0
+
+Target: objdump
+exec_done: 4000, stack: 0, flip: 0
+exec_done: 8000, stack: 0, flip: 0
+exec_done: 16000, stack: 0, flip: 0
+exec_done: 32000, stack: 0, flip: 0
+Total: stack: 0, flip: 0
+
+Target: tiffsplit
+exec_done: 4000, stack: 1, flip: 1
+exec_done: 8000, stack: 1, flip: 1
+exec_done: 16000, stack: 1, flip: 1
+exec_done: 32000, stack: 1, flip: 1
+Total: stack: 4, flip: 4
+
+Target: exiv2
+exec_done: 4000, stack: 1, flip: 1
+exec_done: 8000, stack: 1, flip: 1
+exec_done: 16000, stack: 1, flip: 1
+exec_done: 32000, stack: 1, flip: 1
+Total: stack: 4, flip: 4
+
+Target: flvmeta
+exec_done: 4000, stack: 1, flip: 1
+exec_done: 8000, stack: 1, flip: 1
+exec_done: 16000, stack: 1, flip: 1
+exec_done: 32000, stack: 0, flip: 1
+Total: stack: 3, flip: 4
+
+Target: jhead
+exec_done: 4000, stack: 0, flip: 0
+exec_done: 8000, stack: 0, flip: 0
+exec_done: 16000, stack: 1, flip: 0
+exec_done: 32000, stack: 0, flip: 0
+Total: stack: 1, flip: 0
+
+Target: lame
+exec_done: 4000, stack: 0, flip: 0
+exec_done: 8000, stack: 0, flip: 0
+exec_done: 16000, stack: 0, flip: 0
+exec_done: 32000, stack: 0, flip: 0
+Total: stack: 0, flip: 0
+
+Target: mp42aac
+exec_done: 4000, stack: 0, flip: 0
+exec_done: 8000, stack: 0, flip: 0
+exec_done: 16000, stack: 0, flip: 0
+exec_done: 32000, stack: 0, flip: 0
+Total: stack: 0, flip: 0
+
+Target: nm-new
+exec_done: 4000, stack: 1, flip: 1
+exec_done: 8000, stack: 0, flip: 1
+exec_done: 16000, stack: 0, flip: 0
+exec_done: 32000, stack: 0, flip: 0
+Total: stack: 1, flip: 2
+
+Target: pdftotext
+exec_done: 4000, stack: 0, flip: 0
+exec_done: 8000, stack: 0, flip: 1
+exec_done: 16000, stack: 0, flip: 0
+exec_done: 32000, stack: 0, flip: 0
+Total: stack: 0, flip: 1
+
+Target: tcpdump
+exec_done: 4000, stack: 1, flip: 0
+exec_done: 8000, stack: 0, flip: 0
+exec_done: 16000, stack: 1, flip: 0
+exec_done: 32000, stack: 0, flip: 0
+Total: stack: 2, flip: 0
+
+Overall Total for all targets:
+stack: 49
+flip: 33
