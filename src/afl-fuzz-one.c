@@ -3550,6 +3550,7 @@ afl->stage_max = 100000;
 
   }
 fclose(seedf);
+fclose(covlog);
 afl->force_ui_update = 1;
 show_stats(afl);
 FATAL("Over");
