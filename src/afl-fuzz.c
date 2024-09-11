@@ -2895,6 +2895,7 @@ int main(int argc, char **argv_orig, char **envp) {
 
           } while (unlikely(afl->current_entry >= afl->queued_items));
 
+	  afl->current_entry = 0;
           afl->queue_cur = afl->queue_buf[afl->current_entry];
 
         }

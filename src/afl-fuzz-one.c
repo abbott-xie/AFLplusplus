@@ -28,7 +28,7 @@
 #include <limits.h>
 #include "cmplog.h"
 #include "afl-mutations.h"
-FILE *arrf;
+FILE *seedf;
 /* MOpt */
 
 static int select_algorithm(afl_state_t *afl, u32 max_algorithm) {
@@ -2180,10 +2180,15 @@ havoc_stage:
   } else {
     afl->fsrv.stack_flag = 0;
   }
-arrf = fopen(alloc_printf("%s/arr_log", afl->out_dir), "a");
-afl->stage_max = 10000;
+seedf = fopen(alloc_printf("%s/seed_log", afl->out_dir), "a");
+afl->stage_max = 100000;
   for (afl->stage_cur = 0; afl->stage_cur < afl->stage_max; ++afl->stage_cur) {
-    afl->stage_max = 10000;
+    fprintf(seedf, "%u\n", afl->current_entry);
+    if (afl->stage_cur % 10000 == 0) {
+        afl->force_ui_update = 1;
+        show_stats(afl);
+    }
+    afl->stage_max = 100000;
     u32 special_random = 0;
     if (taint_diff_flag) {
       // 50% chance to use taint model
@@ -2195,15 +2200,6 @@ afl->stage_max = 10000;
     u32 use_stacking = 1 + rand_below(afl, stack_max);
 
     afl->stage_cur_val = use_stacking;
-
-int arr_cnt = 0;
-for (u32 i = 0; i < len; i++) {
-  fprintf(arrf, "%u", taint_array[i]); 
-  if (taint_array[i]) { arr_cnt++; }
-}
-fflush(arrf); 
-fprintf(arrf, "\n%d,%u,%u\n", arr_cnt, len, temp_len);
-fflush(arrf);
 
 #ifdef INTROSPECTION
     snprintf(afl->mutation, sizeof(afl->mutation), "%s HAVOC-%u-%u",
@@ -3547,7 +3543,7 @@ fflush(arrf);
     }
 
   }
-fclose(arrf);
+fclose(seedf);
 afl->force_ui_update = 1;
 show_stats(afl);
 FATAL("Over");
