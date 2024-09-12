@@ -2176,11 +2176,12 @@ havoc_stage:
 
   // + (afl->extras_cnt ? 2 : 0) + (afl->a_extras_cnt ? 2 : 0);
 
-  if (stack_max < 8) {
-    afl->fsrv.stack_flag = 1;
-  } else {
-    afl->fsrv.stack_flag = 0;
-  }
+  // if (stack_max < 8) {
+  //   afl->fsrv.stack_flag = 1;
+  // } else {
+  //   afl->fsrv.stack_flag = 0;
+  // }
+  afl->fsrv.stack_flag = 1;
   seedf = fopen(alloc_printf("%s/seed_log", afl->out_dir), "a");
   covlog = fopen(alloc_printf("%s/cov_log", afl->out_dir), "a");
   afl->stage_max = 32000;
@@ -2215,7 +2216,7 @@ havoc_stage:
     snprintf(afl->mutation, sizeof(afl->mutation), "%s HAVOC-%u-%u",
              afl->queue_cur->fname, afl->queue_cur->is_ascii, use_stacking);
 #endif
-    afl->fsrv.filter_flag = 1;
+    afl->fsrv.limit_flag = 1;
     for (i = 0; i < use_stacking; ++i) {
 
       if (afl->custom_mutators_count) {
@@ -2623,7 +2624,6 @@ havoc_stage:
         }
 
         case MUT_CLONE_COPY: {
-          afl->fsrv.filter_flag = 0;
           if (likely(temp_len + HAVOC_BLK_XL < MAX_FILE)) {
 
             /* Clone bytes. */
@@ -2675,7 +2675,6 @@ havoc_stage:
         }
 
         case MUT_CLONE_FIXED: {
-          afl->fsrv.filter_flag = 0;
           if (likely(temp_len + HAVOC_BLK_XL < MAX_FILE)) {
 
             /* Insert a block of constant bytes (25%). */
@@ -2899,7 +2898,6 @@ havoc_stage:
         }
 
         case MUT_DEL: {
-          afl->fsrv.filter_flag = 0;
           /* Delete bytes. */
 
           if (unlikely(temp_len < 2)) { break; }  // no retry
@@ -2964,7 +2962,6 @@ havoc_stage:
         }
 
         case MUT_DELONE: {
-          afl->fsrv.filter_flag = 0;
           /* Delete bytes. */
 
           if (unlikely(temp_len < 2)) { break; }  // no retry
@@ -2992,7 +2989,6 @@ havoc_stage:
         }
 
         case MUT_INSERTONE: {
-          afl->fsrv.filter_flag = 0;
           if (unlikely(temp_len < 2)) { break; }  // no retry
 
           u32 clone_len = 1;
@@ -3034,7 +3030,6 @@ havoc_stage:
         }
 
         case MUT_ASCIINUM: {
-          afl->fsrv.filter_flag = 0;
           if (unlikely(temp_len < 4)) { break; }  // no retry
 
           u32 off = rand_below(afl, temp_len), off2 = off, cnt = 0;
@@ -3248,7 +3243,6 @@ havoc_stage:
         }
 
         case MUT_EXTRA_INSERT: {
-          afl->fsrv.filter_flag = 0;
           if (unlikely(!afl->extras_cnt)) { goto retry_havoc_step; }
 
           u32 use_extra = rand_below(afl, afl->extras_cnt);
@@ -3316,7 +3310,6 @@ havoc_stage:
         }
 
         case MUT_AUTO_EXTRA_INSERT: {
-          afl->fsrv.filter_flag = 0;
           if (unlikely(!afl->a_extras_cnt)) { goto retry_havoc_step; }
 
           u32 use_extra = rand_below(afl, afl->a_extras_cnt);
@@ -3407,7 +3400,6 @@ havoc_stage:
         }
 
         case MUT_SPLICE_INSERT: {
-          afl->fsrv.filter_flag = 0;
           if (unlikely(afl->ready_for_splicing_count <= 1)) {
 
             goto retry_havoc_step;
@@ -3484,23 +3476,28 @@ havoc_stage:
 
     }
 
+    u32 total_diff = 0;
+    if (temp_len == len || temp_len > len) {
+      for (u32 i = 0; i < len; i++) {
+        if (out_buf[i] != in_buf[i]) {
+          total_diff++;
+        }
+      }
+    } else {
+      for (u32 i = 0; i < temp_len; i++) {
+        if (out_buf[i] != in_buf[i]) {
+          total_diff++;
+        }
+      }
+    }
+    if (total_diff > 5) {
+      afl->fsrv.limit_flag = 0;
+    }
+
     afl->fsrv.taint_flag = 0;
     if (common_fuzz_stuff(afl, out_buf, temp_len)) { goto abandon_entry; }
     if (afl->fsrv.taint_flag == 1) {
-      u32 total_diff = 0;
-      if (temp_len == len || temp_len > len) {
-        for (u32 i = 0; i < len; i++) {
-          if (out_buf[i] != in_buf[i]) {
-            total_diff++;
-          }
-        }
-      } else {
-        for (u32 i = 0; i < temp_len; i++) {
-          if (out_buf[i] != in_buf[i]) {
-            total_diff++;
-          }
-        }
-      }
+
       if (total_diff < 5) {
         // find diff
         taint_diff_flag = 1;
@@ -3545,11 +3542,11 @@ havoc_stage:
     }
 
   }
-fclose(seedf);
-fclose(covlog);
-afl->force_ui_update = 1;
-show_stats(afl);
-FATAL("Over");
+  fclose(seedf);
+  fclose(covlog);
+  afl->force_ui_update = 1;
+  show_stats(afl);
+  FATAL("Over");
   new_hit_cnt = afl->queued_items + afl->saved_crashes;
 
   if (!splice_cycle) {
