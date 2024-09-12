@@ -2181,9 +2181,10 @@ havoc_stage:
   } else {
     afl->fsrv.stack_flag = 0;
   }
-seedf = fopen(alloc_printf("%s/seed_log", afl->out_dir), "a");
-covlog = fopen(alloc_printf("%s/cov_log", afl->out_dir), "a");
-afl->stage_max = 100000;
+  seedf = fopen(alloc_printf("%s/seed_log", afl->out_dir), "a");
+  covlog = fopen(alloc_printf("%s/cov_log", afl->out_dir), "a");
+  afl->stage_max = 32000;
+  u32 taint_flag = 0;
   for (afl->stage_cur = 0; afl->stage_cur < afl->stage_max; ++afl->stage_cur) {
     fprintf(seedf, "%u\n", afl->current_entry);
     // edge
@@ -2194,11 +2195,14 @@ afl->stage_max = 100000;
         afl->force_ui_update = 1;
         show_stats(afl);
     }
-    afl->stage_max = 100000;
+    afl->stage_max = 32000;
+
+    if (afl->stage_cur > (afl->stage_max/2))
+      taint_flag = 1;
     u32 special_random = 0;
-    if (taint_diff_flag) {
+    if (taint_diff_flag && taint_flag) {
       // 50% chance to use taint model
-      if (rand_below(afl, 100) < 50) {
+      if (rand_below(afl, 100) < 90) {
         special_random = 1;
       }
     }
@@ -3483,45 +3487,37 @@ afl->stage_max = 100000;
     afl->fsrv.taint_flag = 0;
     if (common_fuzz_stuff(afl, out_buf, temp_len)) { goto abandon_entry; }
     if (afl->fsrv.taint_flag == 1) {
-      // find diff
-      u32 *diff_array = (int *)ck_alloc(len * sizeof(u32));
-      u8 *change_val = ck_alloc(sizeof(u8) * len);
-      u32 num_diff = 0;
-      taint_diff_flag = 1;
+      u32 total_diff = 0;
       if (temp_len == len || temp_len > len) {
         for (u32 i = 0; i < len; i++) {
           if (out_buf[i] != in_buf[i]) {
-            diff_array[i] = 1;
-            change_val[i] = out_buf[i];
-            num_diff++;
+            total_diff++;
           }
         }
       } else {
         for (u32 i = 0; i < temp_len; i++) {
           if (out_buf[i] != in_buf[i]) {
-            diff_array[i] = 1;
-            change_val[i] = out_buf[i];
-            num_diff++;
+            total_diff++;
           }
         }
       }
-      u8 *orig_val = ck_alloc(sizeof(u8) * num_diff);
-      memcpy(out_buf, in_buf, len);
-
-      for (u32 i = 0; i < len; i++) {
-        if (diff_array[i] == 1) {
-          orig_val[i] = in_buf[i];
-          out_buf[i] = change_val[i];
-          afl->fsrv.taint_flag = 0;
-          if (common_fuzz_stuff(afl, out_buf, temp_len)) { goto abandon_entry; }
-          if (afl->fsrv.taint_flag == 1) {
-            taint_array[i] = 1;
+      if (total_diff < 5) {
+        // find diff
+        taint_diff_flag = 1;
+        if (temp_len == len || temp_len > len) {
+          for (u32 i = 0; i < len; i++) {
+            if (out_buf[i] != in_buf[i]) {
+              taint_array[i] = 1;
+            }
           }
-          out_buf[i] = orig_val[i];
+        } else {
+          for (u32 i = 0; i < temp_len; i++) {
+            if (out_buf[i] != in_buf[i]) {
+              taint_array[i] = 1;
+            }
+          }
         }
       }
-      free(diff_array);
-      free(orig_val);
     }
 
     /* out_buf might have been mangled a bit, so let's restore it to its
