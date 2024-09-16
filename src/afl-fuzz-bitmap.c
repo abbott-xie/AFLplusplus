@@ -469,8 +469,8 @@ void write_crash_readme(afl_state_t *afl) {
     return;
   }
 
-  u8 stack_flag = afl->fsrv.stack_flag;
-  if (stack_flag == 0 && br_trace_setting != BR_TRACE_SEED_INPUT) {
+  u8 begin_sample_flag = afl->fsrv.begin_sample_flag;
+  if (begin_sample_flag == 0 && br_trace_setting != BR_TRACE_SEED_INPUT) {
     return;
   }
 

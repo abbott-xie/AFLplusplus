@@ -2192,12 +2192,7 @@ havoc_stage:
 
   // + (afl->extras_cnt ? 2 : 0) + (afl->a_extras_cnt ? 2 : 0);
 
-  // if (stack_max < 8) {
-  //   afl->fsrv.stack_flag = 1;
-  // } else {
-  //   afl->fsrv.stack_flag = 0;
-  // }
-  afl->fsrv.stack_flag = 1;
+  afl->fsrv.begin_sample_flag = 1;
   arrf = fopen(alloc_printf("%s/arr_log", afl->out_dir), "a");
   //afl->stage_max = 32000;
   u32 taint_flag = 0;
@@ -2205,7 +2200,11 @@ havoc_stage:
     //afl->stage_max = 32000;
 
     if (afl->stage_cur > (afl->stage_max/2))
+    {
       taint_flag = 1;
+      afl->fsrv.begin_sample_flag = 0;
+    }
+      
     u32 special_random = 0;
     if (taint_diff_flag && taint_flag) {
       // 50% chance to use taint model
