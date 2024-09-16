@@ -215,19 +215,36 @@ static u8 could_be_arith(u32 old_val, u32 new_val, u8 blen) {
 
 u32 getRandomIndex(u32 taint_array[], u32 max) {
     u32 *valid_indices = (u32 *)malloc(max * sizeof(u32));
+    u32 *cumulative_values = (u32 *)malloc(max * sizeof(u32));
     u32 count = 0;
+    u32 cumulative_sum = 0;
+
     for (u32 i = 0; i < max; i++) {
-        if (taint_array[i] == 1) {
-            valid_indices[count++] = i;
-        }
+      cumulative_sum += taint_array[i];
+      valid_indices[count] = i;
+      cumulative_values[count] = cumulative_sum;
+      count++;
     }
-    if (count == 0) {
+
+    if (cumulative_sum == 0) {
         free(valid_indices);
+        free(cumulative_values);
         return rand() % max;
     }
-    u32 random_index = valid_indices[rand() % count];
-    free(valid_indices); 
-    return random_index;
+
+    u32 random_value = rand() % cumulative_sum;
+
+    for (u32 i = 0; i < count; i++) {
+        if (cumulative_values[i] > random_value) {
+            free(valid_indices);
+            free(cumulative_values);
+            return valid_indices[i];
+        }
+    }
+
+    free(valid_indices);
+    free(cumulative_values);
+    return valid_indices[count - 1];
 }
 
 /* Last but not least, a similar helper to see if insertion of an
@@ -3499,13 +3516,13 @@ havoc_stage:
       if (temp_len == len || temp_len > len) {
         for (u32 i = 0; i < len; i++) {
           if (out_buf[i] != in_buf[i]) {
-            taint_array[i] = 1;
+            taint_array[i] += 1;
           }
         }
       } else {
         for (u32 i = 0; i < temp_len; i++) {
           if (out_buf[i] != in_buf[i]) {
-            taint_array[i] = 1;
+            taint_array[i] += 1;
           }
         }
       }
