@@ -28,8 +28,6 @@
 #include <limits.h>
 #include "cmplog.h"
 #include "afl-mutations.h"
-FILE *seedf;
-FILE *covlog;
 FILE *arrf;
 /* MOpt */
 
@@ -2183,22 +2181,11 @@ havoc_stage:
   //   afl->fsrv.stack_flag = 0;
   // }
   afl->fsrv.stack_flag = 1;
-  seedf = fopen(alloc_printf("%s/seed_log", afl->out_dir), "a");
-  covlog = fopen(alloc_printf("%s/cov_log", afl->out_dir), "a");
   arrf = fopen(alloc_printf("%s/arr_log", afl->out_dir), "a");
-  afl->stage_max = 32000;
+  //afl->stage_max = 32000;
   u32 taint_flag = 0;
   for (afl->stage_cur = 0; afl->stage_cur < afl->stage_max; ++afl->stage_cur) {
-    fprintf(seedf, "%u\n", afl->current_entry);
-    // edge
-    u32 t_bytes = count_non_255_bytes(afl, afl->virgin_bits);
-    // afl->stage_cur, edge
-    fprintf(covlog, "%u,%u\n", afl->stage_cur, t_bytes);
-    if (afl->stage_cur % 10000 == 0) {
-        afl->force_ui_update = 1;
-        show_stats(afl);
-    }
-    afl->stage_max = 32000;
+    //afl->stage_max = 32000;
 
     if (afl->stage_cur > (afl->stage_max/2))
       taint_flag = 1;
@@ -3508,21 +3495,17 @@ havoc_stage:
     afl->fsrv.taint_flag = 0;
     if (common_fuzz_stuff(afl, out_buf, temp_len)) { goto abandon_entry; }
     if (afl->fsrv.taint_flag == 1) {
-
-      if (total_diff < 5) {
-        // find diff
-        taint_diff_flag = 1;
-        if (temp_len == len || temp_len > len) {
-          for (u32 i = 0; i < len; i++) {
-            if (out_buf[i] != in_buf[i]) {
-              taint_array[i] = 1;
-            }
+      taint_diff_flag = 1;
+      if (temp_len == len || temp_len > len) {
+        for (u32 i = 0; i < len; i++) {
+          if (out_buf[i] != in_buf[i]) {
+            taint_array[i] = 1;
           }
-        } else {
-          for (u32 i = 0; i < temp_len; i++) {
-            if (out_buf[i] != in_buf[i]) {
-              taint_array[i] = 1;
-            }
+        }
+      } else {
+        for (u32 i = 0; i < temp_len; i++) {
+          if (out_buf[i] != in_buf[i]) {
+            taint_array[i] = 1;
           }
         }
       }
@@ -3553,12 +3536,10 @@ havoc_stage:
     }
 
   }
-  fclose(seedf);
-  fclose(covlog);
   fclose(arrf);
-  afl->force_ui_update = 1;
-  show_stats(afl);
-  FATAL("Over");
+  // afl->force_ui_update = 1;
+  // show_stats(afl);
+  // FATAL("Over");
   new_hit_cnt = afl->queued_items + afl->saved_crashes;
 
   if (!splice_cycle) {
