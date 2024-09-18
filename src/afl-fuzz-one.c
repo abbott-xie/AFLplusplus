@@ -218,7 +218,7 @@ u32 getRandomIndex(u32 taint_array[], u32 max) {
     u32 *cumulative_values = (u32 *)malloc(max * sizeof(u32));
     u32 count = 0;
     u32 cumulative_sum = 0;
-
+    u32 result;
     for (u32 i = 0; i < max; i++) {
       cumulative_sum += taint_array[i];
       valid_indices[count] = i;
@@ -236,15 +236,16 @@ u32 getRandomIndex(u32 taint_array[], u32 max) {
 
     for (u32 i = 0; i < count; i++) {
         if (cumulative_values[i] > random_value) {
+	    result = valid_indices[i];
             free(valid_indices);
             free(cumulative_values);
-            return valid_indices[i];
+            return result;
         }
     }
-
+    result = valid_indices[count - 1];
     free(valid_indices);
     free(cumulative_values);
-    return valid_indices[count - 1];
+    return result;
 }
 
 /* Last but not least, a similar helper to see if insertion of an
@@ -2219,11 +2220,11 @@ havoc_stage:
 
     int arr_cnt = 0;
     for (u32 i = 0; i < len; i++) {
-      fprintf(arrf, "%u", taint_array[i]);
+      //fprintf(arrf, "%u", taint_array[i]);
       if (taint_array[i]) { arr_cnt++; }
     }
     fflush(arrf);
-    fprintf(arrf, "\n%d,%u,%u\n", arr_cnt, len, temp_len);
+    fprintf(arrf, "%d,%u\n", arr_cnt, temp_len);
     fflush(arrf);
 
 #ifdef INTROSPECTION
