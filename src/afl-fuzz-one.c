@@ -218,12 +218,7 @@ u32 getRandomIndex(u32 taint_array[], u32 max) {
     u32 cumulative_sum = 0;
     u32 result;
 
-    u32 len = 0;
-    while (taint_array[len] != 0) {
-        len++;
-    }
-
-    for (u32 i = 0; i < len; i++) {
+    for (u32 i = 0; i < max; i++) {
         if (taint_array[i] > 0) {
             cumulative_sum += taint_array[i];
             count++;
@@ -245,7 +240,7 @@ u32 getRandomIndex(u32 taint_array[], u32 max) {
 
     count = 0;
     cumulative_sum = 0;
-    for (u32 i = 0; i < len; i++) {
+    for (u32 i = 0; i < max; i++) {
         if (taint_array[i] > 0) {
             cumulative_sum += taint_array[i];
             valid_indices[count] = i;
@@ -270,6 +265,7 @@ u32 getRandomIndex(u32 taint_array[], u32 max) {
     free(cumulative_values);
     return result;
 }
+
 
 /* Last but not least, a similar helper to see if insertion of an
    interesting integer is redundant given the insertions done for
@@ -2304,7 +2300,7 @@ havoc_stage:
           u8  bit = rand_below(afl, 8);
           u32 off = rand_below(afl, temp_len);
           if (special_random) {
-            off = getRandomIndex(taint_array, temp_len);
+            off = getRandomIndex(taint_array, MIN(len, temp_len));
           }
           
           out_buf[off] ^= 1 << bit;
@@ -2328,7 +2324,7 @@ havoc_stage:
 #endif
           u32 off = rand_below(afl, temp_len);
           if (special_random) {
-            off = getRandomIndex(taint_array, temp_len);
+            off = getRandomIndex(taint_array, MIN(len, temp_len));
           }
           out_buf[off] = interesting_8[item];
           break;
@@ -2348,7 +2344,7 @@ havoc_stage:
 #endif
           u32 off = rand_below(afl, temp_len - 1);
           if (special_random) {
-            off = getRandomIndex(taint_array, temp_len - 1);
+            off = getRandomIndex(taint_array, MIN(len, temp_len - 1));
           }
           *(u16 *)(out_buf + off) =
               interesting_16[item];
@@ -2370,7 +2366,7 @@ havoc_stage:
 #endif
           u32 off = rand_below(afl, temp_len - 1);
           if (special_random) {
-            off = getRandomIndex(taint_array, temp_len - 1);
+            off = getRandomIndex(taint_array, MIN(len, temp_len - 1));
           }
           *(u16 *)(out_buf + off) =
               SWAP16(interesting_16[item]);
@@ -2392,7 +2388,7 @@ havoc_stage:
 #endif
           u32 off = rand_below(afl, temp_len - 3);
           if (special_random) {
-            off = getRandomIndex(taint_array, temp_len - 3);
+            off = getRandomIndex(taint_array, MIN(len, temp_len - 3));
           }
 
           *(u32 *)(out_buf + off) =
@@ -2415,7 +2411,7 @@ havoc_stage:
 #endif    
           u32 off = rand_below(afl, temp_len - 3);
           if (special_random) {
-            off = getRandomIndex(taint_array, temp_len - 3);
+            off = getRandomIndex(taint_array, MIN(len, temp_len - 3));
           } 
           *(u32 *)(out_buf + off) =
               SWAP32(interesting_32[item]);
@@ -2435,7 +2431,7 @@ havoc_stage:
 #endif
           u32 off = rand_below(afl, temp_len);
           if (special_random) {
-            off = getRandomIndex(taint_array, temp_len);
+            off = getRandomIndex(taint_array, MIN(len, temp_len));
           }
           out_buf[off] -= item;
           break;
@@ -2453,7 +2449,7 @@ havoc_stage:
 #endif    
           u32 off = rand_below(afl, temp_len);
           if (special_random) {
-            off = getRandomIndex(taint_array, temp_len);
+            off = getRandomIndex(taint_array, MIN(len, temp_len));
           }
           out_buf[off] += item;
           break;
@@ -2468,7 +2464,7 @@ havoc_stage:
 
           u32 off = rand_below(afl, temp_len - 1);
           if (special_random) {
-            off = getRandomIndex(taint_array, temp_len - 1);
+            off = getRandomIndex(taint_array, MIN(len, temp_len - 1));
           }
           item = 1 + rand_below(afl, ARITH_MAX);
 
@@ -2490,7 +2486,7 @@ havoc_stage:
 
           u32 off = rand_below(afl, temp_len - 1);
           if (special_random) {
-            off = getRandomIndex(taint_array, temp_len - 1);
+            off = getRandomIndex(taint_array, MIN(len, temp_len - 1));
           } 
           u16 num = 1 + rand_below(afl, ARITH_MAX);
 
@@ -2513,7 +2509,7 @@ havoc_stage:
 
           u32 off = rand_below(afl, temp_len - 1);
           if (special_random) {
-            off = getRandomIndex(taint_array, temp_len - 1);
+            off = getRandomIndex(taint_array, MIN(len, temp_len - 1));
           }
           item = 1 + rand_below(afl, ARITH_MAX);
 
@@ -2535,7 +2531,7 @@ havoc_stage:
 
           u32 off = rand_below(afl, temp_len - 1);
           if (special_random) {
-            off = getRandomIndex(taint_array, temp_len - 1);
+            off = getRandomIndex(taint_array, MIN(len, temp_len - 1));
           }
           u16 num = 1 + rand_below(afl, ARITH_MAX);
 
@@ -2558,7 +2554,7 @@ havoc_stage:
 
           u32 off = rand_below(afl, temp_len - 3);
           if (special_random) {
-            off = getRandomIndex(taint_array, temp_len - 3);
+            off = getRandomIndex(taint_array, MIN(len, temp_len - 3));
           }
           item = 1 + rand_below(afl, ARITH_MAX);
 
@@ -2580,7 +2576,7 @@ havoc_stage:
 
           u32 off = rand_below(afl, temp_len - 3);
           if (special_random) {
-            off = getRandomIndex(taint_array, temp_len - 3);
+            off = getRandomIndex(taint_array, MIN(len, temp_len - 3));
           }
           u32 num = 1 + rand_below(afl, ARITH_MAX);
 
@@ -2603,7 +2599,7 @@ havoc_stage:
 
           u32 off = rand_below(afl, temp_len - 3);
           if (special_random) {
-            off = getRandomIndex(taint_array, temp_len - 3);
+            off = getRandomIndex(taint_array, MIN(len, temp_len - 3));
           }
           item = 1 + rand_below(afl, ARITH_MAX);
 
@@ -2625,7 +2621,7 @@ havoc_stage:
 
           u32 off = rand_below(afl, temp_len - 3);
           if (special_random) {
-            off = getRandomIndex(taint_array, temp_len - 3);
+            off = getRandomIndex(taint_array, MIN(len, temp_len - 3));
           }
           u32 num = 1 + rand_below(afl, ARITH_MAX);
 
@@ -2648,7 +2644,7 @@ havoc_stage:
 
           u32 pos = rand_below(afl, temp_len);
           if (special_random) {
-            pos = getRandomIndex(taint_array, temp_len);
+            pos = getRandomIndex(taint_array, MIN(len, temp_len));
           }
           item = 1 + rand_below(afl, 255);
 #ifdef INTROSPECTION
@@ -2670,7 +2666,7 @@ havoc_stage:
             u32 clone_from = rand_below(afl, temp_len - clone_len + 1);
             u32 clone_to = rand_below(afl, temp_len);
             if (special_random) {
-              clone_to = getRandomIndex(taint_array, temp_len);
+              clone_to = getRandomIndex(taint_array, MIN(len, temp_len));
             }
 
 #ifdef INTROSPECTION
@@ -2720,7 +2716,7 @@ havoc_stage:
             u32 clone_len = choose_block_len(afl, HAVOC_BLK_XL);
             u32 clone_to = rand_below(afl, temp_len);
             if (special_random) {
-              clone_to = getRandomIndex(taint_array, temp_len);
+              clone_to = getRandomIndex(taint_array, MIN(len, temp_len));
             }
             u32 strat = rand_below(afl, 2);
             u32 clone_from = clone_to ? clone_to - 1 : 0;
@@ -2806,7 +2802,7 @@ havoc_stage:
           u32 copy_len = choose_block_len(afl, temp_len - 1);
           u32 copy_to = rand_below(afl, temp_len - copy_len + 1);
           if (special_random) {
-            copy_to = getRandomIndex(taint_array, temp_len - copy_len + 1);
+            copy_to = getRandomIndex(taint_array, MIN(len, temp_len - copy_len + 1));
           }
           u32 strat = rand_below(afl, 2);
           u32 copy_from = copy_to ? copy_to - 1 : 0;
@@ -2834,7 +2830,7 @@ havoc_stage:
 #endif
           u32 off = rand_below(afl, temp_len);
           if (special_random) {
-            off = getRandomIndex(taint_array, temp_len);
+            off = getRandomIndex(taint_array, MIN(len, temp_len));
           }
           out_buf[off]++;
           break;
@@ -2851,7 +2847,7 @@ havoc_stage:
 #endif    
           u32 off = rand_below(afl, temp_len);
           if (special_random) {
-            off = getRandomIndex(taint_array, temp_len);
+            off = getRandomIndex(taint_array, MIN(len, temp_len));
           }
           out_buf[off]--;
           break;
@@ -2868,7 +2864,7 @@ havoc_stage:
 #endif
           u32 off = rand_below(afl, temp_len);
           if (special_random) {
-            off = getRandomIndex(taint_array, temp_len);
+            off = getRandomIndex(taint_array, MIN(len, temp_len));
           }
           out_buf[off] ^= 0xff;
           break;
@@ -2945,7 +2941,7 @@ havoc_stage:
           u32 del_len = choose_block_len(afl, temp_len - 1);
           u32 del_from = rand_below(afl, temp_len - del_len + 1);
           if (special_random) {
-            del_from = getRandomIndex(taint_array, temp_len - del_len + 1);
+            del_from = getRandomIndex(taint_array, MIN(len, temp_len - del_len + 1));
           } 
 
 #ifdef INTROSPECTION
@@ -2971,7 +2967,7 @@ havoc_stage:
           u32 len = choose_block_len(afl, temp_len - 1);
           u32 off = rand_below(afl, temp_len - len + 1);
           if (special_random) {
-            off = getRandomIndex(taint_array, temp_len - len + 1);
+            off = getRandomIndex(taint_array, MIN(len, temp_len - len + 1));
           }
 
 
@@ -3009,7 +3005,7 @@ havoc_stage:
           u32 del_len = 1;
           u32 del_from = rand_below(afl, temp_len - del_len + 1);
           if (special_random) {
-            del_from = getRandomIndex(taint_array, temp_len - del_len + 1);
+            del_from = getRandomIndex(taint_array, MIN(len, temp_len - del_len + 1));
           }
 
 
@@ -3032,7 +3028,7 @@ havoc_stage:
           u32 clone_len = 1;
           u32 clone_to = rand_below(afl, temp_len);
           if (special_random) {
-            clone_to = getRandomIndex(taint_array, temp_len);
+            clone_to = getRandomIndex(taint_array, MIN(len, temp_len));
           }
           u32 strat = rand_below(afl, 2);
           u32 clone_from = clone_to ? clone_to - 1 : 0;
@@ -3072,7 +3068,7 @@ havoc_stage:
 
           u32 off = rand_below(afl, temp_len), off2 = off, cnt = 0;
           if (special_random) {
-            off = getRandomIndex(taint_array, temp_len);
+            off = getRandomIndex(taint_array, MIN(len, temp_len));
           } else {
             off = rand_below(afl, temp_len);
           }
@@ -3220,7 +3216,7 @@ havoc_stage:
           u32 len = 1 + rand_below(afl, 8);
           u32 pos = rand_below(afl, temp_len);
           if (special_random) {
-            pos = getRandomIndex(taint_array, temp_len);
+            pos = getRandomIndex(taint_array, MIN(len, temp_len));
           } else {
             pos = rand_below(afl, temp_len);
           }
@@ -3265,7 +3261,7 @@ havoc_stage:
 
           u32 insert_at = rand_below(afl, temp_len - extra_len + 1);
           if (special_random) {
-            insert_at = getRandomIndex(taint_array, temp_len - extra_len + 1);
+            insert_at = getRandomIndex(taint_array, MIN(len, temp_len - extra_len + 1));
           } else {
             insert_at = rand_below(afl, temp_len - extra_len + 1);
           }
@@ -3294,7 +3290,7 @@ havoc_stage:
           u8 *ptr = afl->extras[use_extra].data;
           u32 insert_at = rand_below(afl, temp_len + 1);
           if (special_random) {
-            insert_at = getRandomIndex(taint_array, temp_len + 1);
+            insert_at = getRandomIndex(taint_array, MIN(len, temp_len + 1));
           } else {
             insert_at = rand_below(afl, temp_len + 1);
           }
@@ -3332,7 +3328,7 @@ havoc_stage:
 
           u32 insert_at = rand_below(afl, temp_len - extra_len + 1);
           if (special_random) {
-            insert_at = getRandomIndex(taint_array, temp_len - extra_len + 1);
+            insert_at = getRandomIndex(taint_array, MIN(len, temp_len - extra_len + 1));
           } else {
             insert_at = rand_below(afl, temp_len - extra_len + 1);
           }
@@ -3361,7 +3357,7 @@ havoc_stage:
           u8 *ptr = afl->a_extras[use_extra].data;
           u32 insert_at = rand_below(afl, temp_len + 1);
           if (special_random) {
-            insert_at = getRandomIndex(taint_array, temp_len + 1);
+            insert_at = getRandomIndex(taint_array, MIN(len, temp_len + 1));
           } else {
             insert_at = rand_below(afl, temp_len + 1);
           }
@@ -3420,7 +3416,7 @@ havoc_stage:
           copy_from = rand_below(afl, new_len - copy_len + 1);
           copy_to = rand_below(afl, temp_len - copy_len + 1);
           if (special_random) {
-            copy_to = getRandomIndex(taint_array, temp_len - copy_len + 1);
+            copy_to = getRandomIndex(taint_array, MIN(len, temp_len - copy_len + 1));
           } else {
             copy_to = rand_below(afl, temp_len - copy_len + 1);
           }
@@ -3474,7 +3470,7 @@ havoc_stage:
           clone_from = rand_below(afl, new_len - clone_len + 1);
           clone_to = rand_below(afl, temp_len + 1);
           if (special_random) {
-            clone_to = getRandomIndex(taint_array, temp_len + 1);
+            clone_to = getRandomIndex(taint_array, MIN(len, temp_len + 1));
           } else {
             clone_to = rand_below(afl, temp_len + 1);
           }
@@ -6495,5 +6491,6 @@ u8 fuzz_one(afl_state_t *afl) {
   return (key_val_lv_1 | key_val_lv_2);
 
 }
+
 
 
