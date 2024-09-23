@@ -28,7 +28,7 @@
 #include <limits.h>
 #include "cmplog.h"
 #include "afl-mutations.h"
-FILE *arrf;
+//FILE *arrf;
 /* MOpt */
 
 static int select_algorithm(afl_state_t *afl, u32 max_algorithm) {
@@ -214,34 +214,57 @@ static u8 could_be_arith(u32 old_val, u32 new_val, u8 blen) {
 }
 
 u32 getRandomIndex(u32 taint_array[], u32 max) {
-    u32 *valid_indices = (u32 *)malloc(max * sizeof(u32));
-    u32 *cumulative_values = (u32 *)malloc(max * sizeof(u32));
     u32 count = 0;
     u32 cumulative_sum = 0;
     u32 result;
-    for (u32 i = 0; i < max; i++) {
-      cumulative_sum += taint_array[i];
-      valid_indices[count] = i;
-      cumulative_values[count] = cumulative_sum;
-      count++;
+
+    u32 len = 0;
+    while (taint_array[len] != 0) {
+        len++;
+    }
+
+    for (u32 i = 0; i < len; i++) {
+        if (taint_array[i] > 0) {
+            cumulative_sum += taint_array[i];
+            count++;
+        }
     }
 
     if (cumulative_sum == 0) {
+        return rand() % max;
+    }
+
+    u32 *valid_indices = (u32 *)calloc(count, sizeof(u32));
+    u32 *cumulative_values = (u32 *)calloc(count, sizeof(u32));
+
+    if (valid_indices == NULL || cumulative_values == NULL) {
         free(valid_indices);
         free(cumulative_values);
         return rand() % max;
+    }
+
+    count = 0;
+    cumulative_sum = 0;
+    for (u32 i = 0; i < len; i++) {
+        if (taint_array[i] > 0) {
+            cumulative_sum += taint_array[i];
+            valid_indices[count] = i;
+            cumulative_values[count] = cumulative_sum;
+            count++;
+        }
     }
 
     u32 random_value = rand() % cumulative_sum;
 
     for (u32 i = 0; i < count; i++) {
         if (cumulative_values[i] > random_value) {
-	    result = valid_indices[i];
+            result = valid_indices[i];
             free(valid_indices);
             free(cumulative_values);
             return result;
         }
     }
+
     result = valid_indices[count - 1];
     free(valid_indices);
     free(cumulative_values);
@@ -2194,7 +2217,7 @@ havoc_stage:
   // + (afl->extras_cnt ? 2 : 0) + (afl->a_extras_cnt ? 2 : 0);
 
   afl->fsrv.begin_sample_flag = 1;
-  arrf = fopen(alloc_printf("%s/arr_log", afl->out_dir), "a");
+  //arrf = fopen(alloc_printf("%s/arr_log", afl->out_dir), "a");
   //afl->stage_max = 32000;
   u32 taint_flag = 0;
   for (afl->stage_cur = 0; afl->stage_cur < afl->stage_max; ++afl->stage_cur) {
@@ -2217,7 +2240,7 @@ havoc_stage:
     u32 use_stacking = 1 + rand_below(afl, stack_max);
 
     afl->stage_cur_val = use_stacking;
-
+/*
     int arr_cnt = 0;
     for (u32 i = 0; i < len; i++) {
       //fprintf(arrf, "%u", taint_array[i]);
@@ -2226,7 +2249,7 @@ havoc_stage:
     fflush(arrf);
     fprintf(arrf, "%d,%u\n", arr_cnt, temp_len);
     fflush(arrf);
-
+*/
 #ifdef INTROSPECTION
     snprintf(afl->mutation, sizeof(afl->mutation), "%s HAVOC-%u-%u",
              afl->queue_cur->fname, afl->queue_cur->is_ascii, use_stacking);
@@ -3553,7 +3576,7 @@ havoc_stage:
     }
 
   }
-  fclose(arrf);
+  //fclose(arrf);
   // afl->force_ui_update = 1;
   // show_stats(afl);
   // FATAL("Over");
