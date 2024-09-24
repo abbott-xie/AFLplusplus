@@ -31,6 +31,7 @@
 //FILE *arrf;
 /* MOpt */
 
+#define TAINT_NUM 5
 static int select_algorithm(afl_state_t *afl, u32 max_algorithm) {
 
   int i_puppet, j_puppet = 0, operator_number = max_algorithm;
@@ -2211,10 +2212,6 @@ havoc_stage:
   stack_max = 1 << (1 + rand_below(afl, afl->havoc_stack_pow2));
 
   // + (afl->extras_cnt ? 2 : 0) + (afl->a_extras_cnt ? 2 : 0);
-  if (stack_max > 4) 
-    afl->fsrv.begin_sample_flag = 0;
-  else 
-    afl->fsrv.begin_sample_flag = 1;
   //arrf = fopen(alloc_printf("%s/arr_log", afl->out_dir), "a");
   //afl->stage_max = 32000;
   u32 taint_flag = 0;
@@ -2237,7 +2234,16 @@ havoc_stage:
 
     u32 use_stacking = 1 + rand_below(afl, stack_max);
 
+    if (use_stacking > TAINT_NUM) 
+      afl->fsrv.begin_sample_flag = 0;
+    else 
+      afl->fsrv.begin_sample_flag = 1;
+
     afl->stage_cur_val = use_stacking;
+
+    // a array to store 10 bytes of diff
+    u32 count_diff_pos[2 * TAINT_NUM] = {0};
+    u32 count_diff_num[2 * TAINT_NUM] = {0};
 /*
     int arr_cnt = 0;
     for (u32 i = 0; i < len; i++) {
@@ -2310,6 +2316,10 @@ havoc_stage:
           snprintf(afl->m_tmp, sizeof(afl->m_tmp), " FLIP-BIT_%u", bit);
           strcat(afl->mutation, afl->m_tmp);
 #endif
+          if (afl->fsrv.begin_sample_flag) {
+            count_diff_pos[i] = off;
+            count_diff_num[i] = 1;
+          }
           break;
 
         }
@@ -2328,6 +2338,11 @@ havoc_stage:
             off = getRandomIndex(taint_array, MIN(len, temp_len));
           }
           out_buf[off] = interesting_8[item];
+
+          if (afl->fsrv.begin_sample_flag) {
+            count_diff_pos[i] = off;
+            count_diff_num[i] = 1;
+          }
           break;
 
         }
@@ -2350,6 +2365,11 @@ havoc_stage:
           *(u16 *)(out_buf + off) =
               interesting_16[item];
 
+          if (afl->fsrv.begin_sample_flag) {
+            count_diff_pos[i] = off;
+            count_diff_num[i] = 2;
+          }
+
           break;
 
         }
@@ -2371,6 +2391,11 @@ havoc_stage:
           }
           *(u16 *)(out_buf + off) =
               SWAP16(interesting_16[item]);
+
+          if (afl->fsrv.begin_sample_flag) {
+            count_diff_pos[i] = off;
+            count_diff_num[i] = 2;
+          }
 
           break;
 
@@ -2395,6 +2420,11 @@ havoc_stage:
           *(u32 *)(out_buf + off) =
               interesting_32[item];
 
+          if (afl->fsrv.begin_sample_flag) {
+            count_diff_pos[i] = off;
+            count_diff_num[i] = 4;
+          }
+
           break;
 
         }
@@ -2417,6 +2447,11 @@ havoc_stage:
           *(u32 *)(out_buf + off) =
               SWAP32(interesting_32[item]);
 
+          if (afl->fsrv.begin_sample_flag) {
+            count_diff_pos[i] = off;
+            count_diff_num[i] = 4;
+          }
+
           break;
 
         }
@@ -2435,6 +2470,11 @@ havoc_stage:
             off = getRandomIndex(taint_array, MIN(len, temp_len));
           }
           out_buf[off] -= item;
+
+          if (afl->fsrv.begin_sample_flag) {
+            count_diff_pos[i] = off;
+            count_diff_num[i] = 1;
+          }
           break;
 
         }
@@ -2453,6 +2493,11 @@ havoc_stage:
             off = getRandomIndex(taint_array, MIN(len, temp_len));
           }
           out_buf[off] += item;
+
+          if (afl->fsrv.begin_sample_flag) {
+            count_diff_pos[i] = off;
+            count_diff_num[i] = 1;
+          }
           break;
 
         }
@@ -2474,6 +2519,11 @@ havoc_stage:
           strcat(afl->mutation, afl->m_tmp);
 #endif
           *(u16 *)(out_buf + off) -= item;
+
+          if (afl->fsrv.begin_sample_flag) {
+            count_diff_pos[i] = off;
+            count_diff_num[i] = 2;
+          }
 
           break;
 
@@ -2498,6 +2548,11 @@ havoc_stage:
           *(u16 *)(out_buf + off) =
               SWAP16(SWAP16(*(u16 *)(out_buf + off)) - num);
 
+          if (afl->fsrv.begin_sample_flag) {
+            count_diff_pos[i] = off;
+            count_diff_num[i] = 2;
+          }
+
           break;
 
         }
@@ -2519,6 +2574,11 @@ havoc_stage:
           strcat(afl->mutation, afl->m_tmp);
 #endif
           *(u16 *)(out_buf + off) += item;
+
+          if (afl->fsrv.begin_sample_flag) {
+            count_diff_pos[i] = off;
+            count_diff_num[i] = 2;
+          }
 
           break;
 
@@ -2543,6 +2603,11 @@ havoc_stage:
           *(u16 *)(out_buf + off) =
               SWAP16(SWAP16(*(u16 *)(out_buf + off)) + num);
 
+          if (afl->fsrv.begin_sample_flag) {
+            count_diff_pos[i] = off;
+            count_diff_num[i] = 2;
+          }
+
           break;
 
         }
@@ -2564,6 +2629,11 @@ havoc_stage:
           strcat(afl->mutation, afl->m_tmp);
 #endif
           *(u32 *)(out_buf + off) -= item;
+
+          if (afl->fsrv.begin_sample_flag) {
+            count_diff_pos[i] = off;
+            count_diff_num[i] = 4;
+          }
 
           break;
 
@@ -2588,6 +2658,11 @@ havoc_stage:
           *(u32 *)(out_buf + off) =
               SWAP32(SWAP32(*(u32 *)(out_buf + off)) - num);
 
+          if (afl->fsrv.begin_sample_flag) {
+            count_diff_pos[i] = off;
+            count_diff_num[i] = 4;
+          }
+
           break;
 
         }
@@ -2609,6 +2684,11 @@ havoc_stage:
           strcat(afl->mutation, afl->m_tmp);
 #endif
           *(u32 *)(out_buf + off) += item;
+
+          if (afl->fsrv.begin_sample_flag) {
+            count_diff_pos[i] = off;
+            count_diff_num[i] = 4;
+          }
 
           break;
 
@@ -2633,6 +2713,11 @@ havoc_stage:
           *(u32 *)(out_buf + off) =
               SWAP32(SWAP32(*(u32 *)(out_buf + off)) + num);
 
+          if (afl->fsrv.begin_sample_flag) {
+            count_diff_pos[i] = off;
+            count_diff_num[i] = 4;
+          }
+
           break;
 
         }
@@ -2654,6 +2739,11 @@ havoc_stage:
           strcat(afl->mutation, afl->m_tmp);
 #endif
           out_buf[pos] ^= item;
+
+          if (afl->fsrv.begin_sample_flag) {
+            count_diff_pos[i] = pos;
+            count_diff_num[i] = 1;
+          }
           break;
 
         }
@@ -2703,6 +2793,11 @@ havoc_stage:
 
             goto retry_havoc_step;
 
+          }
+          
+          // if the length is change, we don't need to update taint array
+          if (afl->fsrv.begin_sample_flag) {
+            afl->fsrv.begin_sample_flag = 0;
           }
 
           break;
@@ -2758,6 +2853,11 @@ havoc_stage:
 
           }
 
+          // if the length is change, we don't need to update taint array
+          if (afl->fsrv.begin_sample_flag) {
+            afl->fsrv.begin_sample_flag = 0;
+          }
+
           break;
 
         }
@@ -2790,6 +2890,11 @@ havoc_stage:
 #endif
           memmove(out_buf + copy_to, out_buf + copy_from, copy_len);
 
+          if (afl->fsrv.begin_sample_flag) {
+            count_diff_pos[i] = copy_to;
+            count_diff_num[i] = copy_len;
+          }
+
           break;
 
         }
@@ -2817,6 +2922,11 @@ havoc_stage:
 #endif
           memset(out_buf + copy_to, item, copy_len);
 
+          if (afl->fsrv.begin_sample_flag) {
+            count_diff_pos[i] = copy_to;
+            count_diff_num[i] = copy_len;
+          }
+
           break;
 
         }
@@ -2834,6 +2944,11 @@ havoc_stage:
             off = getRandomIndex(taint_array, MIN(len, temp_len));
           }
           out_buf[off]++;
+
+          if (afl->fsrv.begin_sample_flag) {
+            count_diff_pos[i] = off;
+            count_diff_num[i] = 1;
+          }
           break;
 
         }
@@ -2851,6 +2966,11 @@ havoc_stage:
             off = getRandomIndex(taint_array, MIN(len, temp_len));
           }
           out_buf[off]--;
+
+          if (afl->fsrv.begin_sample_flag) {
+            count_diff_pos[i] = off;
+            count_diff_num[i] = 1;
+          }
           break;
 
         }
@@ -2868,6 +2988,11 @@ havoc_stage:
             off = getRandomIndex(taint_array, MIN(len, temp_len));
           }
           out_buf[off] ^= 0xff;
+
+          if (afl->fsrv.begin_sample_flag) {
+            count_diff_pos[i] = off;
+            count_diff_num[i] = 1;
+          }
           break;
 
         }
@@ -2928,6 +3053,14 @@ havoc_stage:
 
           memcpy(out_buf + switch_to, new_buf, switch_len);
 
+          // TODO: update taint array in two side
+          if (afl->fsrv.begin_sample_flag) {
+            count_diff_pos[i] = switch_from;
+            count_diff_num[i] = switch_len;
+            count_diff_pos[i + TAINT_NUM] = switch_to;
+            count_diff_num[i + TAINT_NUM] = switch_len;
+          }
+
           break;
 
         }
@@ -2954,6 +3087,10 @@ havoc_stage:
                   temp_len - del_from - del_len);
 
           temp_len -= del_len;
+
+          if (afl->fsrv.begin_sample_flag) {
+            afl->fsrv.begin_sample_flag = 0;
+          }
 
           break;
 
@@ -2992,6 +3129,11 @@ havoc_stage:
 
           }
 
+          if (afl->fsrv.begin_sample_flag) {
+            count_diff_pos[i] = off;
+            count_diff_num[i] = len;
+          }
+
           break;
 
         }
@@ -3018,6 +3160,10 @@ havoc_stage:
                   temp_len - del_from - del_len);
 
           temp_len -= del_len;
+
+          if (afl->fsrv.begin_sample_flag) {
+            afl->fsrv.begin_sample_flag = 0;
+          }
 
           break;
 
@@ -3060,6 +3206,9 @@ havoc_stage:
           afl_swap_bufs(AFL_BUF_PARAM(out), AFL_BUF_PARAM(out_scratch));
           temp_len += clone_len;
 
+          if (afl->fsrv.begin_sample_flag) {
+            afl->fsrv.begin_sample_flag = 0;
+          }
           break;
 
         }
@@ -3208,6 +3357,10 @@ havoc_stage:
           }
 
           // fprintf(stderr, "AFTER : %s\n", out_buf);
+
+          if (afl->fsrv.begin_sample_flag) {
+            afl->fsrv.begin_sample_flag = 0;
+          }
           break;
 
         }
@@ -3245,6 +3398,11 @@ havoc_stage:
           snprintf(buf, sizeof(buf), "%llu", val);
           memcpy(out_buf + pos, buf, len);
 
+          if (afl->fsrv.begin_sample_flag) {
+            count_diff_pos[i] = pos;
+            count_diff_num[i] = len;
+          }
+
           break;
 
         }
@@ -3272,6 +3430,11 @@ havoc_stage:
           strcat(afl->mutation, afl->m_tmp);
 #endif
           memcpy(out_buf + insert_at, afl->extras[use_extra].data, extra_len);
+
+          if (afl->fsrv.begin_sample_flag) {
+            count_diff_pos[i] = insert_at;
+            count_diff_num[i] = extra_len;
+          }
 
           break;
 
@@ -3312,6 +3475,10 @@ havoc_stage:
           memcpy(out_buf + insert_at, ptr, extra_len);
           temp_len += extra_len;
 
+          if (afl->fsrv.begin_sample_flag) {
+            afl->fsrv.begin_sample_flag = 0;
+          }
+
           break;
 
         }
@@ -3339,6 +3506,11 @@ havoc_stage:
           strcat(afl->mutation, afl->m_tmp);
 #endif
           memcpy(out_buf + insert_at, afl->a_extras[use_extra].data, extra_len);
+
+          if (afl->fsrv.begin_sample_flag) {
+            count_diff_pos[i] = insert_at;
+            count_diff_num[i] = extra_len;
+          }
 
           break;
 
@@ -3378,6 +3550,10 @@ havoc_stage:
           /* Inserted part */
           memcpy(out_buf + insert_at, ptr, extra_len);
           temp_len += extra_len;
+
+          if (afl->fsrv.begin_sample_flag) {
+            afl->fsrv.begin_sample_flag = 0;
+          }
 
           break;
 
@@ -3429,6 +3605,11 @@ havoc_stage:
           strcat(afl->mutation, afl->m_tmp);
 #endif
           memmove(out_buf + copy_to, new_buf + copy_from, copy_len);
+
+          if (afl->fsrv.begin_sample_flag) {
+            count_diff_pos[i] = copy_to;
+            count_diff_num[i] = copy_len;
+          }
 
           break;
 
@@ -3501,6 +3682,9 @@ havoc_stage:
           afl_swap_bufs(AFL_BUF_PARAM(out), AFL_BUF_PARAM(out_scratch));
           temp_len += clone_len;
 
+          if (afl->fsrv.begin_sample_flag) {
+            afl->fsrv.begin_sample_flag = 0;
+          }
           break;
 
         }
@@ -3512,39 +3696,49 @@ havoc_stage:
     }
 
     u32 total_diff = 0;
-    if (temp_len == len || temp_len > len) {
-      for (u32 i = 0; i < len; i++) {
-        if (out_buf[i] != in_buf[i]) {
-          total_diff++;
+    u32 taint_diff_temp[TAINT_NUM] = {0};
+    if (afl->fsrv.begin_sample_flag) {
+      for (u32 diff_index = 0; diff_index < 2 * TAINT_NUM; diff_index++) {
+        if (total_diff > TAINT_NUM) {
+          break;
+        }
+        if (count_diff_num[diff_index] > 0) {
+          for (u32 diff_num_index = 0; diff_num_index < count_diff_num[diff_index]; diff_num_index++) {
+            if (total_diff > TAINT_NUM) {
+              break;
+            }
+            if (cound_diff_pos[diff_index] + diff_num_index >= len || cound_diff_pos[diff_index] + diff_num_index >= temp_len) {
+              break;
+            }
+            if (out_buf[cound_diff_pos[diff_index] + diff_num_index] != in_buf[cound_diff_pos[diff_index] + diff_num_index]) {
+              // the new byte item can not be in the array
+              bool in_temp_flag = false;
+              for (u32 diff_orig = 0; diff_orig < total_diff; diff_orig++)
+              {
+                if (taint_diff_temp[diff_orig] == cound_diff_pos[diff_index] + diff_num_index) {
+                  in_temp_flag = true;
+                }
+              }
+              if (in_temp_flag) {
+                continue;
+              }
+              taint_diff_temp[total_diff] = cound_diff_pos[diff_index] + diff_num_index;
+              total_diff++;
+            }
+          }
         }
       }
-    } else {
-      for (u32 i = 0; i < temp_len; i++) {
-        if (out_buf[i] != in_buf[i]) {
-          total_diff++;
-        }
+      if (total_diff > TAINT_NUM) {
+        afl->fsrv.begin_sample_flag = 0;
       }
-    }
-    if (total_diff > 5) {
-      afl->fsrv.begin_sample_flag = 0;
     }
 
     afl->fsrv.taint_flag = 0;
     if (common_fuzz_stuff(afl, out_buf, temp_len)) { goto abandon_entry; }
     if (afl->fsrv.taint_flag == 1) {
       taint_diff_flag = 1;
-      if (temp_len == len || temp_len > len) {
-        for (u32 i = 0; i < len; i++) {
-          if (out_buf[i] != in_buf[i]) {
-            taint_array[i] += 1;
-          }
-        }
-      } else {
-        for (u32 i = 0; i < temp_len; i++) {
-          if (out_buf[i] != in_buf[i]) {
-            taint_array[i] += 1;
-          }
-        }
+      for (u32 diff_index = 0; diff_index < total_diff; diff_index++) {
+        taint_array[taint_diff_temp[diff_index]] += 1;
       }
     }
 
