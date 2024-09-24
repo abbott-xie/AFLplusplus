@@ -2211,8 +2211,10 @@ havoc_stage:
   stack_max = 1 << (1 + rand_below(afl, afl->havoc_stack_pow2));
 
   // + (afl->extras_cnt ? 2 : 0) + (afl->a_extras_cnt ? 2 : 0);
-
-  afl->fsrv.begin_sample_flag = 1;
+  if (stack_max > 4) 
+    afl->fsrv.begin_sample_flag = 0;
+  else 
+    afl->fsrv.begin_sample_flag = 1;
   //arrf = fopen(alloc_printf("%s/arr_log", afl->out_dir), "a");
   //afl->stage_max = 32000;
   u32 taint_flag = 0;
@@ -2250,7 +2252,6 @@ havoc_stage:
     snprintf(afl->mutation, sizeof(afl->mutation), "%s HAVOC-%u-%u",
              afl->queue_cur->fname, afl->queue_cur->is_ascii, use_stacking);
 #endif
-    afl->fsrv.limit_flag = 1;
     for (i = 0; i < use_stacking; ++i) {
 
       if (afl->custom_mutators_count) {
@@ -3525,7 +3526,7 @@ havoc_stage:
       }
     }
     if (total_diff > 5) {
-      afl->fsrv.limit_flag = 0;
+      afl->fsrv.begin_sample_flag = 0;
     }
 
     afl->fsrv.taint_flag = 0;

@@ -462,12 +462,6 @@ void write_crash_readme(afl_state_t *afl) {
   u8 *br_cov = afl->fsrv.br_cov;
   u8 br_trace_setting = afl->fsrv.br_trace_setting;
   s64 *local_br_bits = afl->fsrv.local_br_bits;
-  //u8 taint_flag = afl->fsrv.taint_flag;
-  
-  u8 limit_flag = afl->fsrv.limit_flag;
-  if (limit_flag == 0 && br_trace_setting != BR_TRACE_SEED_INPUT) {
-    return;
-  }
 
   u8 begin_sample_flag = afl->fsrv.begin_sample_flag;
   if (begin_sample_flag == 0 && br_trace_setting != BR_TRACE_SEED_INPUT) {

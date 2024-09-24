@@ -104,7 +104,6 @@ typedef struct afl_forkserver {
   /*Taint specific struct*/
   u8 br_trace_setting;                  /* Branch trace setting             */
   u8 taint_flag;                        /* Taint flag                       */
-  u8 limit_flag;                       /* Filter flag                      */
   u8 begin_sample_flag;                        /* Stack flag                       */
   s64 *local_br_bits;                   /* Local branch bits                */
   s64 *br_bits;                         /* Branch bits                      */
