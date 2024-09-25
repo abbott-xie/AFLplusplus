@@ -26,6 +26,7 @@
 #include "afl-fuzz.h"
 #include <string.h>
 #include <limits.h>
+#include <vcruntime.h>
 #include "cmplog.h"
 #include "afl-mutations.h"
 //FILE *arrf;
@@ -214,57 +215,49 @@ static u8 could_be_arith(u32 old_val, u32 new_val, u8 blen) {
 
 }
 
-u32 getRandomIndex(u32 taint_array[], u32 max) {
-    u32 count = 0;
+u32 getRandomIndex(u32 valid_indices[], u32 cumulative_values[], u32 diff_count, u32 max) {
+    int count = -1;
     u32 cumulative_sum = 0;
-    u32 result;
 
-    for (u32 i = 0; i < max; i++) {
-        if (taint_array[i] > 0) {
-            cumulative_sum += taint_array[i];
-            count++;
+    // binary search in valid_indices, find the one that is biggest but less than max
+    int left = 0, right = diff_count - 1;
+
+    while (left <= right) {
+        int mid = left + (right - left) / 2;
+
+        if (valid_indices[mid] < max) {
+            count = mid;
+            left = mid + 1; 
+        } else {
+            right = mid - 1;
         }
     }
 
-    if (cumulative_sum == 0) {
+    if (count == -1) {
         return rand() % max;
     }
 
-    u32 *valid_indices = (u32 *)calloc(count, sizeof(u32));
-    u32 *cumulative_values = (u32 *)calloc(count, sizeof(u32));
-
-    if (valid_indices == NULL || cumulative_values == NULL) {
-        free(valid_indices);
-        free(cumulative_values);
-        return rand() % max;
-    }
-
-    count = 0;
-    cumulative_sum = 0;
-    for (u32 i = 0; i < max; i++) {
-        if (taint_array[i] > 0) {
-            cumulative_sum += taint_array[i];
-            valid_indices[count] = i;
-            cumulative_values[count] = cumulative_sum;
-            count++;
-        }
-    }
+    cumulative_sum = cumulative_values[count];
 
     u32 random_value = rand() % cumulative_sum;
 
-    for (u32 i = 0; i < count; i++) {
-        if (cumulative_values[i] > random_value) {
-            result = valid_indices[i];
-            free(valid_indices);
-            free(cumulative_values);
-            return result;
+    // also binary search in cumulative_values, find the first value that is bigger than random_value, but the index range is 0 - count
+    left = 0;
+    right = count;
+    int result = count;
+ 
+    while (left <= right) {
+        int mid = left + (right - left) / 2;
+
+        if (cumulative_values[mid] > random_value) {
+            result = mid;
+            right = mid - 1;
+        } else {
+            left = mid + 1;
         }
     }
 
-    result = valid_indices[count - 1];
-    free(valid_indices);
-    free(cumulative_values);
-    return result;
+    return valid_indices[result];
 }
 
 
@@ -2215,6 +2208,11 @@ havoc_stage:
   //arrf = fopen(alloc_printf("%s/arr_log", afl->out_dir), "a");
   //afl->stage_max = 32000;
   u32 taint_flag = 0;
+  u32 taint_table_build_flag = 0;
+  u32 *valid_indices = NULL;
+  u32 *cumulative_values = NULL;
+  u32 diff_count = 0;
+  u32 taint_error_flag = 0;
   for (afl->stage_cur = 0; afl->stage_cur < afl->stage_max; ++afl->stage_cur) {
     //afl->stage_max = 32000;
 
@@ -2226,8 +2224,37 @@ havoc_stage:
       
     u32 special_random = 0;
     if (taint_diff_flag && taint_flag) {
-      // 50% chance to use taint model
-      if (rand_below(afl, 100) < 90) {
+      // build taint table
+      if (!taint_table_build_flag) {
+        for (u32 i = 0; i < len; i++) {
+            if (taint_array[i] > 0) {
+                diff_count++;
+            }
+        }
+        valid_indices = (u32 *)calloc(diff_count, sizeof(u32));
+        cumulative_values = (u32 *)calloc(diff_count, sizeof(u32));
+
+        if (valid_indices == NULL || cumulative_values == NULL) {
+          free(valid_indices);
+          free(cumulative_values);
+          // we don't use taint random
+          taint_error_flag = 1;
+        }
+
+        u32 taint_diff_index = 0;
+        u32 cumulative_sum = 0;
+        for (u32 i = 0; i < len; i++) {
+            if (taint_array[i] > 0) {
+                cumulative_sum += taint_array[i];
+                valid_indices[taint_diff_index] = i;
+                cumulative_values[taint_diff_index] = cumulative_sum;
+                taint_diff_index++;
+            }
+        }
+        taint_table_build_flag = 1;
+      }
+      // 90% chance to use taint model
+      if ((!taint_error_flag) && (rand_below(afl, 100) < 90)) {
         special_random = 1;
       }
     }
@@ -2307,7 +2334,7 @@ havoc_stage:
           u8  bit = rand_below(afl, 8);
           u32 off = rand_below(afl, temp_len);
           if (special_random) {
-            off = getRandomIndex(taint_array, MIN(len, temp_len));
+            off = getRandomIndex(valid_indices, cumulative_values, diff_count, MIN(len, temp_len));
           }
           
           out_buf[off] ^= 1 << bit;
@@ -2335,7 +2362,7 @@ havoc_stage:
 #endif
           u32 off = rand_below(afl, temp_len);
           if (special_random) {
-            off = getRandomIndex(taint_array, MIN(len, temp_len));
+            off = getRandomIndex(valid_indices, cumulative_values, diff_count, MIN(len, temp_len));
           }
           out_buf[off] = interesting_8[item];
 
@@ -2360,7 +2387,7 @@ havoc_stage:
 #endif
           u32 off = rand_below(afl, temp_len - 1);
           if (special_random) {
-            off = getRandomIndex(taint_array, MIN(len, temp_len - 1));
+            off = getRandomIndex(valid_indices, cumulative_values, diff_count, MIN(len, temp_len - 1));
           }
           *(u16 *)(out_buf + off) =
               interesting_16[item];
@@ -2387,7 +2414,7 @@ havoc_stage:
 #endif
           u32 off = rand_below(afl, temp_len - 1);
           if (special_random) {
-            off = getRandomIndex(taint_array, MIN(len, temp_len - 1));
+            off = getRandomIndex(valid_indices, cumulative_values, diff_count, MIN(len, temp_len - 1));
           }
           *(u16 *)(out_buf + off) =
               SWAP16(interesting_16[item]);
@@ -2414,7 +2441,7 @@ havoc_stage:
 #endif
           u32 off = rand_below(afl, temp_len - 3);
           if (special_random) {
-            off = getRandomIndex(taint_array, MIN(len, temp_len - 3));
+            off = getRandomIndex(valid_indices, cumulative_values, diff_count, MIN(len, temp_len - 3));
           }
 
           *(u32 *)(out_buf + off) =
@@ -2442,7 +2469,7 @@ havoc_stage:
 #endif    
           u32 off = rand_below(afl, temp_len - 3);
           if (special_random) {
-            off = getRandomIndex(taint_array, MIN(len, temp_len - 3));
+            off = getRandomIndex(valid_indices, cumulative_values, diff_count, MIN(len, temp_len - 3));
           } 
           *(u32 *)(out_buf + off) =
               SWAP32(interesting_32[item]);
@@ -2467,7 +2494,7 @@ havoc_stage:
 #endif
           u32 off = rand_below(afl, temp_len);
           if (special_random) {
-            off = getRandomIndex(taint_array, MIN(len, temp_len));
+            off = getRandomIndex(valid_indices, cumulative_values, diff_count, MIN(len, temp_len));
           }
           out_buf[off] -= item;
 
@@ -2490,7 +2517,7 @@ havoc_stage:
 #endif    
           u32 off = rand_below(afl, temp_len);
           if (special_random) {
-            off = getRandomIndex(taint_array, MIN(len, temp_len));
+            off = getRandomIndex(valid_indices, cumulative_values, diff_count, MIN(len, temp_len));
           }
           out_buf[off] += item;
 
@@ -2510,7 +2537,7 @@ havoc_stage:
 
           u32 off = rand_below(afl, temp_len - 1);
           if (special_random) {
-            off = getRandomIndex(taint_array, MIN(len, temp_len - 1));
+            off = getRandomIndex(valid_indices, cumulative_values, diff_count, MIN(len, temp_len - 1));
           }
           item = 1 + rand_below(afl, ARITH_MAX);
 
@@ -2537,7 +2564,7 @@ havoc_stage:
 
           u32 off = rand_below(afl, temp_len - 1);
           if (special_random) {
-            off = getRandomIndex(taint_array, MIN(len, temp_len - 1));
+            off = getRandomIndex(valid_indices, cumulative_values, diff_count, MIN(len, temp_len - 1));
           } 
           u16 num = 1 + rand_below(afl, ARITH_MAX);
 
@@ -2565,7 +2592,7 @@ havoc_stage:
 
           u32 off = rand_below(afl, temp_len - 1);
           if (special_random) {
-            off = getRandomIndex(taint_array, MIN(len, temp_len - 1));
+            off = getRandomIndex(valid_indices, cumulative_values, diff_count, MIN(len, temp_len - 1));
           }
           item = 1 + rand_below(afl, ARITH_MAX);
 
@@ -2592,7 +2619,7 @@ havoc_stage:
 
           u32 off = rand_below(afl, temp_len - 1);
           if (special_random) {
-            off = getRandomIndex(taint_array, MIN(len, temp_len - 1));
+            off = getRandomIndex(valid_indices, cumulative_values, diff_count, MIN(len, temp_len - 1));
           }
           u16 num = 1 + rand_below(afl, ARITH_MAX);
 
@@ -2620,7 +2647,7 @@ havoc_stage:
 
           u32 off = rand_below(afl, temp_len - 3);
           if (special_random) {
-            off = getRandomIndex(taint_array, MIN(len, temp_len - 3));
+            off = getRandomIndex(valid_indices, cumulative_values, diff_count, MIN(len, temp_len - 3));
           }
           item = 1 + rand_below(afl, ARITH_MAX);
 
@@ -2647,7 +2674,7 @@ havoc_stage:
 
           u32 off = rand_below(afl, temp_len - 3);
           if (special_random) {
-            off = getRandomIndex(taint_array, MIN(len, temp_len - 3));
+            off = getRandomIndex(valid_indices, cumulative_values, diff_count, MIN(len, temp_len - 3));
           }
           u32 num = 1 + rand_below(afl, ARITH_MAX);
 
@@ -2675,7 +2702,7 @@ havoc_stage:
 
           u32 off = rand_below(afl, temp_len - 3);
           if (special_random) {
-            off = getRandomIndex(taint_array, MIN(len, temp_len - 3));
+            off = getRandomIndex(valid_indices, cumulative_values, diff_count, MIN(len, temp_len - 3));
           }
           item = 1 + rand_below(afl, ARITH_MAX);
 
@@ -2702,7 +2729,7 @@ havoc_stage:
 
           u32 off = rand_below(afl, temp_len - 3);
           if (special_random) {
-            off = getRandomIndex(taint_array, MIN(len, temp_len - 3));
+            off = getRandomIndex(valid_indices, cumulative_values, diff_count, MIN(len, temp_len - 3));
           }
           u32 num = 1 + rand_below(afl, ARITH_MAX);
 
@@ -2730,7 +2757,7 @@ havoc_stage:
 
           u32 pos = rand_below(afl, temp_len);
           if (special_random) {
-            pos = getRandomIndex(taint_array, MIN(len, temp_len));
+            pos = getRandomIndex(valid_indices, cumulative_values, diff_count, MIN(len, temp_len));
           }
           item = 1 + rand_below(afl, 255);
 #ifdef INTROSPECTION
@@ -2757,7 +2784,7 @@ havoc_stage:
             u32 clone_from = rand_below(afl, temp_len - clone_len + 1);
             u32 clone_to = rand_below(afl, temp_len);
             if (special_random) {
-              clone_to = getRandomIndex(taint_array, MIN(len, temp_len));
+              clone_to = getRandomIndex(valid_indices, cumulative_values, diff_count, MIN(len, temp_len));
             }
 
 #ifdef INTROSPECTION
@@ -2812,7 +2839,7 @@ havoc_stage:
             u32 clone_len = choose_block_len(afl, HAVOC_BLK_XL);
             u32 clone_to = rand_below(afl, temp_len);
             if (special_random) {
-              clone_to = getRandomIndex(taint_array, MIN(len, temp_len));
+              clone_to = getRandomIndex(valid_indices, cumulative_values, diff_count, MIN(len, temp_len));
             }
             u32 strat = rand_below(afl, 2);
             u32 clone_from = clone_to ? clone_to - 1 : 0;
@@ -2875,7 +2902,7 @@ havoc_stage:
 
             copy_from = rand_below(afl, temp_len - copy_len + 1);
             //if (special_random) {
-            //  copy_to = getRandomIndex(taint_array, temp_len - copy_len + 1);
+            //  copy_to = getRandomIndex(valid_indices, cumulative_values, diff_count, temp_len - copy_len + 1);
             //} else {
               copy_to = rand_below(afl, temp_len - copy_len + 1);
             //}
@@ -2908,7 +2935,7 @@ havoc_stage:
           u32 copy_len = choose_block_len(afl, temp_len - 1);
           u32 copy_to = rand_below(afl, temp_len - copy_len + 1);
           if (special_random) {
-            copy_to = getRandomIndex(taint_array, MIN(len, temp_len - copy_len + 1));
+            copy_to = getRandomIndex(valid_indices, cumulative_values, diff_count, MIN(len, temp_len - copy_len + 1));
           }
           u32 strat = rand_below(afl, 2);
           u32 copy_from = copy_to ? copy_to - 1 : 0;
@@ -2941,7 +2968,7 @@ havoc_stage:
 #endif
           u32 off = rand_below(afl, temp_len);
           if (special_random) {
-            off = getRandomIndex(taint_array, MIN(len, temp_len));
+            off = getRandomIndex(valid_indices, cumulative_values, diff_count, MIN(len, temp_len));
           }
           out_buf[off]++;
 
@@ -2963,7 +2990,7 @@ havoc_stage:
 #endif    
           u32 off = rand_below(afl, temp_len);
           if (special_random) {
-            off = getRandomIndex(taint_array, MIN(len, temp_len));
+            off = getRandomIndex(valid_indices, cumulative_values, diff_count, MIN(len, temp_len));
           }
           out_buf[off]--;
 
@@ -2985,7 +3012,7 @@ havoc_stage:
 #endif
           u32 off = rand_below(afl, temp_len);
           if (special_random) {
-            off = getRandomIndex(taint_array, MIN(len, temp_len));
+            off = getRandomIndex(valid_indices, cumulative_values, diff_count, MIN(len, temp_len));
           }
           out_buf[off] ^= 0xff;
 
@@ -3005,14 +3032,14 @@ havoc_stage:
 
           u32 to_end, switch_to, switch_len, switch_from;
           //if (special_random) {
-          //  switch_from = getRandomIndex(taint_array, temp_len);
+          //  switch_from = getRandomIndex(valid_indices, cumulative_values, diff_count, temp_len);
           //} else {
             switch_from = rand_below(afl, temp_len);
           //}
 
           do {
             //if (special_random) {
-            //  switch_to = getRandomIndex(taint_array, temp_len);
+            //  switch_to = getRandomIndex(valid_indices, cumulative_values, diff_count, temp_len);
             //} else {
               switch_to = rand_below(afl, temp_len);
             //}
@@ -3075,7 +3102,7 @@ havoc_stage:
           u32 del_len = choose_block_len(afl, temp_len - 1);
           u32 del_from = rand_below(afl, temp_len - del_len + 1);
           if (special_random) {
-            del_from = getRandomIndex(taint_array, MIN(len, temp_len - del_len + 1));
+            del_from = getRandomIndex(valid_indices, cumulative_values, diff_count, MIN(len, temp_len - del_len + 1));
           } 
 
 #ifdef INTROSPECTION
@@ -3105,7 +3132,7 @@ havoc_stage:
           u32 len = choose_block_len(afl, temp_len - 1);
           u32 off = rand_below(afl, temp_len - len + 1);
           if (special_random) {
-            off = getRandomIndex(taint_array, MIN(len, temp_len - len + 1));
+            off = getRandomIndex(valid_indices, cumulative_values, diff_count, MIN(len, temp_len - len + 1));
           }
 
 
@@ -3148,7 +3175,7 @@ havoc_stage:
           u32 del_len = 1;
           u32 del_from = rand_below(afl, temp_len - del_len + 1);
           if (special_random) {
-            del_from = getRandomIndex(taint_array, MIN(len, temp_len - del_len + 1));
+            del_from = getRandomIndex(valid_indices, cumulative_values, diff_count, MIN(len, temp_len - del_len + 1));
           }
 
 
@@ -3175,7 +3202,7 @@ havoc_stage:
           u32 clone_len = 1;
           u32 clone_to = rand_below(afl, temp_len);
           if (special_random) {
-            clone_to = getRandomIndex(taint_array, MIN(len, temp_len));
+            clone_to = getRandomIndex(valid_indices, cumulative_values, diff_count, MIN(len, temp_len));
           }
           u32 strat = rand_below(afl, 2);
           u32 clone_from = clone_to ? clone_to - 1 : 0;
@@ -3218,7 +3245,7 @@ havoc_stage:
 
           u32 off = rand_below(afl, temp_len), off2 = off, cnt = 0;
           if (special_random) {
-            off = getRandomIndex(taint_array, MIN(len, temp_len));
+            off = getRandomIndex(valid_indices, cumulative_values, diff_count, MIN(len, temp_len));
           } else {
             off = rand_below(afl, temp_len);
           }
@@ -3370,7 +3397,7 @@ havoc_stage:
           u32 len = 1 + rand_below(afl, 8);
           u32 pos = rand_below(afl, temp_len);
           if (special_random) {
-            pos = getRandomIndex(taint_array, MIN(len, temp_len));
+            pos = getRandomIndex(valid_indices, cumulative_values, diff_count, MIN(len, temp_len));
           } else {
             pos = rand_below(afl, temp_len);
           }
@@ -3420,7 +3447,7 @@ havoc_stage:
 
           u32 insert_at = rand_below(afl, temp_len - extra_len + 1);
           if (special_random) {
-            insert_at = getRandomIndex(taint_array, MIN(len, temp_len - extra_len + 1));
+            insert_at = getRandomIndex(valid_indices, cumulative_values, diff_count, MIN(len, temp_len - extra_len + 1));
           } else {
             insert_at = rand_below(afl, temp_len - extra_len + 1);
           }
@@ -3454,7 +3481,7 @@ havoc_stage:
           u8 *ptr = afl->extras[use_extra].data;
           u32 insert_at = rand_below(afl, temp_len + 1);
           if (special_random) {
-            insert_at = getRandomIndex(taint_array, MIN(len, temp_len + 1));
+            insert_at = getRandomIndex(valid_indices, cumulative_values, diff_count, MIN(len, temp_len + 1));
           } else {
             insert_at = rand_below(afl, temp_len + 1);
           }
@@ -3496,7 +3523,7 @@ havoc_stage:
 
           u32 insert_at = rand_below(afl, temp_len - extra_len + 1);
           if (special_random) {
-            insert_at = getRandomIndex(taint_array, MIN(len, temp_len - extra_len + 1));
+            insert_at = getRandomIndex(valid_indices, cumulative_values, diff_count, MIN(len, temp_len - extra_len + 1));
           } else {
             insert_at = rand_below(afl, temp_len - extra_len + 1);
           }
@@ -3530,7 +3557,7 @@ havoc_stage:
           u8 *ptr = afl->a_extras[use_extra].data;
           u32 insert_at = rand_below(afl, temp_len + 1);
           if (special_random) {
-            insert_at = getRandomIndex(taint_array, MIN(len, temp_len + 1));
+            insert_at = getRandomIndex(valid_indices, cumulative_values, diff_count, MIN(len, temp_len + 1));
           } else {
             insert_at = rand_below(afl, temp_len + 1);
           }
@@ -3593,7 +3620,7 @@ havoc_stage:
           copy_from = rand_below(afl, new_len - copy_len + 1);
           copy_to = rand_below(afl, temp_len - copy_len + 1);
           if (special_random) {
-            copy_to = getRandomIndex(taint_array, MIN(len, temp_len - copy_len + 1));
+            copy_to = getRandomIndex(valid_indices, cumulative_values, diff_count, MIN(len, temp_len - copy_len + 1));
           } else {
             copy_to = rand_below(afl, temp_len - copy_len + 1);
           }
@@ -3652,7 +3679,7 @@ havoc_stage:
           clone_from = rand_below(afl, new_len - clone_len + 1);
           clone_to = rand_below(afl, temp_len + 1);
           if (special_random) {
-            clone_to = getRandomIndex(taint_array, MIN(len, temp_len + 1));
+            clone_to = getRandomIndex(valid_indices, cumulative_values, diff_count, MIN(len, temp_len + 1));
           } else {
             clone_to = rand_below(afl, temp_len + 1);
           }
@@ -3791,6 +3818,15 @@ havoc_stage:
 
   }
   free(taint_array);
+  taint_array = NULL;
+  if(valid_indices) {
+    free(valid_indices);
+    valid_indices = NULL;
+  }
+  if(cumulative_values) {
+    free(cumulative_values);
+    cumulative_values = NULL;
+  }
 
 #ifndef IGNORE_FINDS
 
