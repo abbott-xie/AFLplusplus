@@ -26,7 +26,6 @@
 #include "afl-fuzz.h"
 #include <string.h>
 #include <limits.h>
-#include <vcruntime.h>
 #include "cmplog.h"
 #include "afl-mutations.h"
 //FILE *arrf;
