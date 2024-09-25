@@ -26,7 +26,7 @@
 #include "afl-fuzz.h"
 #include <string.h>
 #include <limits.h>
-#include <vcruntime.h>
+//#include <vcruntime.h>
 #include "cmplog.h"
 #include "afl-mutations.h"
 //FILE *arrf;
@@ -3734,22 +3734,22 @@ havoc_stage:
             if (total_diff > TAINT_NUM) {
               break;
             }
-            if (cound_diff_pos[diff_index] + diff_num_index >= len || cound_diff_pos[diff_index] + diff_num_index >= temp_len) {
+            if (count_diff_pos[diff_index] + diff_num_index >= len || count_diff_pos[diff_index] + diff_num_index >= temp_len) {
               break;
             }
-            if (out_buf[cound_diff_pos[diff_index] + diff_num_index] != in_buf[cound_diff_pos[diff_index] + diff_num_index]) {
+            if (out_buf[count_diff_pos[diff_index] + diff_num_index] != in_buf[count_diff_pos[diff_index] + diff_num_index]) {
               // the new byte item can not be in the array
               bool in_temp_flag = false;
               for (u32 diff_orig = 0; diff_orig < total_diff; diff_orig++)
               {
-                if (taint_diff_temp[diff_orig] == cound_diff_pos[diff_index] + diff_num_index) {
+                if (taint_diff_temp[diff_orig] == count_diff_pos[diff_index] + diff_num_index) {
                   in_temp_flag = true;
                 }
               }
               if (in_temp_flag) {
                 continue;
               }
-              taint_diff_temp[total_diff] = cound_diff_pos[diff_index] + diff_num_index;
+              taint_diff_temp[total_diff] = count_diff_pos[diff_index] + diff_num_index;
               total_diff++;
             }
           }
