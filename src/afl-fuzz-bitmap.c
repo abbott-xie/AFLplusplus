@@ -494,7 +494,8 @@ void write_crash_readme(afl_state_t *afl) {
 
       for (u32 cur_border_edge_id = base_border_edge_id; cur_border_edge_id < base_border_edge_id + cur_num_of_children; cur_border_edge_id++) {
           u32 child_node = border_edge_child[cur_border_edge_id];
-          u32 br_dist_edge_id = border_edge_2_br_dist[cur_border_edge_id];
+          // attention: use base border edge id to get the br_dist_edge_id
+          u32 br_dist_edge_id = border_edge_2_br_dist[base_border_edge_id];
 
           if (br_cov[br_dist_edge_id])
             continue;
