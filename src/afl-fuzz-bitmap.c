@@ -518,6 +518,8 @@ void write_crash_readme(afl_state_t *afl) {
             continue;
           
           afl->fsrv.taint_flag = 1;
+
+          return;
       }
     }
   }
