@@ -3723,7 +3723,7 @@ havoc_stage:
     }
 
     u32 total_diff = 0;
-    u32 taint_diff_temp[TAINT_NUM] = {0};
+    u32 taint_diff_temp[TAINT_NUM + 1] = {0};
     if (afl->fsrv.begin_sample_flag) {
       for (u32 diff_index = 0; diff_index < 2 * TAINT_NUM; diff_index++) {
         if (total_diff > TAINT_NUM) {
