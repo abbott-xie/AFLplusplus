@@ -32,7 +32,9 @@
 //FILE *arrf;
 /* MOpt */
 
-#define TAINT_NUM 5
+#define TAINT_NUM_MIN 1
+#define TAINT_SLOPE 2
+#define TAINT_NUM_DIV 32
 static int select_algorithm(afl_state_t *afl, u32 max_algorithm) {
 
   int i_puppet, j_puppet = 0, operator_number = max_algorithm;
@@ -2213,8 +2215,21 @@ havoc_stage:
   u32 *cumulative_values = NULL;
   u32 diff_count = 0;
   u32 taint_error_flag = 0;
+  u32 taint_num_max = afl->queue_cur->len / TAINT_NUM_DIV;
+  u32 taint_num_min = TAINT_NUM_MIN;
+  // malloc count_diff_pos, count_diff_num and taint_diff_temp
+  u32 *count_diff_pos = (int *)malloc(2 * taint_num_max * sizeof(u32));
+  if (count_diff_pos == NULL) { PFATAL("malloc failed"); }
+  u32 *count_diff_num = (int *)malloc(2 * taint_num_max * sizeof(u32));
+  if (count_diff_num == NULL) { PFATAL("malloc failed"); }
+  u32 *taint_diff_temp = (int *)malloc(taint_num_max * sizeof(u32));
+  if (taint_diff_temp == NULL) { PFATAL("malloc failed"); }
   for (afl->stage_cur = 0; afl->stage_cur < afl->stage_max; ++afl->stage_cur) {
     //afl->stage_max = 32000;
+
+    u32 taint_num = TAINT_SLOPE * afl->queue_cur->len / afl->stage_max;
+    if (taint_num < taint_num_min) { taint_num = taint_num_min; }
+    if (taint_num > taint_num_max) { taint_num = taint_num_max; }
 
     if (afl->stage_cur > (afl->stage_max/2))
     {
@@ -2261,16 +2276,18 @@ havoc_stage:
 
     u32 use_stacking = 1 + rand_below(afl, stack_max);
 
-    if (use_stacking > TAINT_NUM) 
+    if (use_stacking > taint_num) 
       afl->fsrv.begin_sample_flag = 0;
     else 
       afl->fsrv.begin_sample_flag = 1;
 
     afl->stage_cur_val = use_stacking;
 
-    // a array to store 10 bytes of diff
-    u32 count_diff_pos[2 * TAINT_NUM] = {0};
-    u32 count_diff_num[2 * TAINT_NUM] = {0};
+    // a array to store diff
+    memset(count_diff_pos, 0, 2 * taint_num_max * sizeof(u32));
+    memset(count_diff_num, 0, 2 * taint_num_max * sizeof(u32));
+    memset(taint_diff_temp, 0, taint_num_max * sizeof(u32));
+
 /*
     int arr_cnt = 0;
     for (u32 i = 0; i < len; i++) {
@@ -3084,8 +3101,8 @@ havoc_stage:
           if (afl->fsrv.begin_sample_flag) {
             count_diff_pos[i] = switch_from;
             count_diff_num[i] = switch_len;
-            count_diff_pos[i + TAINT_NUM] = switch_to;
-            count_diff_num[i + TAINT_NUM] = switch_len;
+            count_diff_pos[i + taint_num] = switch_to;
+            count_diff_num[i + taint_num] = switch_len;
           }
 
           break;
@@ -3723,15 +3740,14 @@ havoc_stage:
     }
 
     u32 total_diff = 0;
-    u32 taint_diff_temp[TAINT_NUM + 1] = {0};
     if (afl->fsrv.begin_sample_flag) {
-      for (u32 diff_index = 0; diff_index < 2 * TAINT_NUM; diff_index++) {
-        if (total_diff > TAINT_NUM) {
+      for (u32 diff_index = 0; diff_index < 2 * taint_num; diff_index++) {
+        if (total_diff > taint_num) {
           break;
         }
         if (count_diff_num[diff_index] > 0) {
           for (u32 diff_num_index = 0; diff_num_index < count_diff_num[diff_index]; diff_num_index++) {
-            if (total_diff > TAINT_NUM) {
+            if (total_diff > taint_num) {
               break;
             }
             if (count_diff_pos[diff_index] + diff_num_index >= len || count_diff_pos[diff_index] + diff_num_index >= temp_len) {
@@ -3755,7 +3771,7 @@ havoc_stage:
           }
         }
       }
-      if (total_diff > TAINT_NUM) {
+      if (total_diff > taint_num) {
         afl->fsrv.begin_sample_flag = 0;
       }
     }
@@ -3817,6 +3833,12 @@ havoc_stage:
 #endif
 
   }
+  free(count_diff_pos);
+  count_diff_pos = NULL;
+  free(count_diff_num);
+  count_diff_num = NULL;
+  free(taint_diff_temp);
+  taint_diff_temp = NULL;
   free(taint_array);
   taint_array = NULL;
   if(valid_indices) {
