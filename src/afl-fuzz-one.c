@@ -2222,7 +2222,7 @@ havoc_stage:
   if (count_diff_pos == NULL) { PFATAL("malloc failed"); }
   u32 *count_diff_num = (int *)malloc(2 * taint_num_max * sizeof(u32));
   if (count_diff_num == NULL) { PFATAL("malloc failed"); }
-  u32 *taint_diff_temp = (int *)malloc(taint_num_max * sizeof(u32));
+  u32 *taint_diff_temp = (int *)malloc((taint_num_max + 1) * sizeof(u32));
   if (taint_diff_temp == NULL) { PFATAL("malloc failed"); }
   for (afl->stage_cur = 0; afl->stage_cur < afl->stage_max; ++afl->stage_cur) {
     //afl->stage_max = 32000;
@@ -2286,7 +2286,7 @@ havoc_stage:
     // a array to store diff
     memset(count_diff_pos, 0, 2 * taint_num_max * sizeof(u32));
     memset(count_diff_num, 0, 2 * taint_num_max * sizeof(u32));
-    memset(taint_diff_temp, 0, taint_num_max * sizeof(u32));
+    memset(taint_diff_temp, 0, (taint_num_max + 1) * sizeof(u32));
 
 /*
     int arr_cnt = 0;
