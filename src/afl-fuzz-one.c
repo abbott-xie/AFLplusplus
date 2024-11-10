@@ -2235,6 +2235,20 @@ havoc_stage:
     {
       taint_flag = 1;
       afl->fsrv.begin_sample_flag = 0;
+    } else {
+      taint_flag = 0;
+      afl->fsrv.begin_sample_flag = 1;
+      if (taint_table_build_flag) {
+        if (valid_indices != NULL) {
+          free(valid_indices);
+          valid_indices = NULL;
+        }
+        if (cumulative_values != NULL) {
+          free(cumulative_values);
+          cumulative_values = NULL;
+        }
+        taint_table_build_flag = 0;
+      }
     }
       
     u32 special_random = 0;
@@ -2288,9 +2302,12 @@ havoc_stage:
     afl->stage_cur_val = use_stacking;
 
     // a array to store diff
-    memset(count_diff_pos, 0, 2 * taint_num_max * sizeof(u32));
-    memset(count_diff_num, 0, 2 * taint_num_max * sizeof(u32));
-    memset(taint_diff_temp, 0, (taint_num_max + 1) * sizeof(u32));
+    if (afl->fsrv.begin_sample_flag) {
+      memset(count_diff_pos, 0, 2 * taint_num_max * sizeof(u32));
+      memset(count_diff_num, 0, 2 * taint_num_max * sizeof(u32));
+      memset(taint_diff_temp, 0, (taint_num_max + 1) * sizeof(u32));
+    }
+
 
 /*
     int arr_cnt = 0;
@@ -3853,6 +3870,7 @@ havoc_stage:
     free(cumulative_values);
     cumulative_values = NULL;
   }
+  taint_table_build_flag = 0;
 
 #ifndef IGNORE_FINDS
 
