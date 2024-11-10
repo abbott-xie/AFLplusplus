@@ -2281,6 +2281,10 @@ havoc_stage:
     else 
       afl->fsrv.begin_sample_flag = 1;
 
+    if (taint_flag) {
+      afl->fsrv.begin_sample_flag = 0;
+    }
+
     afl->stage_cur_val = use_stacking;
 
     // a array to store diff
