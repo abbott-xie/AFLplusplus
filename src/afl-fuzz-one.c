@@ -2255,6 +2255,7 @@ havoc_stage:
     if (taint_diff_flag && taint_flag) {
       // build taint table
       if (!taint_table_build_flag) {
+        diff_count = 0;
         for (u32 i = 0; i < len; i++) {
             if (taint_array[i] > 0) {
                 diff_count++;
