@@ -2268,7 +2268,7 @@ havoc_stage:
                 diff_count++;
             }
         }
-        fprintf(arrf, "%u %u %u %u\n", afl->stage_max, temp_len, diff_count, taint_num, );
+        fprintf(arrf, "%u %u %u %u\n", afl->stage_max, temp_len, diff_count, taint_num);
         valid_indices = (u32 *)calloc(diff_count, sizeof(u32));
         cumulative_values = (u32 *)calloc(diff_count, sizeof(u32));
 
