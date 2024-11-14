@@ -2215,7 +2215,7 @@ havoc_stage:
   u32 *cumulative_values = NULL;
   u32 diff_count = 0;
   u32 taint_error_flag = 0;
-  u32 taint_num_max = afl->queue_cur->len / TAINT_NUM_DIV;
+  u32 taint_num_max = temp_len / TAINT_NUM_DIV;
   u32 taint_num_min = TAINT_NUM_MIN;
   // malloc count_diff_pos, count_diff_num and taint_diff_temp
   u32 *count_diff_pos = (int *)malloc(2 * taint_num_max * sizeof(u32));
