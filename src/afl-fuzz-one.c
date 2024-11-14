@@ -2234,8 +2234,13 @@ havoc_stage:
   for (afl->stage_cur = 0; afl->stage_cur < afl->stage_max; ++afl->stage_cur) {
     //afl->stage_max = 32000;
 
-    u32 taint_num = TAINT_SLOPE * temp_len / afl->stage_max;
-    if (taint_num < taint_num_min) { taint_num = taint_num_min; }
+    u32 taint_num = (TAINT_SLOPE * temp_len) / afl->stage_max;
+    if (taint_num < taint_num_min) { 
+      taint_num = (10 * TAINT_SLOPE * temp_len) / afl->stage_max;
+      if (taint_num < taint_num_min) {
+        taint_num = taint_num_min; 
+      }
+    }
     if (taint_num > taint_num_max) { taint_num = taint_num_max; }
 
     if (afl->stage_cur > (afl->stage_max/2))
