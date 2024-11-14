@@ -2234,7 +2234,7 @@ havoc_stage:
   for (afl->stage_cur = 0; afl->stage_cur < afl->stage_max; ++afl->stage_cur) {
     //afl->stage_max = 32000;
 
-    u32 taint_num = TAINT_SLOPE * afl->queue_cur->len / afl->stage_max;
+    u32 taint_num = TAINT_SLOPE * temp_len / afl->stage_max;
     if (taint_num < taint_num_min) { taint_num = taint_num_min; }
     if (taint_num > taint_num_max) { taint_num = taint_num_max; }
 
@@ -2268,7 +2268,7 @@ havoc_stage:
                 diff_count++;
             }
         }
-        fprintf(arrf, "%u %u %u %u\n", afl->stage_max, afl->queue_cur->len, diff_count, taint_num, );
+        fprintf(arrf, "%u %u %u %u\n", afl->stage_max, temp_len, diff_count, taint_num, );
         valid_indices = (u32 *)calloc(diff_count, sizeof(u32));
         cumulative_values = (u32 *)calloc(diff_count, sizeof(u32));
 
