@@ -3819,10 +3819,12 @@ havoc_stage:
         sample_success_number ++;
       }
     } else {
-      taint_number ++;
-      if (unlikely(afl->fsrv.new_bit_flag))
-      {
-        taint_success_number ++;
+      if (taint_flag) {
+        taint_number ++;
+        if (unlikely(afl->fsrv.new_bit_flag))
+        {
+          taint_success_number ++;
+        }
       }
     }
 
