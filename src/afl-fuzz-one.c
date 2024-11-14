@@ -29,7 +29,7 @@
 //#include <vcruntime.h>
 #include "cmplog.h"
 #include "afl-mutations.h"
-//FILE *arrf;
+FILE *arrf;
 /* MOpt */
 
 #define TAINT_NUM_MIN 1
@@ -2207,7 +2207,7 @@ havoc_stage:
   stack_max = 1 << (1 + rand_below(afl, afl->havoc_stack_pow2));
 
   // + (afl->extras_cnt ? 2 : 0) + (afl->a_extras_cnt ? 2 : 0);
-  //arrf = fopen(alloc_printf("%s/arr_log", afl->out_dir), "a");
+  arrf = fopen(alloc_printf("%s/taint_log", afl->out_dir), "a");
   //afl->stage_max = 32000;
   u32 taint_flag = 0;
   u32 taint_table_build_flag = 0;
@@ -2224,6 +2224,11 @@ havoc_stage:
   if (count_diff_num == NULL) { PFATAL("malloc failed"); }
   u32 *taint_diff_temp = (int *)malloc((taint_num_max + 1) * sizeof(u32));
   if (taint_diff_temp == NULL) { PFATAL("malloc failed"); }
+
+  u32 sample_number = 0;
+  u32 taint_number = 0;
+  u32 sample_success_number = 0;
+  u32 taint_success_number = 0;
   for (afl->stage_cur = 0; afl->stage_cur < afl->stage_max; ++afl->stage_cur) {
     //afl->stage_max = 32000;
 
@@ -2261,6 +2266,7 @@ havoc_stage:
                 diff_count++;
             }
         }
+        fprintf(arrf, "%u %u %u\n", afl->stage_max, diff_count, taint_num);
         valid_indices = (u32 *)calloc(diff_count, sizeof(u32));
         cumulative_values = (u32 *)calloc(diff_count, sizeof(u32));
 
@@ -3806,6 +3812,19 @@ havoc_stage:
         taint_array[taint_diff_temp[diff_index]] += 1;
       }
     }
+    if (afl->fsrv.begin_sample_flag) {
+      sample_number++;
+      if (unlikely(afl->fsrv.new_bit_flag))
+      {
+        sample_success_number ++;
+      }
+    } else {
+      taint_number ++;
+      if (unlikely(afl->fsrv.new_bit_flag))
+      {
+        taint_success_number ++;
+      }
+    }
 
     /* out_buf might have been mangled a bit, so let's restore it to its
        original size and shape. */
@@ -3832,7 +3851,8 @@ havoc_stage:
     }
 
   }
-  //fclose(arrf);
+  fprintf(arrf, "Succ: %u/%u %u/%u\n", sample_success_number, sample_number, taint_success_number, taint_number);
+  fclose(arrf);
   // afl->force_ui_update = 1;
   // show_stats(afl);
   // FATAL("Over");

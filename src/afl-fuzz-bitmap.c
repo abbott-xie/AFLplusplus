@@ -579,6 +579,7 @@ save_if_interesting(afl_state_t *afl, void *mem, u32 len, u8 fault) {
   if (likely(fault == afl->crash_mode)) {
 
     increment_hit_bits(afl);
+    afl->fsrv.new_bit_flag = 0;
 
     /* Keep only if there are new bits in the map, add to queue for
        future fuzzing, etc. */
@@ -600,6 +601,11 @@ save_if_interesting(afl_state_t *afl, void *mem, u32 len, u8 fault) {
       if (unlikely(afl->crash_mode)) { ++afl->total_crashes; }
       return 0;
 
+    }
+
+    // use a variable to store if successful
+    if (unlikely(new_bits)) {
+      afl->fsrv.new_bit_flag = 1;
     }
 
   save_to_queue:
