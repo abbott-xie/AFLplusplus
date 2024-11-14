@@ -2229,6 +2229,8 @@ havoc_stage:
   u32 taint_number = 0;
   u32 sample_success_number = 0;
   u32 taint_success_number = 0;
+  u32 else_number = 0;
+  u32 else_success_number = 0;
   for (afl->stage_cur = 0; afl->stage_cur < afl->stage_max; ++afl->stage_cur) {
     //afl->stage_max = 32000;
 
@@ -3818,13 +3820,17 @@ havoc_stage:
       {
         sample_success_number ++;
       }
-    } else {
-      if (taint_flag) {
+    } elif (taint_flag) {
         taint_number ++;
         if (unlikely(afl->fsrv.new_bit_flag))
         {
           taint_success_number ++;
         }
+    } else {
+      else_number ++;
+      if (unlikely(afl->fsrv.new_bit_flag))
+      {
+        else_success_number ++;
       }
     }
 
@@ -3853,7 +3859,7 @@ havoc_stage:
     }
 
   }
-  fprintf(arrf, "Succ: %u/%u %u/%u\n", sample_success_number, sample_number, taint_success_number, taint_number);
+  fprintf(arrf, "Succ: %u/%u %u/%u %u/%u\n", sample_success_number, sample_number, taint_success_number, taint_number, else_success_number, else_number);
   fclose(arrf);
   // afl->force_ui_update = 1;
   // show_stats(afl);
