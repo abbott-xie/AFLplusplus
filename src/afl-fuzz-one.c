@@ -3859,7 +3859,8 @@ havoc_stage:
     }
 
   }
-  fprintf(arrf, "Succ: %u/%u %u/%u %u/%u\n", sample_success_number, sample_number, taint_success_number, taint_number, else_success_number, else_number);
+  if (taint_flag && taint_diff_flag)
+    fprintf(arrf, "Succ: %u/%u %u/%u %u/%u\n", sample_success_number, sample_number, taint_success_number, taint_number, else_success_number, else_number);
   fclose(arrf);
   // afl->force_ui_update = 1;
   // show_stats(afl);
