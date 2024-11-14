@@ -3820,7 +3820,7 @@ havoc_stage:
       {
         sample_success_number ++;
       }
-    } elif (taint_flag) {
+    } else if (taint_flag) {
         taint_number ++;
         if (unlikely(afl->fsrv.new_bit_flag))
         {
