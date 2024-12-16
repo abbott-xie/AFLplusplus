@@ -1575,7 +1575,8 @@ static inline s16 s16_min2(s16 a, s16 b) {
 
 static inline s16 s16_min3(s16 a, s16 b, s16 c) {
   return s16_min2(s16_min2(a, b), c);
-/* Compute the SHA1 hash of `data`, which is of `len` bytes, and return the
+}
+ /* Compute the SHA1 hash of `data`, which is of `len` bytes, and return the
  * result as a `\0`-terminated hex string, which the caller much `ck_free`. */
 char *sha1_hex(const u8 *data, size_t len);
 
