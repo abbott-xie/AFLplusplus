@@ -5,7 +5,7 @@
    Originally written by Michal Zalewski
 
    Now maintained by Marc Heuse <mh@mh-sec.de>,
-                     Heiko Eißfeldt <heiko.eissfeldt@hexco.de>,
+                     Heiko Eissfeldt <heiko.eissfeldt@hexco.de>,
                      Andrea Fioraldi <andreafioraldi@gmail.com>,
                      Dominik Maier <mail@dmnk.co>
 
@@ -48,6 +48,14 @@ typedef uint128_t         u128;
 #define FS_ERROR_MMAP 16
 #define FS_ERROR_OLD_CMPLOG 32
 #define FS_ERROR_OLD_CMPLOG_QEMU 64
+
+/* New Forkserver */
+#define FS_NEW_VERSION_MIN 1
+#define FS_NEW_VERSION_MAX 1
+#define FS_NEW_ERROR 0xeffe0000
+#define FS_NEW_OPT_MAPSIZE 0x00000001      // parameter: 32 bit value
+#define FS_NEW_OPT_SHDMEM_FUZZ 0x00000002  // parameter: none
+#define FS_NEW_OPT_AUTODICT 0x00000800     // autodictionary data
 
 /* Reporting options */
 #define FS_OPT_ENABLED 0x80000001
@@ -147,7 +155,7 @@ typedef int128_t s128;
   ({                                           \
                                                \
     char *d = (char *)(_x), *s = (char *)(_y); \
-    u32   i, l = (_l)-1;                       \
+    u32   i, l = (_l) - 1;                     \
     for (i = 0; i <= l; i++)                   \
       d[l - i] = s[i];                         \
                                                \

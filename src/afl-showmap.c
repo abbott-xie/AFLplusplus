@@ -7,7 +7,7 @@
    Forkserver design by Jann Horn <jannhorn@googlemail.com>
 
    Now maintained by Marc Heuse <mh@mh-sec.de>,
-                        Heiko Eißfeldt <heiko.eissfeldt@hexco.de> and
+                        Heiko Eissfeldt <heiko.eissfeldt@hexco.de> and
                         Andrea Fioraldi <andreafioraldi@gmail.com> and
                         Dominik Maier <mail@dmnk.co>
 
@@ -178,7 +178,8 @@ fsrv_run_result_t fuzz_run_target(afl_state_t *afl, afl_forkserver_t *fsrv,
 void classify_counts(afl_forkserver_t *fsrv) {
 
   u8       *mem = fsrv->trace_bits;
-  const u8 *map = binary_mode ? count_class_binary : count_class_human;
+  const u8 *map = (binary_mode || collect_coverage) ? count_class_binary
+                                                    : count_class_human;
 
   u32 i = map_size;
 
@@ -224,8 +225,13 @@ static void at_exit_handler(void) {
 
   if (remove_shm) {
 
+    remove_shm = false;
     if (shm.map) afl_shm_deinit(&shm);
-    if (fsrv->use_shmem_fuzz) deinit_shmem(fsrv, shm_fuzz);
+    if ((shm_fuzz && shm_fuzz->shmemfuzz_mode) || fsrv->use_shmem_fuzz) {
+
+      shm_fuzz = deinit_shmem(fsrv, shm_fuzz);
+
+    }
 
   }
 
@@ -240,14 +246,7 @@ static void analyze_results(afl_forkserver_t *fsrv) {
   u32 i;
   for (i = 0; i < map_size; i++) {
 
-    if (fsrv->trace_bits[i]) {
-
-      total += fsrv->trace_bits[i];
-      if (fsrv->trace_bits[i] > highest) highest = fsrv->trace_bits[i];
-      // if (!coverage_map[i]) { coverage_map[i] = 1; }
-      coverage_map[i] |= fsrv->trace_bits[i];
-
-    }
+    if (fsrv->trace_bits[i]) { coverage_map[i] |= fsrv->trace_bits[i]; }
 
   }
 
@@ -1339,6 +1338,8 @@ int main(int argc, char **argv_orig, char **envp) {
 
   }
 
+  if (collect_coverage) { binary_mode = false; }  // ensure this
+
   if (optind == argc || !out_file) { usage(argv[0]); }
 
   if (in_dir && in_filelist) { FATAL("you can only specify either -i or -I"); }
@@ -1531,6 +1532,8 @@ int main(int argc, char **argv_orig, char **envp) {
 
   /* initialize cmplog_mode */
   shm_fuzz->cmplog_mode = 0;
+  atexit(at_exit_handler);
+
   u8 *map = afl_shm_init(shm_fuzz, MAX_FILE + sizeof(u32), 1);
   shm_fuzz->shmemfuzz_mode = true;
   if (!map) { FATAL("BUG: Zero return from afl_shm_init."); }
@@ -1677,11 +1680,8 @@ int main(int argc, char **argv_orig, char **envp) {
       if ((coverage_map = (u8 *)malloc(map_size + 64)) == NULL)
         FATAL("coult not grab memory");
       edges_only = false;
-      raw_instr_output = true;
 
     }
-
-    atexit(at_exit_handler);
 
     if (get_afl_env("AFL_DEBUG")) {
 
@@ -1699,8 +1699,11 @@ int main(int argc, char **argv_orig, char **envp) {
 
     map_size = fsrv->map_size;
 
-    if (fsrv->support_shmem_fuzz && !fsrv->use_shmem_fuzz)
+    if (fsrv->support_shmem_fuzz && !fsrv->use_shmem_fuzz) {
+
       shm_fuzz = deinit_shmem(fsrv, shm_fuzz);
+
+    }
 
     if (in_dir) {
 
@@ -1733,8 +1736,11 @@ int main(int argc, char **argv_orig, char **envp) {
 
   } else {
 
-    if (fsrv->support_shmem_fuzz && !fsrv->use_shmem_fuzz)
+    if (fsrv->support_shmem_fuzz && !fsrv->use_shmem_fuzz) {
+
       shm_fuzz = deinit_shmem(fsrv, shm_fuzz);
+
+    }
 
 #ifdef __linux__
     if (!fsrv->nyx_mode) {
@@ -1782,9 +1788,9 @@ int main(int argc, char **argv_orig, char **envp) {
 
   }
 
-  remove_shm = 0;
+  remove_shm = false;
   afl_shm_deinit(&shm);
-  if (fsrv->use_shmem_fuzz) shm_fuzz = deinit_shmem(fsrv, shm_fuzz);
+  if (fsrv->use_shmem_fuzz) { shm_fuzz = deinit_shmem(fsrv, shm_fuzz); }
 
   u32 ret;
 

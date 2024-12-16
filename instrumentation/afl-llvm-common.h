@@ -8,7 +8,13 @@
 #include <list>
 #include <string>
 #include <fstream>
-#include <optional>
+
+#ifdef __has_include
+  #if __has_include(<optional>)
+    #include <optional>
+  #endif
+#endif
+
 #include <sys/time.h>
 
 #include "llvm/Config/llvm-config.h"
@@ -55,6 +61,7 @@ void  initInstrumentList();
 bool  isInInstrumentList(llvm::Function *F, std::string Filename);
 unsigned long long int calculateCollisions(uint32_t edges);
 void                   scanForDangerousFunctions(llvm::Module *M);
+unsigned int           calcCyclomaticComplexity(llvm::Function *F);
 
 #ifndef IS_EXTERN
   #define IS_EXTERN

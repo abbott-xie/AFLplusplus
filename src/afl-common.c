@@ -5,7 +5,7 @@
    Originally written by Michal Zalewski
 
    Now maintained by Marc Heuse <mh@mh-sec.de>,
-                        Heiko Eißfeldt <heiko.eissfeldt@hexco.de> and
+                        Heiko Eissfeldt <heiko.eissfeldt@hexco.de> and
                         Andrea Fioraldi <andreafioraldi@gmail.com>
 
    Copyright 2016, 2017 Google Inc. All rights reserved.
@@ -34,6 +34,7 @@
 #endif
 #include <string.h>
 #include <strings.h>
+#include <time.h>
 #include <math.h>
 #include <sys/mman.h>
 
@@ -86,9 +87,10 @@ void set_sanitizer_defaults() {
   u8 *have_lsan_options = getenv("LSAN_OPTIONS");
   u8  have_san_options = 0;
   u8  default_options[1024] =
-      "detect_odr_violation=0:abort_on_error=1:symbolize=0:allocator_may_"
-      "return_null=1:handle_segv=0:handle_sigbus=0:handle_abort=0:handle_"
-      "sigfpe=0:handle_sigill=0:";
+      "detect_odr_violation=0:abort_on_error=1:symbolize=0:"
+      "allocator_may_return_null=1:handle_segv=0:handle_sigbus=0:"
+      "handle_abort=0:handle_sigfpe=0:handle_sigill=0:"
+      "detect_stack_use_after_return=0:check_initialization_order=0:";
 
   if (have_asan_options || have_ubsan_options || have_msan_options ||
       have_lsan_options) {
@@ -106,7 +108,8 @@ void set_sanitizer_defaults() {
     if (!have_san_options) { strcpy(buf, default_options); }
     if (have_asan_options) {
 
-      if (NULL != strstr(have_asan_options, "detect_leaks=0")) {
+      if (NULL != strstr(have_asan_options, "detect_leaks=0") ||
+          NULL != strstr(have_asan_options, "detect_leaks=false")) {
 
         strcat(buf, "exitcode=" STRINGIFY(LSAN_ERROR) ":fast_unwind_on_malloc=0:print_suppressions=0:detect_leaks=0:malloc_context_size=0:");
 
@@ -977,6 +980,7 @@ inline u64 get_cur_time(void) {
   struct timeval  tv;
   struct timezone tz;
 
+  // TO NOT REPLACE WITH clock_gettime!!!
   gettimeofday(&tv, &tz);
 
   return (tv.tv_sec * 1000ULL) + (tv.tv_usec / 1000);
@@ -985,11 +989,12 @@ inline u64 get_cur_time(void) {
 
 /* Get unix time in microseconds */
 
-u64 get_cur_time_us(void) {
+inline u64 get_cur_time_us(void) {
 
   struct timeval  tv;
   struct timezone tz;
 
+  // TO NOT REPLACE WITH clock_gettime!!!
   gettimeofday(&tv, &tz);
 
   return (tv.tv_sec * 1000000ULL) + tv.tv_usec;

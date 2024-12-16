@@ -17,6 +17,10 @@
 
 #define AFL_MAIN
 
+#ifndef _GNU_SOURCE
+  #define _GNU_SOURCE 1
+#endif
+
 #include "common.h"
 #include "config.h"
 #include "types.h"
@@ -32,7 +36,9 @@
 #include <limits.h>
 #include <assert.h>
 #include <ctype.h>
+#include <fcntl.h>
 #include <sys/stat.h>
+#include <sys/mman.h>
 
 #if (LLVM_MAJOR - 0 == 0)
   #undef LLVM_MAJOR
@@ -92,7 +98,8 @@ typedef enum {
 
 } compiler_mode_id;
 
-static u8 cwd[4096];
+static u8   cwd[4096];
+static char opt_level = '3';
 
 char instrument_mode_string[18][18] = {
 
@@ -464,6 +471,8 @@ u8 *find_object(aflcc_state_t *aflcc, u8 *obj) {
             *slash = 0;
             tmp = alloc_printf("%s/%s", exepath, obj);
 
+            if (aflcc->debug) DEBUGF("Trying %s\n", tmp);
+
             if (!access(tmp, R_OK)) { return tmp; }
 
             ck_free(tmp);
@@ -517,8 +526,8 @@ void find_built_deps(aflcc_state_t *aflcc) {
 
   char *ptr = NULL;
 
-#if defined(__x86_64__)
-  if ((ptr = find_object(aflcc, "as")) != NULL) {
+#if defined(__x86_64__) || defined(__i386__)
+  if ((ptr = find_object(aflcc, "afl-as")) != NULL) {
 
   #ifndef __APPLE__
     // on OSX clang masquerades as GCC
@@ -593,7 +602,6 @@ void compiler_mode_by_callname(aflcc_state_t *aflcc) {
   if (strncmp(aflcc->callname, "afl-clang-fast", 14) == 0) {
 
     /* afl-clang-fast is always created there by makefile
-      just like afl-clang, burdened with special purposes:
       - If llvm-config is not available (i.e. LLVM_MAJOR is 0),
         or too old, it falls back to LLVM-NATIVE mode and let
         the actual compiler complain if doesn't work.
@@ -828,7 +836,8 @@ static void instrument_mode_old_environ(aflcc_state_t *aflcc) {
   }
 
   if (getenv("AFL_LLVM_CTX")) aflcc->instrument_opt_mode |= INSTRUMENT_OPT_CTX;
-  if (getenv("AFL_LLVM_CALLER"))
+  if (getenv("AFL_LLVM_CALLER") || getenv("AFL_LLVM_LTO_CALLER") ||
+      getenv("AFL_LLVM_LTO_CTX"))
     aflcc->instrument_opt_mode |= INSTRUMENT_OPT_CALLER;
 
   if (getenv("AFL_LLVM_NGRAM_SIZE")) {
@@ -872,9 +881,17 @@ static void instrument_mode_old_environ(aflcc_state_t *aflcc) {
 */
 static void instrument_mode_new_environ(aflcc_state_t *aflcc) {
 
+  u8 *ptr2;
+
+  if ((ptr2 = getenv("AFL_OPT_LEVEL"))) {
+
+    opt_level = ptr2[0];  // ignore invalid data
+
+  }
+
   if (!getenv("AFL_LLVM_INSTRUMENT")) { return; }
 
-  u8 *ptr2 = strtok(getenv("AFL_LLVM_INSTRUMENT"), ":,;");
+  ptr2 = strtok(getenv("AFL_LLVM_INSTRUMENT"), ":,;");
 
   while (ptr2) {
 
@@ -1148,12 +1165,16 @@ static void instrument_opt_mode_exclude(aflcc_state_t *aflcc) {
 
   }
 
-  if (aflcc->instrument_opt_mode && aflcc->compiler_mode != LLVM)
+  if (aflcc->instrument_opt_mode && aflcc->compiler_mode != LLVM &&
+      !((aflcc->instrument_opt_mode & INSTRUMENT_OPT_CALLER) &&
+        aflcc->compiler_mode == LTO))
     FATAL("CTX, CALLER and NGRAM can only be used in LLVM mode");
 
   if (aflcc->instrument_opt_mode &&
       aflcc->instrument_opt_mode != INSTRUMENT_OPT_CODECOV &&
-      aflcc->instrument_mode != INSTRUMENT_CLASSIC)
+      aflcc->instrument_mode != INSTRUMENT_CLASSIC &&
+      !(aflcc->instrument_opt_mode & INSTRUMENT_OPT_CALLER &&
+        aflcc->compiler_mode == LTO))
     FATAL(
         "CALLER, CTX and NGRAM instrumentation options can only be used with "
         "the LLVM CLASSIC instrumentation mode.");
@@ -1198,11 +1219,8 @@ void mode_final_checkout(aflcc_state_t *aflcc, int argc, char **argv) {
   switch (aflcc->compiler_mode) {
 
     case GCC:
-      if (!aflcc->have_gcc) FATAL("afl-gcc is not available on your platform!");
       break;
     case CLANG:
-      if (!aflcc->have_clang)
-        FATAL("afl-clang is not available on your platform!");
       break;
     case LLVM:
       if (!aflcc->have_llvm)
@@ -1256,12 +1274,7 @@ void mode_final_checkout(aflcc_state_t *aflcc, int argc, char **argv) {
         aflcc->instrument_mode == INSTRUMENT_PCGUARD) {
 
       aflcc->lto_mode = 1;
-      // force CFG
-      // if (!aflcc->instrument_mode) {
-
       aflcc->instrument_mode = INSTRUMENT_PCGUARD;
-
-      // }
 
     } else if (aflcc->instrument_mode == INSTRUMENT_CLASSIC) {
 
@@ -1363,6 +1376,13 @@ void mode_final_checkout(aflcc_state_t *aflcc, int argc, char **argv) {
     setenv("AFL_LLVM_LAF_TRANSFORM_COMPARES", "1", 1);
 
   }
+
+  if (getenv("AFL_LLVM_DICT2FILE") &&
+      (getenv("AFL_LLVM_LAF_SPLIT_SWITCHES") ||
+       getenv("AFL_LLVM_LAF_SPLIT_COMPARES") ||
+       getenv("AFL_LLVM_LAF_SPLIT_FLOATS") ||
+       getenv("AFL_LLVM_LAF_TRANSFORM_COMPARES")))
+    FATAL("AFL_LLVM_DICT2FILE is incompatible with AFL_LLVM_LAF_*");
 
   aflcc->cmplog_mode = getenv("AFL_CMPLOG") || getenv("AFL_LLVM_CMPLOG") ||
                        getenv("AFL_GCC_CMPLOG");
@@ -1540,7 +1560,6 @@ void add_defs_selective_instr(aflcc_state_t *aflcc) {
 /*
   Macro defs for persistent mode. As documented in
   instrumentation/README.persistent_mode.md, deferred forkserver initialization
-  and persistent mode are not available in afl-gcc and afl-clang.
 */
 void add_defs_persistent_mode(aflcc_state_t *aflcc) {
 
@@ -1571,8 +1590,10 @@ void add_defs_persistent_mode(aflcc_state_t *aflcc) {
   insert_param(aflcc,
                "-D__AFL_FUZZ_INIT()="
                "int __afl_sharedmem_fuzzing = 1;"
-               "extern unsigned int *__afl_fuzz_len;"
-               "extern unsigned char *__afl_fuzz_ptr;"
+               "extern __attribute__((visibility(\"default\"))) "
+               "unsigned int *__afl_fuzz_len;"
+               "extern __attribute__((visibility(\"default\"))) "
+               "unsigned char *__afl_fuzz_ptr;"
                "unsigned char __afl_fuzz_alt[1048576];"
                "unsigned char *__afl_fuzz_alt_ptr = __afl_fuzz_alt;");
 
@@ -1894,7 +1915,13 @@ void add_sanitizers(aflcc_state_t *aflcc, char **envp) {
     }
 
     add_defs_fortify(aflcc, 0);
-    if (!aflcc->have_asan) { insert_param(aflcc, "-fsanitize=address"); }
+    if (!aflcc->have_asan) {
+
+      insert_param(aflcc, "-fsanitize=address");
+      insert_param(aflcc, "-fno-common");
+
+    }
+
     aflcc->have_asan = 1;
 
   } else if (getenv("AFL_USE_MSAN") || aflcc->have_msan) {
@@ -1913,11 +1940,15 @@ void add_sanitizers(aflcc_state_t *aflcc, char **envp) {
 
   if (getenv("AFL_USE_UBSAN") || aflcc->have_ubsan) {
 
-    if (!aflcc->have_ubsan) {
+    if (!aflcc->have_ubsan) { insert_param(aflcc, "-fsanitize=undefined"); }
 
-      insert_param(aflcc, "-fsanitize=undefined");
-      insert_param(aflcc, "-fsanitize-undefined-trap-on-error");
-      insert_param(aflcc, "-fno-sanitize-recover=all");
+    if (getenv("AFL_UBSAN_VERBOSE")) {
+
+      insert_param(aflcc, "-fno-sanitize-recover=undefined");
+
+    } else {
+
+      insert_param(aflcc, "-fsanitize-trap=undefined");
 
     }
 
@@ -1977,6 +2008,12 @@ void add_sanitizers(aflcc_state_t *aflcc, char **envp) {
       }
 
       if (!aflcc->have_cfisan) { insert_param(aflcc, "-fsanitize=cfi"); }
+
+      if (getenv("AFL_CFISAN_VERBOSE")) {
+
+        insert_param(aflcc, "-fno-sanitize-trap=cfi");
+
+      }
 
       if (!aflcc->have_hidden) {
 
@@ -2343,8 +2380,7 @@ static void add_aflpplib(aflcc_state_t *aflcc) {
     insert_param(aflcc, afllib);
 
 #ifdef __APPLE__
-    insert_param(aflcc, "-Wl,-undefined");
-    insert_param(aflcc, "dynamic_lookup");
+    insert_param(aflcc, "-Wl,-undefined,dynamic_lookup");
 #endif
 
   }
@@ -2375,7 +2411,11 @@ void add_runtime(aflcc_state_t *aflcc) {
     if (aflcc->plusplus_mode && strlen(libdir) && strncmp(libdir, "/usr", 4) &&
         strncmp(libdir, "/lib", 4)) {
 
+#ifdef __APPLE__
+      u8 *libdir_opt = strdup("-Wl,-rpath," LLVM_LIBDIR);
+#else
       u8 *libdir_opt = strdup("-Wl,-rpath=" LLVM_LIBDIR);
+#endif
       insert_param(aflcc, libdir_opt);
 
     }
@@ -2457,12 +2497,59 @@ void add_runtime(aflcc_state_t *aflcc) {
 */
 void add_assembler(aflcc_state_t *aflcc) {
 
-  u8 *afl_as = find_object(aflcc, "as");
+  u8 *afl_as = find_object(aflcc, "afl-as");
 
-  if (!afl_as) FATAL("Cannot find 'as' (symlink to 'afl-as').");
+  if (!afl_as) FATAL("Cannot find 'afl-as'.");
 
   u8 *slash = strrchr(afl_as, '/');
   if (slash) *slash = 0;
+
+    // Search for 'as' may be unreliable in some cases (see #2058)
+    // so use 'afl-as' instead, because 'as' is usually a symbolic link,
+    // or can be a renamed copy of 'afl-as' created in the same dir.
+    // Now we should verify if the compiler can find the 'as' we need.
+
+#define AFL_AS_ERR "(should be a symlink or copy of 'afl-as')"
+
+  u8 *afl_as_dup = alloc_printf("%s/as", afl_as);
+
+  int fd = open(afl_as_dup, O_RDONLY);
+  if (fd < 0) { PFATAL("Unable to open '%s' " AFL_AS_ERR, afl_as_dup); }
+
+  struct stat st;
+  if (fstat(fd, &st) < 0) {
+
+    PFATAL("Unable to fstat '%s' " AFL_AS_ERR, afl_as_dup);
+
+  }
+
+  u32 f_len = st.st_size;
+
+  u8 *f_data = mmap(0, f_len, PROT_READ, MAP_PRIVATE, fd, 0);
+  if (f_data == MAP_FAILED) {
+
+    PFATAL("Unable to mmap file '%s' " AFL_AS_ERR, afl_as_dup);
+
+  }
+
+  close(fd);
+
+  // "AFL_AS" is a const str passed to getenv in afl-as.c
+  if (!memmem(f_data, f_len, "AFL_AS", strlen("AFL_AS") + 1)) {
+
+    FATAL(
+        "Looks like '%s' is not a valid symlink or copy of '%s/afl-as'. "
+        "It is a prerequisite to override system-wide 'as' for "
+        "instrumentation.",
+        afl_as_dup, afl_as);
+
+  }
+
+  if (munmap(f_data, f_len)) { PFATAL("unmap() failed"); }
+
+  ck_free(afl_as_dup);
+
+#undef AFL_AS_ERR
 
   insert_param(aflcc, "-B");
   insert_param(aflcc, afl_as);
@@ -2485,6 +2572,33 @@ void add_gcc_plugin(aflcc_state_t *aflcc) {
 
   insert_param(aflcc, "-fno-if-conversion");
   insert_param(aflcc, "-fno-if-conversion2");
+
+}
+
+char *get_opt_level() {
+
+  static char levels[8][8] = {"-O0", "-O1", "-O2",    "-O3",
+                              "-Oz", "-Os", "-Ofast", "-Og"};
+  switch (opt_level) {
+
+    case '0':
+      return levels[0];
+    case '1':
+      return levels[1];
+    case '2':
+      return levels[2];
+    case 'z':
+      return levels[4];
+    case 's':
+      return levels[5];
+    case 'f':
+      return levels[6];
+    case 'g':
+      return levels[7];
+    default:
+      return levels[3];
+
+  }
 
 }
 
@@ -2519,7 +2633,7 @@ void add_misc_params(aflcc_state_t *aflcc) {
   if (!getenv("AFL_DONT_OPTIMIZE")) {
 
     insert_param(aflcc, "-g");
-    if (!aflcc->have_o) insert_param(aflcc, "-O3");
+    if (!aflcc->have_o) insert_param(aflcc, get_opt_level());
     if (!aflcc->have_unroll) insert_param(aflcc, "-funroll-loops");
     // if (strlen(aflcc->march_opt) > 1 && aflcc->march_opt[0] == '-')
     //     insert_param(aflcc, aflcc->march_opt);
@@ -2720,11 +2834,11 @@ static void maybe_usage(aflcc_state_t *aflcc, int argc, char **argv) {
         "MODES:                                  NCC PERSIST DICT   LAF "
         "CMPLOG SELECT\n"
         "  [LLVM] LLVM:             %s%s\n"
-        "      PCGUARD              %s    yes yes     module yes yes    "
+        "      PCGUARD              %s yes yes     module yes yes    "
         "yes\n"
         "      NATIVE               AVAILABLE    no  yes     no     no  "
         "part.  yes\n"
-        "      CLASSIC              %s    no  yes     module yes yes    "
+        "      CLASSIC              %s no  yes     module yes yes    "
         "yes\n"
         "        - NORMAL\n"
         "        - CALLER\n"
@@ -2737,26 +2851,15 @@ static void maybe_usage(aflcc_state_t *aflcc, int argc, char **argv) {
         "   yes\n"
         "  [GCC_PLUGIN] gcc plugin: %s%s\n"
         "      CLASSIC              DEFAULT      no  yes     no     no  no     "
-        "yes\n"
-        "  [GCC/CLANG] simple gcc/clang: %s%s\n"
-        "      CLASSIC              DEFAULT      no  no      no     no  no     "
-        "no\n\n",
-        aflcc->have_llvm ? "AVAILABLE" : "unavailable!",
+        "yes\n\n",
+        aflcc->have_llvm ? "AVAILABLE   " : "unavailable!",
         aflcc->compiler_mode == LLVM ? " [SELECTED]" : "",
-        aflcc->have_llvm ? "AVAILABLE" : "unavailable!",
-        aflcc->have_llvm ? "AVAILABLE" : "unavailable!",
+        aflcc->have_llvm ? "AVAILABLE   " : "unavailable!",
+        aflcc->have_llvm ? "AVAILABLE   " : "unavailable!",
         aflcc->have_lto ? "AVAILABLE" : "unavailable!",
         aflcc->compiler_mode == LTO ? " [SELECTED]" : "",
         aflcc->have_gcc_plugin ? "AVAILABLE" : "unavailable!",
-        aflcc->compiler_mode == GCC_PLUGIN ? " [SELECTED]" : "",
-        aflcc->have_gcc && aflcc->have_clang
-            ? "AVAILABLE"
-            : (aflcc->have_gcc
-                   ? "GCC ONLY "
-                   : (aflcc->have_clang ? "CLANG ONLY" : "unavailable!")),
-        (aflcc->compiler_mode == GCC || aflcc->compiler_mode == CLANG)
-            ? " [SELECTED]"
-            : "");
+        aflcc->compiler_mode == GCC_PLUGIN ? " [SELECTED]" : "");
 
     SAYF(
         "Modes:\n"
@@ -2770,7 +2873,7 @@ static void maybe_usage(aflcc_state_t *aflcc, int argc, char **argv) {
         "  The best is LTO but it often needs RANLIB and AR settings outside "
         "of afl-cc.\n\n");
 
-#if LLVM_MAJOR > 10 || (LLVM_MAJOR == 10 && LLVM_MINOR > 0)
+#if LLVM_MAJOR >= 11 || (LLVM_MAJOR == 10 && LLVM_MINOR > 0)
   #define NATIVE_MSG                                                   \
     "  LLVM-NATIVE:  use llvm's native PCGUARD instrumentation (less " \
     "performant)\n"
@@ -2849,6 +2952,8 @@ static void maybe_usage(aflcc_state_t *aflcc, int argc, char **argv) {
         SAYF(
             "\nGCC Plugin-specific environment variables:\n"
             "  AFL_GCC_CMPLOG: log operands of comparisons (RedQueen mutator)\n"
+            "  AFL_GCC_DISABLE_VERSION_CHECK: disable GCC plugin version "
+            "control\n"
             "  AFL_GCC_OUT_OF_LINE: disable inlined instrumentation\n"
             "  AFL_GCC_SKIP_NEVERZERO: do not skip zero on trace counters\n"
             "  AFL_GCC_INSTRUMENT_FILE: enable selective instrumentation by "
@@ -2917,11 +3022,12 @@ static void maybe_usage(aflcc_state_t *aflcc, int argc, char **argv) {
             "  AFL_LLVM_DOCUMENT_IDS: write all edge IDs and the corresponding "
             "functions\n"
             "    into this file (LTO mode)\n"
+            "  AFL_LLVM_LTO_CALLER: activate CALLER/CTX instrumentation\n"
+            "  AFL_LLVM_LTO_CALLER_DEPTH: skip how many empty functions\n"
             "  AFL_LLVM_LTO_DONTWRITEID: don't write the highest ID used to a "
             "global var\n"
             "  AFL_LLVM_LTO_STARTID: from which ID to start counting from for "
-            "a "
-            "bb\n"
+            "a bb\n"
             "  AFL_REAL_LD: use this lld linker instead of the compiled in "
             "path\n"
             "  AFL_LLVM_LTO_SKIPINIT: don't inject initialization code "
@@ -3443,14 +3549,26 @@ int main(int argc, char **argv, char **envp) {
 
   maybe_usage(aflcc, argc, argv);
 
+  if (aflcc->instrument_mode == INSTRUMENT_GCC ||
+      aflcc->instrument_mode == INSTRUMENT_CLANG) {
+
+    FATAL(
+        "afl-gcc/afl-clang are obsolete and has been removed. Use "
+        "afl-clang-fast/afl-gcc-fast for instrumentation instead.");
+
+  }
+
   mode_notification(aflcc);
 
   if (aflcc->debug) debugf_args(argc, argv);
 
   edit_params(aflcc, argc, argv, envp);
 
-  if (aflcc->debug)
+  if (aflcc->debug) {
+
     debugf_args((s32)aflcc->cc_par_cnt, (char **)aflcc->cc_params);
+
+  }
 
   if (aflcc->passthrough) {
 

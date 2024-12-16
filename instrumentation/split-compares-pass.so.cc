@@ -1,7 +1,7 @@
 /*
  * Copyright 2016 laf-intel
- * extended for floating point by Heiko Eißfeldt
- * adapted to new pass manager by Heiko Eißfeldt
+ * extended for floating point by Heiko Eissfeldt
+ * adapted to new pass manager by Heiko Eissfeldt
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -189,7 +189,11 @@ llvmGetPassPluginInfo() {
     #if LLVM_VERSION_MAJOR <= 13
             using OptimizationLevel = typename PassBuilder::OptimizationLevel;
     #endif
+    #if LLVM_VERSION_MAJOR >= 16
+            PB.registerOptimizerEarlyEPCallback(
+    #else
             PB.registerOptimizerLastEPCallback(
+    #endif
                 [](ModulePassManager &MPM, OptimizationLevel OL) {
 
                   MPM.addPass(SplitComparesTransform());
@@ -262,8 +266,11 @@ bool SplitComparesTransform::simplifyFPCompares(Module &M) {
 
             /* this is probably not needed but we do it anyway */
             if (TyOp0 != TyOp1) { continue; }
-
             if (TyOp0->isArrayTy() || TyOp0->isVectorTy()) { continue; }
+            int constants = 0;
+            if (llvm::isa<llvm::Constant>(op0)) { ++constants; }
+            if (llvm::isa<llvm::Constant>(op1)) { ++constants; }
+            if (constants != 1) { continue; }
 
             fcomps.push_back(selectcmpInst);
 
@@ -935,7 +942,7 @@ size_t SplitComparesTransform::nextPowerOfTwo(size_t in) {
 /* splits fcmps into two nested fcmps with sign compare and the rest */
 size_t SplitComparesTransform::splitFPCompares(Module &M) {
 
-  size_t count = 0;
+  size_t counts = 0;
 
   LLVMContext &C = M.getContext();
 
@@ -951,7 +958,7 @@ size_t SplitComparesTransform::splitFPCompares(Module &M) {
 
   } else {
 
-    return count;
+    return counts;
 
   }
 
@@ -1004,7 +1011,7 @@ size_t SplitComparesTransform::splitFPCompares(Module &M) {
 
   }
 
-  if (!fcomps.size()) { return count; }
+  if (!fcomps.size()) { return counts; }
 
   IntegerType *Int1Ty = IntegerType::getInt1Ty(C);
 
@@ -1690,11 +1697,11 @@ size_t SplitComparesTransform::splitFPCompares(Module &M) {
 #else
     ReplaceInstWithInst(FcmpInst->getParent()->getInstList(), ii, PN);
 #endif
-    ++count;
+    ++counts;
 
   }
 
-  return count;
+  return counts;
 
 }
 
@@ -1743,10 +1750,6 @@ bool SplitComparesTransform::runOnModule(Module &M) {
 
   }
 
-#if LLVM_MAJOR >= 11
-  auto PA = PreservedAnalyses::all();
-#endif
-
   if (enableFPSplit) {
 
     simplifyFPCompares(M);
@@ -1778,15 +1781,13 @@ bool SplitComparesTransform::runOnModule(Module &M) {
 
             auto op0 = CI->getOperand(0);
             auto op1 = CI->getOperand(1);
-            if (!op0 || !op1) {
-
-#if LLVM_MAJOR >= 11
-              return PA;
-#else
-              return false;
-#endif
-
-            }
+            // has to valid operands
+            if (!op0 || !op1) { continue; }
+            // has exactly one constant and one variable
+            int constants = 0;
+            if (dyn_cast<ConstantInt>(op0)) { ++constants; }
+            if (dyn_cast<ConstantInt>(op1)) { ++constants; }
+            if (constants != 1) { continue; }
 
             auto iTy1 = dyn_cast<IntegerType>(op0->getType());
             if (iTy1 && isa<IntegerType>(op1->getType())) {
@@ -1813,6 +1814,8 @@ bool SplitComparesTransform::runOnModule(Module &M) {
     }
 
   }
+
+  bool ret = count == 0 ? false : true;
 
   bool brokenDebug = false;
   if (verifyModule(M, &errs()
@@ -1852,9 +1855,12 @@ bool SplitComparesTransform::runOnModule(Module &M) {
 
     }*/
 
-  return PA;
+  if (ret == false)
+    return PreservedAnalyses::all();
+  else
+    return PreservedAnalyses();
 #else
-  return true;
+  return ret;
 #endif
 
 }

@@ -11,21 +11,13 @@ test -e test-custom-mutator.c -a -e ${CUSTOM_MUTATOR_PATH}/example.c -a -e ${CUS
   test -e ../afl-clang-fast && {
     ../afl-clang-fast -o test-custom-mutator test-custom-mutator.c > /dev/null 2>&1
   } || {
-    test -e ../afl-gcc-fast && {
-      ../afl-gcc-fast -o test-custom-mutator test-custom-mutator.c > /dev/null 2>&1
-    } || {
-      ../afl-gcc -o test-custom-mutator test-custom-mutator.c > /dev/null 2>&1
-    }
+    ../afl-gcc-fast -o test-custom-mutator test-custom-mutator.c > /dev/null 2>&1
   }
   # Compile the vulnerable program for multiple mutators
   test -e ../afl-clang-fast && {
     ../afl-clang-fast -o test-multiple-mutators test-multiple-mutators.c > /dev/null 2>&1
   } || {
-    test -e ../afl-gcc-fast && {
-      ../afl-gcc-fast -o test-multiple-mutators test-multiple-mutators.c > /dev/null 2>&1
-    } || {
-      ../afl-gcc -o test-multiple-mutators test-multiple-mutators.c > /dev/null 2>&1
-    }
+    ../afl-gcc-fast -o test-multiple-mutators test-multiple-mutators.c > /dev/null 2>&1
   }
   # Compile the custom mutator
   cc -D_FIXED_CHAR=0x41 -g -fPIC -shared -I../include ../custom_mutators/examples/simple_example.c -o libexamplemutator.so > /dev/null 2>&1
@@ -38,7 +30,7 @@ test -e test-custom-mutator.c -a -e ${CUSTOM_MUTATOR_PATH}/example.c -a -e ${CUS
     # Run afl-fuzz w/ the C mutator
     $ECHO "$GREY[*] running afl-fuzz for the C mutator, this will take approx 10 seconds"
     {
-      AFL_CUSTOM_MUTATOR_LIBRARY=./libexamplemutator.so AFL_CUSTOM_MUTATOR_ONLY=1 ../afl-fuzz -V07 -m ${MEM_LIMIT} -i in -o out -d -- ./test-custom-mutator >>errors 2>&1
+      AFL_CUSTOM_MUTATOR_LIBRARY=./libexamplemutator.so AFL_CUSTOM_MUTATOR_ONLY=1 ../afl-fuzz -V20 -m ${MEM_LIMIT} -i in -o out -d -- ./test-custom-mutator >>errors 2>&1
     } >>errors 2>&1
 
     # Check results
@@ -58,7 +50,7 @@ test -e test-custom-mutator.c -a -e ${CUSTOM_MUTATOR_PATH}/example.c -a -e ${CUS
     # Run afl-fuzz w/ multiple C mutators
     $ECHO "$GREY[*] running afl-fuzz with multiple custom C mutators, this will take approx 10 seconds"
     {
-      AFL_CUSTOM_MUTATOR_LIBRARY="./libexamplemutator.so;./libexamplemutator2.so" AFL_CUSTOM_MUTATOR_ONLY=1 ../afl-fuzz -V07 -m ${MEM_LIMIT} -i in -o out -d -- ./test-multiple-mutators >>errors 2>&1
+      AFL_CUSTOM_MUTATOR_LIBRARY="./libexamplemutator.so;./libexamplemutator2.so" AFL_CUSTOM_MUTATOR_ONLY=1 ../afl-fuzz -V20 -m ${MEM_LIMIT} -i in -o out -d -- ./test-multiple-mutators >>errors 2>&1
     } >>errors 2>&1
 
     test -n "$( ls out/default/crashes/id:000000* 2>/dev/null )" && {  # TODO: update here
@@ -88,7 +80,7 @@ test "1" = "`../afl-fuzz | grep -i 'without python' >/dev/null; echo $?`" && {
       {
         export PYTHONPATH=${CUSTOM_MUTATOR_PATH}
         export AFL_PYTHON_MODULE=example
-        AFL_CUSTOM_MUTATOR_ONLY=1 ../afl-fuzz -V07 -m ${MEM_LIMIT} -i in -o out -- ./test-custom-mutator >>errors 2>&1
+        AFL_CUSTOM_MUTATOR_ONLY=1 ../afl-fuzz -V20 -m ${MEM_LIMIT} -i in -o out -- ./test-custom-mutator >>errors 2>&1
         unset PYTHONPATH
         unset AFL_PYTHON_MODULE
       } >>errors 2>&1

@@ -80,6 +80,7 @@ extern unsigned int   __afl_map_size;
 /*__attribute__((weak))*/ int LLVMFuzzerTestOneInput(const uint8_t *Data,
                                                      size_t         Size);
 __attribute__((weak)) int     LLVMFuzzerInitialize(int *argc, char ***argv);
+__attribute__((weak)) void    LLVMFuzzerCleanup(void);
 __attribute__((weak)) int     LLVMFuzzerRunDriver(
         int *argc, char ***argv, int (*callback)(const uint8_t *data, size_t size));
 
@@ -338,6 +339,7 @@ __attribute__((weak)) int LLVMFuzzerRunDriver(
   output_file = stderr;
   maybe_duplicate_stderr();
   maybe_close_fd_mask();
+
   if (LLVMFuzzerInitialize) {
 
     fprintf(stderr, "Running LLVMFuzzerInitialize ...\n");
@@ -398,7 +400,7 @@ __attribute__((weak)) int LLVMFuzzerRunDriver(
   size_t prev_length = 0;
 
   // for speed only insert asan functions if the target is linked with asan
-  if (__asan_region_is_poisoned) {
+  if (unlikely(__asan_region_is_poisoned)) {
 
     while (__afl_persistent_loop(N)) {
 
@@ -435,9 +437,22 @@ __attribute__((weak)) int LLVMFuzzerRunDriver(
 
     while (__afl_persistent_loop(N)) {
 
-      callback(__afl_fuzz_ptr, *__afl_fuzz_len);
+      if (unlikely(callback(__afl_fuzz_ptr, *__afl_fuzz_len) == -1)) {
+
+        memset(__afl_area_ptr, 0, __afl_map_size);
+        __afl_area_ptr[0] = 1;
+
+      }
 
     }
+
+  }
+
+  if (LLVMFuzzerCleanup) {
+
+    fprintf(stderr, "Running LLVMFuzzerCleanup ...\n");
+    LLVMFuzzerCleanup();
+    fprintf(stderr, "Exiting ...\n");
 
   }
 

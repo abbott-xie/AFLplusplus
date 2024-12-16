@@ -5,7 +5,7 @@
    Originally written by Michal Zalewski
 
    Now maintained by Marc Heuse <mh@mh-sec.de>,
-                        Heiko Eißfeldt <heiko.eissfeldt@hexco.de> and
+                        Heiko Eissfeldt <heiko.eissfeldt@hexco.de> and
                         Andrea Fioraldi <andreafioraldi@gmail.com>
 
    Copyright 2016, 2017 Google Inc. All rights reserved.
@@ -75,9 +75,13 @@ u32 count_bits(afl_state_t *afl, u8 *mem) {
 
     }
 
+#if __has_builtin(__builtin_popcount)
+    ret += __builtin_popcount(v);
+#else
     v -= ((v >> 1) & 0x55555555);
     v = (v & 0x33333333) + ((v >> 2) & 0x33333333);
     ret += (((v + (v >> 4)) & 0xF0F0F0F) * 0x01010101) >> 24;
+#endif
 
   }
 
@@ -529,14 +533,14 @@ void write_crash_readme(afl_state_t *afl) {
    save or queue the input test case for further analysis if so. Returns 1 if
    entry is saved, 0 otherwise. */
 
-u8 __attribute__((hot))
-save_if_interesting(afl_state_t *afl, void *mem, u32 len, u8 fault) {
+u8 __attribute__((hot)) save_if_interesting(afl_state_t *afl, void *mem,
+                                            u32 len, u8 fault) {
 
   if (unlikely(len == 0)) { return 0; }
 
   if (unlikely(fault == FSRV_RUN_TMOUT && afl->afl_env.afl_ignore_timeouts)) {
 
-    if (likely(afl->schedule >= FAST && afl->schedule <= RARE)) {
+    if (unlikely(afl->schedule >= FAST && afl->schedule <= RARE)) {
 
       classify_counts(&afl->fsrv);
       u64 cksum = hash64(afl->fsrv.trace_bits, afl->fsrv.map_size, HASH_CONST);
@@ -562,7 +566,7 @@ save_if_interesting(afl_state_t *afl, void *mem, u32 len, u8 fault) {
 
   /* Generating a hash on every input is super expensive. Bad idea and should
      only be used for special schedules */
-  if (likely(afl->schedule >= FAST && afl->schedule <= RARE)) {
+  if (unlikely(afl->schedule >= FAST && afl->schedule <= RARE)) {
 
     classify_counts(&afl->fsrv);
     classified = 1;
@@ -612,21 +616,41 @@ save_if_interesting(afl_state_t *afl, void *mem, u32 len, u8 fault) {
 
 #ifndef SIMPLE_FILES
 
-    queue_fn =
-        alloc_printf("%s/queue/id:%06u,%s", afl->out_dir, afl->queued_items,
-                     describe_op(afl, new_bits + is_timeout,
-                                 NAME_MAX - strlen("id:000000,")));
+    if (!afl->afl_env.afl_sha1_filenames) {
+
+      queue_fn = alloc_printf(
+          "%s/queue/id:%06u,%s%s%s", afl->out_dir, afl->queued_items,
+          describe_op(afl, new_bits + is_timeout,
+                      NAME_MAX - strlen("id:000000,")),
+          afl->file_extension ? "." : "",
+          afl->file_extension ? (const char *)afl->file_extension : "");
+
+    } else {
+
+      const char *hex = sha1_hex(mem, len);
+      queue_fn = alloc_printf(
+          "%s/queue/%s%s%s", afl->out_dir, hex, afl->file_extension ? "." : "",
+          afl->file_extension ? (const char *)afl->file_extension : "");
+      ck_free((char *)hex);
+
+    }
 
 #else
 
-    queue_fn =
-        alloc_printf("%s/queue/id_%06u", afl->out_dir, afl->queued_items);
+    queue_fn = alloc_printf(
+        "%s/queue/id_%06u", afl->out_dir, afl->queued_items,
+        afl->file_extension ? "." : "",
+        afl->file_extension ? (const char *)afl->file_extension : "");
 
 #endif                                                    /* ^!SIMPLE_FILES */
-    fd = open(queue_fn, O_WRONLY | O_CREAT | O_EXCL, DEFAULT_PERMISSION);
-    if (unlikely(fd < 0)) { PFATAL("Unable to create '%s'", queue_fn); }
-    ck_write(fd, mem, len, queue_fn);
-    close(fd);
+    fd = permissive_create(afl, queue_fn);
+    if (likely(fd >= 0)) {
+
+      ck_write(fd, mem, len, queue_fn);
+      close(fd);
+
+    }
+
     add_to_queue(afl, queue_fn, len, 0);
 
     if (unlikely(afl->fuzz_mode) &&
@@ -824,14 +848,29 @@ save_if_interesting(afl_state_t *afl, void *mem, u32 len, u8 fault) {
 
 #ifndef SIMPLE_FILES
 
-      snprintf(fn, PATH_MAX, "%s/hangs/id:%06llu,%s", afl->out_dir,
-               afl->saved_hangs,
-               describe_op(afl, 0, NAME_MAX - strlen("id:000000,")));
+      if (!afl->afl_env.afl_sha1_filenames) {
+
+        snprintf(fn, PATH_MAX, "%s/hangs/id:%06llu,%s%s%s", afl->out_dir,
+                 afl->saved_hangs,
+                 describe_op(afl, 0, NAME_MAX - strlen("id:000000,")),
+                 afl->file_extension ? "." : "",
+                 afl->file_extension ? (const char *)afl->file_extension : "");
+
+      } else {
+
+        const char *hex = sha1_hex(mem, len);
+        snprintf(fn, PATH_MAX, "%s/hangs/%s%s%s", afl->out_dir, hex,
+                 afl->file_extension ? "." : "",
+                 afl->file_extension ? (const char *)afl->file_extension : "");
+        ck_free((char *)hex);
+
+      }
 
 #else
 
-      snprintf(fn, PATH_MAX, "%s/hangs/id_%06llu", afl->out_dir,
-               afl->saved_hangs);
+      snprintf(fn, PATH_MAX, "%s/hangs/id_%06llu%s%s", afl->out_dir,
+               afl->saved_hangs, afl->file_extension ? "." : "",
+               afl->file_extension ? (const char *)afl->file_extension : "");
 
 #endif                                                    /* ^!SIMPLE_FILES */
 
@@ -877,14 +916,30 @@ save_if_interesting(afl_state_t *afl, void *mem, u32 len, u8 fault) {
 
 #ifndef SIMPLE_FILES
 
-      snprintf(fn, PATH_MAX, "%s/crashes/id:%06llu,sig:%02u,%s", afl->out_dir,
-               afl->saved_crashes, afl->fsrv.last_kill_signal,
-               describe_op(afl, 0, NAME_MAX - strlen("id:000000,sig:00,")));
+      if (!afl->afl_env.afl_sha1_filenames) {
+
+        snprintf(fn, PATH_MAX, "%s/crashes/id:%06llu,sig:%02u,%s%s%s",
+                 afl->out_dir, afl->saved_crashes, afl->fsrv.last_kill_signal,
+                 describe_op(afl, 0, NAME_MAX - strlen("id:000000,sig:00,")),
+                 afl->file_extension ? "." : "",
+                 afl->file_extension ? (const char *)afl->file_extension : "");
+
+      } else {
+
+        const char *hex = sha1_hex(mem, len);
+        snprintf(fn, PATH_MAX, "%s/crashes/%s%s%s", afl->out_dir, hex,
+                 afl->file_extension ? "." : "",
+                 afl->file_extension ? (const char *)afl->file_extension : "");
+        ck_free((char *)hex);
+
+      }
 
 #else
 
-      snprintf(fn, PATH_MAX, "%s/crashes/id_%06llu_%02u", afl->out_dir,
-               afl->saved_crashes, afl->fsrv.last_kill_signal);
+      snprintf(fn, PATH_MAX, "%s/crashes/id_%06llu_%02u%s%s", afl->out_dir,
+               afl->saved_crashes, afl->fsrv.last_kill_signal,
+               afl->file_extension ? "." : "",
+               afl->file_extension ? (const char *)afl->file_extension : "");
 
 #endif                                                    /* ^!SIMPLE_FILES */
 
@@ -947,10 +1002,13 @@ save_if_interesting(afl_state_t *afl, void *mem, u32 len, u8 fault) {
   /* If we're here, we apparently want to save the crash or hang
      test case, too. */
 
-  fd = open(fn, O_WRONLY | O_CREAT | O_EXCL, DEFAULT_PERMISSION);
-  if (unlikely(fd < 0)) { PFATAL("Unable to create '%s'", fn); }
-  ck_write(fd, mem, len, fn);
-  close(fd);
+  fd = permissive_create(afl, fn);
+  if (fd >= 0) {
+
+    ck_write(fd, mem, len, fn);
+    close(fd);
+
+  }
 
 #ifdef __linux__
   if (afl->fsrv.nyx_mode && fault == FSRV_RUN_CRASH) {

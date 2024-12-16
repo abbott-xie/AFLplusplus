@@ -61,6 +61,8 @@ evaluation flow will help you to select the best possible.
 It is highly recommended to have the newest llvm version possible installed,
 anything below 9 is not recommended.
 
+IMPORTANT NOTICE: afl-gcc/afl-clang have been removed from AFL++ as they are obsolete.
+
 ```
 +--------------------------------+
 | clang/clang++ 11+ is available | --> use LTO mode (afl-clang-lto/afl-clang-lto++)
@@ -84,7 +86,7 @@ anything below 9 is not recommended.
     | if not, or if you do not have a gcc with plugin support
     |
     v
-   use GCC mode (afl-gcc/afl-g++) (or afl-clang/afl-clang++ for clang)
+   GAME OVER! Install gcc-VERSION-plugin-dev or llvm-VERSION-dev
 ```
 
 Clickable README links for the chosen compiler:
@@ -92,14 +94,12 @@ Clickable README links for the chosen compiler:
 * [LTO mode - afl-clang-lto](../instrumentation/README.lto.md)
 * [LLVM mode - afl-clang-fast](../instrumentation/README.llvm.md)
 * [GCC_PLUGIN mode - afl-gcc-fast](../instrumentation/README.gcc_plugin.md)
-* GCC/CLANG modes (afl-gcc/afl-clang) have no README as they have no own
-  features
 
 You can select the mode for the afl-cc compiler by one of the following methods:
 
-* Using a symlink to afl-cc: afl-gcc, afl-g++, afl-clang, afl-clang++,
+* Using a symlink to afl-cc: 
    afl-clang-fast, afl-clang-fast++, afl-clang-lto, afl-clang-lto++,
-   afl-gcc-fast, afl-g++-fast (recommended!).
+   afl-gcc-fast, afl-g++-fast.
 * Using the environment variable `AFL_CC_COMPILER` with `MODE`.
 * Passing --afl-`MODE` command line options to the compiler via
    `CFLAGS`/`CXXFLAGS`/`CPPFLAGS`.
@@ -108,8 +108,7 @@ You can select the mode for the afl-cc compiler by one of the following methods:
 
 * LTO (afl-clang-lto*)
 * LLVM (afl-clang-fast*)
-* GCC_PLUGIN (afl-g*-fast) or GCC (afl-gcc/afl-g++)
-* CLANG(afl-clang/afl-clang++)
+* GCC_PLUGIN (afl-g*-fast)
 
 Because no AFL++ specific command-line options are accepted (beside the
 --afl-MODE command), the compile-time tools make fairly broad use of environment
@@ -200,6 +199,9 @@ and RAM usage. Also, you should only run one afl-fuzz instance per sanitizer
 type. This is enough because e.g. a use-after-free bug will be picked up by ASAN
 (address sanitizer) anyway after syncing test cases from other fuzzing
 instances, so running more than one address sanitized target would be a waste.
+
+*IF* you are running a saturated corpus, then you can run up to half of the 
+instances with sanitizers.
 
 The following sanitizers have built-in support in AFL++:
 
@@ -632,7 +634,7 @@ crash or timeout during startup.
 
 Also, it is recommended to set `export AFL_IMPORT_FIRST=1` to load test cases
 from other fuzzers in the campaign first. But note that can slow down the start
-of the first fuzz by quite a lot of you have many fuzzers and/or many seeds.
+of the first fuzz by quite a lot if you have many fuzzers and/or many seeds.
 
 If you have a large corpus, a corpus from a previous run or are fuzzing in a CI,
 then also set `export AFL_CMPLOG_ONLY_NEW=1` and `export AFL_FAST_CAL=1`.
@@ -958,7 +960,7 @@ too long for your overall available fuzz run time.
    campaign but not good for short CI runs.
 
 How this can look like can, e.g., be seen at AFL++'s setup in Google's
-[oss-fuzz](https://github.com/google/oss-fuzz/blob/master/infra/base-images/base-builder/compile_afl)
+[previous oss-fuzz version](https://github.com/google/oss-fuzz/blob/3e2c5312417d1a6f9564472f3df1fd27759b289d/infra/base-images/base-builder/compile_afl)
 and
 [clusterfuzz](https://github.com/google/clusterfuzz/blob/master/src/clusterfuzz/_internal/bot/fuzzers/afl/launcher.py).
 

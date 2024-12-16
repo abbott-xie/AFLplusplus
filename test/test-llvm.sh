@@ -62,7 +62,7 @@ test -e ../afl-clang-fast -a -e ../split-switches-pass.so && {
       $ECHO "$RED[!] llvm_mode threadsafe instrumentation failed"
       CODE=1
     }
-    rm -f test-instr.ts.0 test-instr.ts.1
+    rm -f test-instr.ts.0 test-instr.ts.1 test-instr.ts
   } || {
     $ECHO "$RED[!] llvm_mode (threadsafe) failed"
     CODE=1
@@ -197,7 +197,8 @@ test -e ../afl-clang-fast -a -e ../split-switches-pass.so && {
     for I in char short int long "long long"; do
       for BITS in 8 16 32 64; do
         bin="$testcase-split-$I-$BITS.compcov" 
-        AFL_LLVM_INSTRUMENT=AFL AFL_DEBUG=1 AFL_LLVM_LAF_SPLIT_COMPARES_BITW=$BITS AFL_LLVM_LAF_SPLIT_COMPARES=1 ../afl-clang-fast -fsigned-char -DINT_TYPE="$I" -o "$bin" "$testcase" > test.out 2>&1;
+        #AFL_LLVM_INSTRUMENT=AFL 
+        AFL_DEBUG=1 AFL_LLVM_LAF_SPLIT_COMPARES_BITW=$BITS AFL_LLVM_LAF_SPLIT_COMPARES=1 ../afl-clang-fast -fsigned-char -DINT_TYPE="$I" -o "$bin" "$testcase" > test.out 2>&1;
         if ! test -e "$bin"; then
             cat test.out
             $ECHO "$RED[!] llvm_mode laf-intel/compcov integer splitting failed! ($testcase with type $I split to $BITS)!";
@@ -263,15 +264,14 @@ test -e ../afl-clang-fast -a -e ../split-switches-pass.so && {
   }
   rm -f test-compcov test.out instrumentlist.txt
   AFL_LLVM_CMPLOG=1 ../afl-clang-fast -o test-cmplog test-cmplog.c > /dev/null 2>&1
-  ../afl-clang-fast -O0 -o test-c test-cmplog.c > /dev/null 2>&1
   test -e test-cmplog && {
     $ECHO "$GREY[*] running afl-fuzz for llvm_mode cmplog, this will take approx 10 seconds"
     {
       mkdir -p in
       echo 00000000000000000000000000000000 > in/in
-      AFL_BENCH_UNTIL_CRASH=1 ../afl-fuzz -l 3 -m none -V30 -i in -o out -c ./test-cmplog -- ./test-c >>errors 2>&1
+      AFL_BENCH_UNTIL_CRASH=1 AFL_NO_CRASH_README=1 AFL_SHA1_FILENAMES=1 ../afl-fuzz -Z -l 3 -m none -V30 -i in -o out -c 0 -- ./test-cmplog >>errors 2>&1
     } >>errors 2>&1
-    test -n "$( ls out/default/crashes/id:000000* out/default/hangs/id:000000* 2>/dev/null )" && {
+    test -n "$( ls out/default/crashes/* out/default/hangs/* 2>/dev/null )" && {
       $ECHO "$GREEN[+] afl-fuzz is working correctly with llvm_mode cmplog"
     } || {
       echo CUT------------------------------------------------------------------CUT
@@ -280,11 +280,15 @@ test -e ../afl-clang-fast -a -e ../split-switches-pass.so && {
       $ECHO "$RED[!] afl-fuzz is not working correctly with llvm_mode cmplog"
       CODE=1
     }
+    test -n "$( ls out/default/crashes/id:000000* out/default/hangs/id:000000* 2>/dev/null )" && {
+      $ECHO "$RED[!] filenames are not SHA1"
+      CODE=1
+    } || true
   } || {
     $ECHO "$YELLOW[-] we cannot test llvm_mode cmplog because it is not present"
     INCOMPLETE=1
   }
-  rm -rf errors test-cmplog test-c in core.*
+  rm -rf errors test-cmplog in core.*
   ../afl-clang-fast -o test-persistent ../utils/persistent_mode/persistent_demo.c > /dev/null 2>&1
   test -e test-persistent && {
     echo foo | AFL_QUIET=1 ../afl-showmap -m ${MEM_LIMIT} -o /dev/null -q -r ./test-persistent && {

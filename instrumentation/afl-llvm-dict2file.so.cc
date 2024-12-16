@@ -661,6 +661,13 @@ bool AFLdict2filePass::runOnModule(Module &M) {
             Value       *op2 = callInst->getArgOperand(2);
             ConstantInt *ilen = dyn_cast<ConstantInt>(op2);
 
+            if (!ilen) {
+
+              op2 = callInst->getArgOperand(1);
+              ilen = dyn_cast<ConstantInt>(op2);
+
+            }
+
             if (ilen) {
 
               uint64_t literalLength = optLen;
@@ -746,7 +753,7 @@ bool AFLdict2filePass::runOnModule(Module &M) {
   auto PA = PreservedAnalyses::all();
   return PA;
 #else
-  return true;
+  return false;
 #endif
 
 }
