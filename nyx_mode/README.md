@@ -23,7 +23,7 @@ requires an Intel processor (6th generation onwards) and a special 5.10 kernel
 2. Additionally, install the following packages:
 
    ```shell
-   apt-get install -y libgtk-3-dev pax-utils python3-msgpack python3-jinja2
+   apt-get install -y libgtk-3-dev pax-utils python3-msgpack python3-jinja2 libcapstone-dev
    ```
 
 3. As Nyx is written in Rust, install the newest rust compiler (rust packages in
@@ -33,7 +33,7 @@ requires an Intel processor (6th generation onwards) and a special 5.10 kernel
    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
    ```
 
-4. Finally build Nyx mode:
+4. Finally build Nyx mode (or use `make distrib` at the repo root to build all AFL++ modes):
 
    ```shell
    ./build_nyx_support.sh
@@ -84,8 +84,16 @@ Then the final step: we generate the Nyx package configuration:
 python3 nyx_mode/packer/packer/nyx_config_gen.py PACKAGE-DIRECTORY Kernel
 ```
 
-
 ## Fuzzing with Nyx mode
+
+Note that you need to load the kvm kernel modules for Nyx:
+```
+sudo modprobe -r kvm-intel
+sudo modprobe -r kvm
+sudo modprobe  kvm enable_vmware_backdoor=y
+sudo modprobe  kvm-intel
+cat /sys/module/kvm/parameters/enable_vmware_backdoor | grep -q Y && echo OK || echo KVM module problem
+```
 
 All the hard parts are done, fuzzing with Nyx mode is easy - just supply the
 `PACKAGE-DIRECTORY` as fuzzing target and specify the `-X` option to afl-fuzz:
@@ -94,16 +102,8 @@ All the hard parts are done, fuzzing with Nyx mode is easy - just supply the
 afl-fuzz -i in -o out -X -- ./PACKAGE-DIRECTORY
 ```
 
-Most likely your first run will fail because the Linux modules have to be
-specially set up, but afl-fuzz will tell you this on startup and how to rectify
-the situation:
-
-```
-sudo modprobe -r kvm-intel # or kvm-amd for AMD processors
-sudo modprobe -r kvm
-sudo modprobe kvm enable_vmware_backdoor=y
-sudo modprobe kvm-intel # or kvm-amd for AMD processors
-```
+If you get a forkserver error upon starting then you did not load the Linux
+kvm kernel modules, see above.
 
 If you want to fuzz in parallel (and you should!), then this has to be done in a
 special way:
@@ -186,7 +186,7 @@ make CC=afl-clang-fast CXX=afl-clang-fast++ LD=afl-clang-fast
 
 #### Nyx share directories
 
-Nyx expects that the target is provided in a certain format. More specifically, the target is passed as a so-called „share directory“ to a Nyx-frontend implementation. The share directory contains the target as well as a folder containing all dependencies and other files that are copied over to the guest. But more importantly, this share directory also contains a bootstrap script (`fuzz.sh`if you are using `KVM-Nyx`otherwise `fuzz_no_pt.sh`) that is also executed right after launching the fuzzer. Both bootstrap scripts use several tools to communicate with the "outer world":
+Nyx expects that the target is provided in a certain format. More specifically, the target is passed as a so-called „share directory“ to a Nyx-frontend implementation. The share directory contains the target as well as a folder containing all dependencies and other files that are copied over to the guest. But more importantly, this share directory also contains a bootstrap script (`fuzz.sh`if you are using `KVM-Nyx`otherwise `fuzz_no_pt.sh`) that is also executed right after launching the fuzzer. Either of these scripts can be edited to more fully prepare an environment for the target, like transferring configuration files to the target's filesystem. Both bootstrap scripts use several tools to communicate with the "outer world":
 
 - `hcat` - this tool copies a given string to the host
 - `hget` - this program requests a file from the host's share directory

@@ -5,11 +5,11 @@
    Originally written by Michal Zalewski
 
    Now maintained by Marc Heuse <mh@mh-sec.de>,
-                        Heiko Eißfeldt <heiko.eissfeldt@hexco.de> and
+                        Heiko Eissfeldt <heiko.eissfeldt@hexco.de> and
                         Andrea Fioraldi <andreafioraldi@gmail.com>
 
    Copyright 2016, 2017 Google Inc. All rights reserved.
-   Copyright 2019-2023 AFLplusplus Project. All rights reserved.
+   Copyright 2019-2024 AFLplusplus Project. All rights reserved.
 
    Licensed under the Apache License, Version 2.0 (the "License");
    you may not use this file except in compliance with the License.
@@ -408,9 +408,9 @@ u8 fuzz_one_original(afl_state_t *afl) {
   u32 len, temp_len;
   u32 j;
   u32 i;
-  u8 *in_buf, *out_buf, *orig_in, *ex_tmp, *eff_map = 0;
+  u8 *in_buf, *out_buf, *orig_in, *ex_tmp;
   u64 havoc_queued = 0, orig_hit_cnt, new_hit_cnt = 0, prev_cksum, _prev_cksum;
-  u32 splice_cycle = 0, perf_score = 100, orig_perf, eff_cnt = 1;
+  u32 splice_cycle = 0, perf_score = 100, orig_perf;
 
   u64 havoc_queued_new = 0, havoc_queued_val = 0;
   u32 *mutant_len = afl->fsrv.mutant_len;
@@ -702,12 +702,37 @@ u8 fuzz_one_original(afl_state_t *afl) {
 
   }
 
+  u64 before_det_time = get_cur_time();
+#ifdef INTROSPECTION
+
+  u64 before_havoc_time;
+  u32 before_det_findings = afl->queued_items,
+      before_det_edges = count_non_255_bytes(afl, afl->virgin_bits),
+      before_havoc_findings, before_havoc_edges;
+  u8 is_logged = 0;
+
+#endif
+  if (!afl->skip_deterministic) {
+
+    if (!skip_deterministic_stage(afl, in_buf, out_buf, len, before_det_time)) {
+
+      goto abandon_entry;
+
+    }
+
+  }
+
+  u8 *skip_eff_map = afl->queue_cur->skipdet_e->skip_eff_map;
+
   /* Skip right away if -d is given, if it has not been chosen sufficiently
      often to warrant the expensive deterministic stage (fuzz_level), or
      if it has gone through deterministic testing in earlier, resumed runs
      (passed_det). */
+  /* if skipdet decide to skip the seed or no interesting bytes found,
+     we skip the whole deterministic stage as well */
 
   if (likely(afl->skip_deterministic) || likely(afl->queue_cur->passed_det) ||
+      likely(!afl->queue_cur->skipdet_e->quick_eff_bytes) ||
       likely(perf_score <
              (afl->queue_cur->depth * 30 <= afl->havoc_max_mult * 100
                   ? afl->queue_cur->depth * 30
@@ -765,6 +790,10 @@ u8 fuzz_one_original(afl_state_t *afl) {
   for (afl->stage_cur = 0; afl->stage_cur < afl->stage_max; ++afl->stage_cur) {
 
     afl->stage_cur_byte = afl->stage_cur >> 3;
+
+    if (!skip_eff_map[afl->stage_cur_byte]) continue;
+
+    if (is_det_timeout(before_det_time, 0)) { goto custom_mutator_stage; }
 
     FLIP_BIT(out_buf, afl->stage_cur);
 
@@ -882,6 +911,10 @@ u8 fuzz_one_original(afl_state_t *afl) {
 
     afl->stage_cur_byte = afl->stage_cur >> 3;
 
+    if (!skip_eff_map[afl->stage_cur_byte]) continue;
+
+    if (is_det_timeout(before_det_time, 0)) { goto custom_mutator_stage; }
+
     FLIP_BIT(out_buf, afl->stage_cur);
     FLIP_BIT(out_buf, afl->stage_cur + 1);
 
@@ -917,6 +950,10 @@ u8 fuzz_one_original(afl_state_t *afl) {
 
     afl->stage_cur_byte = afl->stage_cur >> 3;
 
+    if (!skip_eff_map[afl->stage_cur_byte]) continue;
+
+    if (is_det_timeout(before_det_time, 0)) { goto custom_mutator_stage; }
+
     FLIP_BIT(out_buf, afl->stage_cur);
     FLIP_BIT(out_buf, afl->stage_cur + 1);
     FLIP_BIT(out_buf, afl->stage_cur + 2);
@@ -944,34 +981,6 @@ u8 fuzz_one_original(afl_state_t *afl) {
   afl->queue_cur->stats_mutated += afl->stage_max;
 #endif
 
-  /* Effector map setup. These macros calculate:
-
-     EFF_APOS      - position of a particular file offset in the map.
-     EFF_ALEN      - length of a map with a particular number of bytes.
-     EFF_SPAN_ALEN - map span for a sequence of bytes.
-
-   */
-
-#define EFF_APOS(_p) ((_p) >> EFF_MAP_SCALE2)
-#define EFF_REM(_x) ((_x) & ((1 << EFF_MAP_SCALE2) - 1))
-#define EFF_ALEN(_l) (EFF_APOS(_l) + !!EFF_REM(_l))
-#define EFF_SPAN_ALEN(_p, _l) (EFF_APOS((_p) + (_l)-1) - EFF_APOS(_p) + 1)
-
-  /* Initialize effector map for the next step (see comments below). Always
-     flag first and last byte as doing something. */
-
-  eff_map = afl_realloc(AFL_BUF_PARAM(eff), EFF_ALEN(len));
-  if (unlikely(!eff_map)) { PFATAL("alloc"); }
-  memset(eff_map, 0, EFF_ALEN(len));
-  eff_map[0] = 1;
-
-  if (EFF_APOS(len - 1) != 0) {
-
-    eff_map[EFF_APOS(len - 1)] = 1;
-    ++eff_cnt;
-
-  }
-
   /* Walking byte. */
 
   afl->stage_name = "bitflip 8/8";
@@ -985,6 +994,10 @@ u8 fuzz_one_original(afl_state_t *afl) {
 
     afl->stage_cur_byte = afl->stage_cur;
 
+    if (!skip_eff_map[afl->stage_cur_byte]) continue;
+
+    if (is_det_timeout(before_det_time, 0)) { goto custom_mutator_stage; }
+
     out_buf[afl->stage_cur] ^= 0xFF;
 
 #ifdef INTROSPECTION
@@ -994,59 +1007,19 @@ u8 fuzz_one_original(afl_state_t *afl) {
 
     if (common_fuzz_stuff(afl, out_buf, len)) { goto abandon_entry; }
 
-    /* We also use this stage to pull off a simple trick: we identify
-       bytes that seem to have no effect on the current execution path
-       even when fully flipped - and we skip them during more expensive
-       deterministic stages, such as arithmetics or known ints. */
-
-    if (!eff_map[EFF_APOS(afl->stage_cur)]) {
-
-      u64 cksum;
-
-      /* If in non-instrumented mode or if the file is very short, just flag
-         everything without wasting time on checksums. */
-
-      if (!afl->non_instrumented_mode && len >= EFF_MIN_LEN) {
-
-        cksum = hash64(afl->fsrv.trace_bits, afl->fsrv.map_size, HASH_CONST);
-
-      } else {
-
-        cksum = ~prev_cksum;
-
-      }
-
-      if (cksum != prev_cksum) {
-
-        eff_map[EFF_APOS(afl->stage_cur)] = 1;
-        ++eff_cnt;
-
-      }
-
-    }
-
     out_buf[afl->stage_cur] ^= 0xFF;
 
   }
 
-  /* If the effector map is more than EFF_MAX_PERC dense, just flag the
-     whole thing as worth fuzzing, since we wouldn't be saving much time
-     anyway. */
+  /* New effective bytes calculation. */
 
-  if (eff_cnt != (u32)EFF_ALEN(len) &&
-      eff_cnt * 100 / EFF_ALEN(len) > EFF_MAX_PERC) {
+  for (i = 0; i < len; i++) {
 
-    memset(eff_map, 1, EFF_ALEN(len));
-
-    afl->blocks_eff_select += EFF_ALEN(len);
-
-  } else {
-
-    afl->blocks_eff_select += eff_cnt;
+    if (skip_eff_map[i]) afl->blocks_eff_select += 1;
 
   }
 
-  afl->blocks_eff_total += EFF_ALEN(len);
+  afl->blocks_eff_total += len;
 
   new_hit_cnt = afl->queued_items + afl->saved_crashes;
 
@@ -1071,12 +1044,9 @@ u8 fuzz_one_original(afl_state_t *afl) {
 
     /* Let's consult the effector map... */
 
-    if (!eff_map[EFF_APOS(i)] && !eff_map[EFF_APOS(i + 1)]) {
+    if (!skip_eff_map[i]) continue;
 
-      --afl->stage_max;
-      continue;
-
-    }
+    if (is_det_timeout(before_det_time, 0)) { goto custom_mutator_stage; }
 
     afl->stage_cur_byte = i;
 
@@ -1116,13 +1086,10 @@ u8 fuzz_one_original(afl_state_t *afl) {
   for (i = 0; i < len - 3; ++i) {
 
     /* Let's consult the effector map... */
-    if (!eff_map[EFF_APOS(i)] && !eff_map[EFF_APOS(i + 1)] &&
-        !eff_map[EFF_APOS(i + 2)] && !eff_map[EFF_APOS(i + 3)]) {
 
-      --afl->stage_max;
-      continue;
+    if (!skip_eff_map[i]) continue;
 
-    }
+    if (is_det_timeout(before_det_time, 0)) { goto custom_mutator_stage; }
 
     afl->stage_cur_byte = i;
 
@@ -1173,12 +1140,9 @@ skip_bitflip:
 
     /* Let's consult the effector map... */
 
-    if (!eff_map[EFF_APOS(i)]) {
+    if (!skip_eff_map[i]) continue;
 
-      afl->stage_max -= 2 * ARITH_MAX;
-      continue;
-
-    }
+    if (is_det_timeout(before_det_time, 0)) { goto custom_mutator_stage; }
 
     afl->stage_cur_byte = i;
 
@@ -1260,12 +1224,9 @@ skip_bitflip:
 
     /* Let's consult the effector map... */
 
-    if (!eff_map[EFF_APOS(i)] && !eff_map[EFF_APOS(i + 1)]) {
+    if (!skip_eff_map[i]) continue;
 
-      afl->stage_max -= 4 * ARITH_MAX;
-      continue;
-
-    }
+    if (is_det_timeout(before_det_time, 0)) { goto custom_mutator_stage; }
 
     afl->stage_cur_byte = i;
 
@@ -1393,13 +1354,9 @@ skip_bitflip:
 
     /* Let's consult the effector map... */
 
-    if (!eff_map[EFF_APOS(i)] && !eff_map[EFF_APOS(i + 1)] &&
-        !eff_map[EFF_APOS(i + 2)] && !eff_map[EFF_APOS(i + 3)]) {
+    if (!skip_eff_map[i]) continue;
 
-      afl->stage_max -= 4 * ARITH_MAX;
-      continue;
-
-    }
+    if (is_det_timeout(before_det_time, 0)) { goto custom_mutator_stage; }
 
     afl->stage_cur_byte = i;
 
@@ -1531,12 +1488,9 @@ skip_arith:
 
     /* Let's consult the effector map... */
 
-    if (!eff_map[EFF_APOS(i)]) {
+    if (!skip_eff_map[i]) continue;
 
-      afl->stage_max -= sizeof(interesting_8);
-      continue;
-
-    }
+    if (is_det_timeout(before_det_time, 0)) { goto custom_mutator_stage; }
 
     afl->stage_cur_byte = i;
 
@@ -1594,12 +1548,9 @@ skip_arith:
 
     /* Let's consult the effector map... */
 
-    if (!eff_map[EFF_APOS(i)] && !eff_map[EFF_APOS(i + 1)]) {
+    if (!skip_eff_map[i]) continue;
 
-      afl->stage_max -= sizeof(interesting_16);
-      continue;
-
-    }
+    if (is_det_timeout(before_det_time, 0)) { goto custom_mutator_stage; }
 
     afl->stage_cur_byte = i;
 
@@ -1685,13 +1636,9 @@ skip_arith:
 
     /* Let's consult the effector map... */
 
-    if (!eff_map[EFF_APOS(i)] && !eff_map[EFF_APOS(i + 1)] &&
-        !eff_map[EFF_APOS(i + 2)] && !eff_map[EFF_APOS(i + 3)]) {
+    if (!skip_eff_map[i]) continue;
 
-      afl->stage_max -= sizeof(interesting_32) >> 1;
-      continue;
-
-    }
+    if (is_det_timeout(before_det_time, 0)) { goto custom_mutator_stage; }
 
     afl->stage_cur_byte = i;
 
@@ -1783,6 +1730,10 @@ skip_interest:
 
     u32 last_len = 0;
 
+    if (!skip_eff_map[i]) continue;
+
+    if (is_det_timeout(before_det_time, 0)) { goto custom_mutator_stage; }
+
     afl->stage_cur_byte = i;
 
     /* Extras are sorted by size, from smallest to largest. This means
@@ -1800,9 +1751,7 @@ skip_interest:
       if ((afl->extras_cnt > afl->max_det_extras &&
            rand_below(afl, afl->extras_cnt) >= afl->max_det_extras) ||
           afl->extras[j].len > len - i ||
-          !memcmp(afl->extras[j].data, out_buf + i, afl->extras[j].len) ||
-          !memchr(eff_map + EFF_APOS(i), 1,
-                  EFF_SPAN_ALEN(i, afl->extras[j].len))) {
+          !memcmp(afl->extras[j].data, out_buf + i, afl->extras[j].len)) {
 
         --afl->stage_max;
         continue;
@@ -1849,6 +1798,10 @@ skip_interest:
   if (unlikely(!ex_tmp)) { PFATAL("alloc"); }
 
   for (i = 0; i <= (u32)len; ++i) {
+
+    if (!skip_eff_map[i % len]) continue;
+
+    if (is_det_timeout(before_det_time, 0)) { goto custom_mutator_stage; }
 
     afl->stage_cur_byte = i;
 
@@ -1912,6 +1865,10 @@ skip_user_extras:
 
     u32 last_len = 0;
 
+    if (!skip_eff_map[i]) continue;
+
+    if (is_det_timeout(before_det_time, 0)) { goto custom_mutator_stage; }
+
     afl->stage_cur_byte = i;
 
     u32 min_extra_len = MIN(afl->a_extras_cnt, (u32)USE_AUTO_EXTRAS);
@@ -1920,9 +1877,7 @@ skip_user_extras:
       /* See the comment in the earlier code; extras are sorted by size. */
 
       if (afl->a_extras[j].len > len - i ||
-          !memcmp(afl->a_extras[j].data, out_buf + i, afl->a_extras[j].len) ||
-          !memchr(eff_map + EFF_APOS(i), 1,
-                  EFF_SPAN_ALEN(i, afl->a_extras[j].len))) {
+          !memcmp(afl->a_extras[j].data, out_buf + i, afl->a_extras[j].len)) {
 
         --afl->stage_max;
         continue;
@@ -1969,6 +1924,10 @@ skip_user_extras:
   if (unlikely(!ex_tmp)) { PFATAL("alloc"); }
 
   for (i = 0; i <= (u32)len; ++i) {
+
+    if (!skip_eff_map[i % len]) continue;
+
+    if (is_det_timeout(before_det_time, 0)) { goto custom_mutator_stage; }
 
     afl->stage_cur_byte = i;
 
@@ -2176,6 +2135,19 @@ custom_mutator_stage:
    ****************/
 
 havoc_stage:
+
+#ifdef INTROSPECTION
+
+  if (!is_logged) {
+
+    is_logged = 1;
+    before_havoc_findings = afl->queued_items;
+    before_havoc_edges = count_non_255_bytes(afl, afl->virgin_bits);
+    before_havoc_time = get_cur_time();
+
+  }
+
+#endif
 
   if (unlikely(afl->custom_only)) {
 
@@ -4307,6 +4279,25 @@ retry_splicing:
 
   ret_val = 0;
 
+#ifdef INTROSPECTION
+
+  afl->havoc_prof->queued_det_stage =
+      before_havoc_findings - before_det_findings;
+  afl->havoc_prof->queued_havoc_stage =
+      afl->queued_items - before_havoc_findings;
+  afl->havoc_prof->total_queued_det += afl->havoc_prof->queued_det_stage;
+  afl->havoc_prof->edge_det_stage = before_havoc_edges - before_det_edges;
+  afl->havoc_prof->edge_havoc_stage =
+      count_non_255_bytes(afl, afl->virgin_bits) - before_havoc_edges;
+  afl->havoc_prof->total_det_edge += afl->havoc_prof->edge_det_stage;
+  afl->havoc_prof->det_stage_time = before_havoc_time - before_det_time;
+  afl->havoc_prof->havoc_stage_time = get_cur_time() - before_havoc_time;
+  afl->havoc_prof->total_det_time += afl->havoc_prof->det_stage_time;
+
+  plot_profile_data(afl, afl->queue_cur);
+
+#endif
+
 /* we are through with this queue entry - for this iteration */
 abandon_entry:
 
@@ -4803,7 +4794,7 @@ static u8 mopt_common_fuzzing(afl_state_t *afl, MOpt_globals_t MOpt_globals) {
 #define EFF_APOS(_p) ((_p) >> EFF_MAP_SCALE2)
 #define EFF_REM(_x) ((_x) & ((1 << EFF_MAP_SCALE2) - 1))
 #define EFF_ALEN(_l) (EFF_APOS(_l) + !!EFF_REM(_l))
-#define EFF_SPAN_ALEN(_p, _l) (EFF_APOS((_p) + (_l)-1) - EFF_APOS(_p) + 1)
+#define EFF_SPAN_ALEN(_p, _l) (EFF_APOS((_p) + (_l) - 1) - EFF_APOS(_p) + 1)
 
   /* Initialize effector map for the next step (see comments below). Always
          flag first and last byte as doing something. */

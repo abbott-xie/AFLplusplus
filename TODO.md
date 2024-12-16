@@ -2,26 +2,23 @@
 
 ## Must
 
+ - ijon support?
+ - check for null ptr for xml/curl/g_ string transform functions
+ - hardened_usercopy=0 page_alloc.shuffle=0
+ - add value_profile but only enable after 15 minutes without finds
+ - cmplog max items env?
  - adapt MOpt to new mutation engine
- - Update afl->pending_not_fuzzed for MOpt
- - cmplog rtn sanity check on fixed length? + no length 1
+   - Update afl->pending_not_fuzzed for MOpt
+ - cmplog rtn sanity check on fixed length? currently we ignore the length
  - afl-showmap -f support
  - afl-fuzz multicore wrapper script
  - when trimming then perform crash detection
- - either -L0 and/or -p mmopt results in zero new coverage
+
 
 ## Should
 
-<<<<<<< Updated upstream
- - add value_profile but only enable after 15 minutes without finds?
-=======
- - afl-showmap -f support
- - afl-fuzz multicore wrapper script
- - UI revamp
- - hardened_usercopy=0 page_alloc.shuffle=0
- - add value_profile but only enable after 15 minutes without finds
->>>>>>> Stashed changes
  - afl-crash-analysis
+ - cmplog: add loop count resolving (byte -> loop cnt change, calc special values)
  - support persistent and deferred fork server in afl-showmap?
  - better autodetection of shifting runtime timeout values
  - afl-plot to support multiple plot_data

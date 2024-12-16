@@ -7,7 +7,7 @@
 #
 # Copyright 2014, 2015 Google Inc. All rights reserved.
 #
-# Copyright 2019-2023 AFLplusplus
+# Copyright 2019-2024 AFLplusplus
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -152,6 +152,7 @@ Minimization settings:
   -e            - solve for edge coverage only, ignore hit counts
 
 For additional tips, please consult README.md.
+This script cannot read filenames that end with a space ' '.
 
 Environment variables used:
 AFL_KEEP_TRACES: leave the temporary <out_dir>\.traces directory

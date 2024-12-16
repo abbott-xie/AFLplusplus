@@ -20,7 +20,7 @@ echo foobar | grep -qE 'asd|oob' 2>/dev/null || { echo Error: grep command does 
 test -e ./test-all.sh || cd $(dirname $0) || exit 1
 test -e ./test-all.sh || { echo Error: you must be in the test/ directory ; exit 1 ; }
 export AFL_PATH=`pwd`/..
-export AFL_NO_AFFINITY=1 # workaround for travis that fails for no avail cores 
+export AFL_TRY_AFFINITY=1 # workaround for travis that fails for no avail cores
 
 echo 1 > test.1
 echo 1 > test.2
@@ -111,14 +111,7 @@ test -n "$TRAVIS_OS_NAME" && {
 test -e /usr/local/bin/opt && {
   test `uname -s` = 'Darwin' || export PATH="/usr/local/bin:${PATH}"
 }
-# on MacOS X we prefer afl-clang over afl-gcc, because
-# afl-gcc does not work there (it is a symlink from clang)
-test `uname -s` = 'Darwin' -o `uname -s` = 'FreeBSD' && {
-  AFL_GCC=afl-clang
-} || {
-  AFL_GCC=afl-gcc
-}
-command -v gcc >/dev/null 2>&1 || AFL_GCC=afl-clang
+AFL_COMPILER=afl-clang-fast
 
 SYS=`uname -m`
 

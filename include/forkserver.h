@@ -7,12 +7,12 @@
    Forkserver design by Jann Horn <jannhorn@googlemail.com>
 
    Now maintained by Marc Heuse <mh@mh-sec.de>,
-                     Heiko Eißfeldt <heiko.eissfeldt@hexco.de>,
+                     Heiko Eissfeldt <heiko.eissfeldt@hexco.de>,
                      Andrea Fioraldi <andreafioraldi@gmail.com>,
                      Dominik Maier <mail@dmnk.co>>
 
    Copyright 2016, 2017 Google Inc. All rights reserved.
-   Copyright 2019-2023 AFLplusplus Project. All rights reserved.
+   Copyright 2019-2024 AFLplusplus Project. All rights reserved.
 
    Licensed under the Apache License, Version 2.0 (the "License");
    you may not use this file except in compliance with the License.
@@ -89,11 +89,14 @@ typedef struct {
   bool (*nyx_config_set_aux_buffer_size)(void    *config,
                                          uint32_t aux_buffer_size);
 
+  uint64_t (*nyx_get_target_hash64)(void *config);
+
+  void (*nyx_config_free)(void *config);
+
 } nyx_plugin_handler_t;
 
 /* Imports helper functions to enable Nyx mode (Linux only )*/
 nyx_plugin_handler_t *afl_load_libnyx_plugin(u8 *libnyx_binary);
-
 #endif
 
 #define WINNING_CAPACITY 5120
@@ -187,7 +190,8 @@ typedef struct afl_forkserver {
   u8 *out_file,                         /* File to fuzz, if any             */
       *target_path;                     /* Path of the target               */
 
-  FILE *plot_file;                      /* Gnuplot output file              */
+  FILE *plot_file,                      /* Gnuplot output file              */
+      *det_plot_file;
 
   /* Note: last_run_timed_out is u32 to send it to the child as 4 byte array */
   u32 last_run_timed_out;               /* Traced process timed out?        */
@@ -248,6 +252,8 @@ typedef struct afl_forkserver {
 
   u8 persistent_mode;
 
+  u32 max_length;
+
 #ifdef __linux__
   nyx_plugin_handler_t *nyx_handlers;
   char                 *out_dir_path;    /* path to the output directory     */
@@ -262,7 +268,17 @@ typedef struct afl_forkserver {
   bool                  nyx_use_tmp_workdir;
   char                 *nyx_tmp_workdir_path;
   s32                   nyx_log_fd;
+  u64                   nyx_target_hash64;
 #endif
+
+#ifdef __AFL_CODE_COVERAGE
+  u8 *persistent_trace_bits;                   /* Persistent copy of bitmap */
+#endif
+
+  void *custom_data_ptr;
+  u8   *custom_input;
+  u32   custom_input_len;
+  void (*late_send)(void *, const u8 *, size_t);
 
 } afl_forkserver_t;
 
@@ -289,6 +305,10 @@ fsrv_run_result_t afl_fsrv_run_target(afl_forkserver_t *fsrv, u32 timeout,
 void              afl_fsrv_killall(void);
 void              afl_fsrv_deinit(afl_forkserver_t *fsrv);
 void              afl_fsrv_kill(afl_forkserver_t *fsrv);
+
+#ifdef __linux__
+void nyx_load_target_hash(afl_forkserver_t *fsrv);
+#endif
 
 #ifdef __APPLE__
   #define MSG_FORK_ON_APPLE                                                    \

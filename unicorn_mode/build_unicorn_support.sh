@@ -14,7 +14,7 @@
 #                                <andreafioraldi@gmail.com>
 #
 # Copyright 2017 Battelle Memorial Institute. All rights reserved.
-# Copyright 2019-2023 AFLplusplus Project. All rights reserved.
+# Copyright 2019-2024 AFLplusplus Project. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -198,25 +198,27 @@ $MAKECMD -j1 || exit 1
 echo "[+] Build process successful!"
 
 echo "[*] Installing Unicorn python bindings..."
+XOPT=
+#$PYTHONBIN -m pip install --help 2>/dev/null | grep -q break-system-packages && XOPT=--break-system-packages
 cd unicorn/bindings/python || exit 1
 if [ -z "$VIRTUAL_ENV" ]; then
   echo "[*] Info: Installing python unicornafl using --user"
-  THREADS=$CORES $PYTHONBIN -m pip install --user --force .|| exit 1
+  THREADS=$CORES $PYTHONBIN setup.py install --user $XOPT --force || exit 1
 else
   echo "[*] Info: Installing python unicornafl to virtualenv: $VIRTUAL_ENV"
-  THREADS=$CORES $PYTHONBIN -m pip install --force .|| exit 1
+  THREADS=$CORES $PYTHONBIN setup.py install --force || exit 1
 fi
 cd ../../../
 echo "[*] Installing Unicornafl python bindings..."
 cd bindings/python || exit 1
 if [ -z "$VIRTUAL_ENV" ]; then
   echo "[*] Info: Installing python unicornafl using --user"
-  THREADS=$CORES $PYTHONBIN -m pip install --user --force .|| exit 1
+  THREADS=$CORES $PYTHONBIN setup.py install --user $XOPT --force || exit 1
 else
   echo "[*] Info: Installing python unicornafl to virtualenv: $VIRTUAL_ENV"
-  THREADS=$CORES $PYTHONBIN -m pip install --force .|| exit 1
+  THREADS=$CORES $PYTHONBIN setup.py install --force || exit 1
 fi
-echo '[*] If needed, you can (re)install the bindings in `./unicornafl/bindings/python` using `pip install --force .`'
+echo '[*] If needed, you can (re)install the bindings in `./unicornafl/bindings/python` using `python setup.py install --force .`'
 
 cd ../../ || exit 1
 

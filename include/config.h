@@ -10,7 +10,7 @@
                      Heiko Eissfeldt <heiko.eissfeldt@hexco.de>,
 
    Copyright 2016, 2017 Google Inc. All rights reserved.
-   Copyright 2019-2023 AFLplusplus Project. All rights reserved.
+   Copyright 2019-2024 AFLplusplus Project. All rights reserved.
 
    Licensed under the Apache License, Version 2.0 (the "License");
    you may not use this file except in compliance with the License.
@@ -26,7 +26,7 @@
 /* Version string: */
 
 // c = release, a = volatile github dev, e = experimental branch
-#define VERSION "++4.09c"
+#define VERSION "++4.30c"
 
 /******************************************************
  *                                                    *
@@ -51,6 +51,18 @@
 
 /* Default file permission umode when creating files (default: 0600) */
 #define DEFAULT_PERMISSION 0600
+
+/* SkipDet's global configuration */
+
+#define MINIMAL_BLOCK_SIZE 64
+#define SMALL_DET_TIME (60 * 1000 * 1000U)
+#define MAXIMUM_INF_EXECS (16 * 1024U)
+#define MAXIMUM_QUICK_EFF_EXECS (64 * 1024U)
+#define THRESHOLD_DEC_TIME (20 * 60 * 1000U)
+
+/* Set the Prob of selecting eff_bytes 3 times more than original,
+   Now disabled */
+#define EFF_HAVOC_RATE 3
 
 /* CMPLOG/REDQUEEN TUNING
  *
@@ -84,6 +96,11 @@
    Note that every crash will be written, not only unique ones! */
 
 // #define AFL_PERSISTENT_RECORD
+
+/* Adds support in compiler-rt to replay persistent records in @@-style
+ * harnesses */
+
+//  #define AFL_PERSISTENT_REPLAY_ARGPARSE
 
 /* console output colors: There are three ways to configure its behavior
  * 1. default: colored outputs fixed on: defined USE_COLOR && defined
@@ -312,9 +329,9 @@
 #define SYNC_INTERVAL 8
 
 /* Sync time (minimum time between syncing in ms, time is halfed for -M main
-   nodes) - default is 30 minutes: */
+   nodes) - default is 20 minutes: */
 
-#define SYNC_TIME (30 * 60 * 1000)
+#define SYNC_TIME (20 * 60 * 1000)
 
 /* Output directory reuse grace period (minutes): */
 
@@ -452,7 +469,7 @@
 /* Do not change this unless you really know what you are doing. */
 
 #define MAP_SIZE (1U << MAP_SIZE_POW2)
-#if MAP_SIZE <= 65536
+#if MAP_SIZE <= 2097152
   #define MAP_INITIAL_SIZE (2 << 20)  // = 2097152
 #else
   #define MAP_INITIAL_SIZE MAP_SIZE

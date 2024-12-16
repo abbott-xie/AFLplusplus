@@ -3,7 +3,7 @@
    Copyright 2014-2019 Free Software Foundation, Inc
    Copyright 2015, 2016 Google Inc. All rights reserved.
    Copyright 2019-2020 AFLplusplus Project. All rights reserved.
-   Copyright 2019-2023 AdaCore
+   Copyright 2019-2024 AdaCore
 
    Written by Alexandre Oliva <oliva@adacore.com>, based on the AFL++
    LLVM CmpLog pass by Andrea Fioraldi <andreafioraldi@gmail.com>, and
@@ -370,7 +370,8 @@ Set AFL_QUIET in the environment to silence it.\n\
 int plugin_init(struct plugin_name_args   *info,
                 struct plugin_gcc_version *version) {
 
-  if (!plugin_default_version_check(version, &gcc_version))
+  if (!plugin_default_version_check(version, &gcc_version) &&
+      !getenv("AFL_GCC_DISABLE_VERSION_CHECK"))
     FATAL(G_("GCC and plugin have incompatible versions, expected GCC %s, "
              "is %s"),
           gcc_version.basever, version->basever);

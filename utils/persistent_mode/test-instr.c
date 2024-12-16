@@ -3,7 +3,7 @@
    --------------------------------------------------------
    Originally written by Michal Zalewski
    Copyright 2014 Google Inc. All rights reserved.
-   Copyright 2019-2023 AFLplusplus Project. All rights reserved.
+   Copyright 2019-2024 AFLplusplus Project. All rights reserved.
    Licensed under the Apache License, Version 2.0 (the "License");
    you may not use this file except in compliance with the License.
    You may obtain a copy of the License at:
@@ -24,7 +24,7 @@ __AFL_FUZZ_INIT();
 /* To ensure checks are not optimized out it is recommended to disable
    code optimization for the fuzzer harness main() */
 #pragma clang optimize off
-#pragma GCC            optimize("O0")
+#pragma GCC optimize("O0")
 
 int main(int argc, char **argv) {
 

@@ -2,7 +2,7 @@
 
 ## TL;DR:
 
-This version requires a LLVM 11 or newer.
+This version requires a LLVM 12 or newer.
 
 1. Use afl-clang-lto/afl-clang-lto++ because the resulting binaries run
    slightly faster and give better coverage.
@@ -10,7 +10,7 @@ This version requires a LLVM 11 or newer.
 2. You can use it together with COMPCOV, COMPLOG and the instrument file
    listing features.
 
-3. It only works with LLVM 11 or newer.
+3. It only works with LLVM 12 or newer.
 
 4. AUTODICTIONARY feature (see below)
 
@@ -57,23 +57,23 @@ libtool: link: afl-clang-lto -g -O2 -Wall -W -o thumbnail thumbnail.o  ../libtif
 afl-clang-lto++2.63d by Marc "vanHauser" Heuse <mh@mh-sec.de> in mode LTO
 afl-llvm-lto++2.63d by Marc "vanHauser" Heuse <mh@mh-sec.de>
 AUTODICTIONARY: 11 strings found
-[+] Instrumented 12071 locations with no collisions (on average 1046 collisions would be in afl-gcc/afl-clang-fast) (non-hardened mode).
+[+] Instrumented 12071 locations with no collisions (on average 1046 collisions would be in afl-clang-fast CLASSIC) (non-hardened mode).
 ```
 
-## Getting LLVM 11+
+## Getting LLVM 13+
 
 ### Installing llvm
 
 The best way to install LLVM is to follow [https://apt.llvm.org/](https://apt.llvm.org/)
 
-e.g. for LLVM 15:
+e.g. for LLVM 19:
 ```
 wget https://apt.llvm.org/llvm.sh
 chmod +x llvm.sh
-sudo ./llvm.sh 15 all
+sudo ./llvm.sh 19 all
 ```
 
-LLVM 11 to 16 should be available in all current Linux repositories.
+LLVM 13 to 19 should be available in all current Linux repositories.
 
 ## How to build afl-clang-lto
 
@@ -90,7 +90,7 @@ sudo make install
 
 ## How to use afl-clang-lto
 
-Just use afl-clang-lto like you did with afl-clang-fast or afl-gcc.
+Just use afl-clang-lto like you did with afl-clang-fast.
 
 Also, the instrument file listing (AFL_LLVM_ALLOWLIST/AFL_LLVM_DENYLIST ->
 [README.instrument_list.md](README.instrument_list.md)) and laf-intel/compcov
@@ -277,7 +277,7 @@ AS=llvm-as  ...
 afl-clang-lto is still work in progress.
 
 Known issues:
-* Anything that LLVM 11+ cannot compile, afl-clang-lto cannot compile either -
+* Anything that LLVM 12+ cannot compile, afl-clang-lto cannot compile either -
   obviously.
 * Anything that does not compile with LTO, afl-clang-lto cannot compile either -
   obviously.
@@ -319,7 +319,7 @@ Still more problems came up though as this only works without bugs from LLVM 9
 onwards, and with high optimization the link optimization ruins the instrumented
 control flow graph.
 
-This is all now fixed with LLVM 11+. The llvm's own linker is now able to load
+This is all now fixed with LLVM 12+. The llvm's own linker is now able to load
 passes and this bypasses all problems we had.
 
 Happy end :)

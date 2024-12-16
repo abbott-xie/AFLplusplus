@@ -5,7 +5,7 @@
    Written by Andrea Fioraldi <andreafioraldi@gmail.com>
 
    Copyright 2015, 2016 Google Inc. All rights reserved.
-   Copyright 2019-2023 AFLplusplus Project. All rights reserved.
+   Copyright 2019-2024 AFLplusplus Project. All rights reserved.
 
    Licensed under the Apache License, Version 2.0 (the "License");
    you may not use this file except in compliance with the License.
@@ -680,13 +680,16 @@ bool CmpLogInstructions::runOnModule(Module &M) {
     printf("Running cmplog-instructions-pass by andreafioraldi@gmail.com\n");
   else
     be_quiet = 1;
-  hookInstrs(M);
+  bool ret = hookInstrs(M);
   verifyModule(M);
 
 #if LLVM_MAJOR >= 11                                /* use new pass manager */
-  return PreservedAnalyses::all();
+  if (ret == false)
+    return PreservedAnalyses::all();
+  else
+    return PreservedAnalyses();
 #else
-  return true;
+  return ret;
 #endif
 
 }

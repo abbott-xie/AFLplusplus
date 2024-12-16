@@ -3,7 +3,7 @@
    --------------------------------------------------------
    Originally written by Michal Zalewski
    Copyright 2014 Google Inc. All rights reserved.
-   Copyright 2019-2023 AFLplusplus Project. All rights reserved.
+   Copyright 2019-2024 AFLplusplus Project. All rights reserved.
    Licensed under the Apache License, Version 2.0 (the "License");
    you may not use this file except in compliance with the License.
    You may obtain a copy of the License at:
@@ -41,7 +41,7 @@ int run(char *file) {
 
   int    fd = -1;
   off_t  len;
-  char * buf = NULL;
+  char  *buf = NULL;
   size_t n_read;
   int    result = -1;
 
@@ -51,6 +51,7 @@ int run(char *file) {
 
     fd = open(file, O_RDONLY);
     if (fd < 0) {
+
       perror("open");
       break;
 
@@ -110,8 +111,10 @@ void slow() {
 
 }
 
-TESTINSTR_SECTION int do_run(char * file) {
+TESTINSTR_SECTION int do_run(char *file) {
+
   return run(file);
+
 }
 
 int main(int argc, char **argv) {

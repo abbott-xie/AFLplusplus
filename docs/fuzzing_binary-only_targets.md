@@ -46,10 +46,9 @@ The following setup to use QEMU mode is recommended:
   `AFL_COMPCOV_LEVEL=2`), alternatively you can use FRIDA mode, just switch `-Q`
   with `-O` and remove the LAF instance
 
-Then run as many instances as you have cores left with either -Q mode or - even
-better - use a binary rewriter like Dyninst, RetroWrite, ZAFL, etc.
-The binary rewriters all have their own advantages and caveats.
-ZAFL is the best but cannot be used in a business/commercial context.
+Then run as many instances as you have cores left with either `-Q` mode or use
+a static binary rewriter like Dyninst, RetroWrite, ZAFL, etc.
+The binary rewriters all have their own advantages and caveats, but ZAFL is a good choice.
 
 If a binary rewriter works for your target then you can use afl-fuzz normally
 and it will have twice the speed compared to QEMU mode (but slower than QEMU
@@ -94,8 +93,7 @@ For more information, see
 
 In FRIDA mode, you can fuzz binary-only targets as easily as with QEMU mode.
 FRIDA mode is most of the times slightly faster than QEMU mode. It is also
-newer, lacks COMPCOV, and has the advantage that it works on MacOS (both intel
-and M1).
+newer, and has the advantage that it works on MacOS (both intel and M1).
 
 To build FRIDA mode:
 
@@ -112,10 +110,6 @@ If possible, you should use the persistent mode, see
 The mode is approximately 2-5x slower than compile-time instrumentation, and is
 less conducive to parallelization. But for binary-only fuzzing, it gives a huge
 speed improvement if it is possible to use.
-
-If you want to fuzz a binary-only library, then you can fuzz it with frida-gum
-via frida_mode/. You will have to write a harness to call the target function in
-the library, use afl-frida.c as a template.
 
 You can also perform remote fuzzing with frida, e.g., if you want to fuzz on
 iPhone or Android devices, for this you can use
@@ -205,6 +199,7 @@ have an x86_64 or arm64 binary that does not contain C++ exceptions and - if
 x86_64 - still has it's symbols and compiled with position independent code
 (PIC/PIE), then the RetroWrite solution might be for you.
 It decompiles to ASM files which can then be instrumented with afl-gcc.
+Note that afl-gcc is only present until AFL++ v4.21c and was subsequently removed as it is obsolete.
 
 Binaries that are statically instrumented for fuzzing using RetroWrite are close
 in performance to compiler-instrumented binaries and outperform the QEMU-based
@@ -302,7 +297,6 @@ some are very hard to set up...
 * S2E: [https://github.com/S2E](https://github.com/S2E)
 * TinyInst:
   [https://github.com/googleprojectzero/TinyInst](https://github.com/googleprojectzero/TinyInst)
-  (Mac/Windows only)
 *  ... please send me any missing that are good
 
 ## Closing words
