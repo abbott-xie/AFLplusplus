@@ -172,7 +172,7 @@ class EnsembleFuzzer:
     output_dir: str
     fuzzer_queue: Deque[AFLFuzzer]
 
-    def __init__(self, corpus_dir: str, output_dir: str, dicts: List[str], target_binary: str, cmplog_target_binary: str, fox_target_binary: str, args: List[str]):
+    def __init__(self, corpus_dir: str, output_dir: str, dicts: List[str], target_binary: str, cmplog_target_binary: str, fox_target_binary: str, ztaint_target_binary: str, args: List[str]):
         self.output_dir = os.path.join(output_dir, "ensemble_fuzzer")
         self.fuzzer_queue = deque([
             ZTaintFuzzer(corpus_dir, self.output_dir, dicts, ztaint_target_binary, args),
@@ -211,7 +211,7 @@ def main(args):
     os.makedirs(args.output_dir, exist_ok=True)
     logging.basicConfig(filename=os.path.join(args.output_dir, "ensemble_runner.log"), level=logging.DEBUG)
 
-    fuzzer = EnsembleFuzzer(args.corpus_dir, args.output_dir, args.dicts, args.target_binary, args.cmplog_target_binary, args.fox_target_binary, args.args)
+    fuzzer = EnsembleFuzzer(args.corpus_dir, args.output_dir, args.dicts, args.target_binary, args.cmplog_target_binary, args.fox_target_binary, args.ztaint_target_binary, args.args)
     fuzzer.run()
 
 
