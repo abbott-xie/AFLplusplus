@@ -8,7 +8,8 @@ Note:
     - Input and output directories are managed per fuzzer instance.
     - Before each fuzzer runs, a new output directory is created.
     - The input for each subsequent fuzzer is the 'queue' directory from the previous fuzzer's output.
-    - The environment variable 'AFL_AUTORESUME' is not set, as we're not relying on AFL++'s auto-resume feature.
+    - The 'queue' directory is searched within the fuzzer's output directory.
+    - The environment variable 'AFL_AUTORESUME' is not set.
 
 Alternatively, you can directly import the EnsembleFuzzer class and use it as follows:
     EnsembleFuzzer(corpus_dir, output_dir, dicts, target_binary, cmplog_target_binary, fox_target_binary, ztaint_target_binary).run()
@@ -205,6 +206,7 @@ class EnsembleFuzzer:
     EnsembleFuzzer orchestrates multiple fuzzers, running them in a coordinated manner.
     Before each fuzzer runs, a new output directory is created, and the input directory is set up by copying
     the previous fuzzer's queue into it.
+    The 'queue' directory is searched within the previous fuzzer's output directory.
     The environment variable 'AFL_AUTORESUME' is not set, so each fuzzer starts fresh with the provided inputs.
     """
     output_dir: str
@@ -223,6 +225,16 @@ class EnsembleFuzzer:
             FoxFuzzer(None, None, dicts, fox_target_binary, args),
             CmplogFuzzer(None, None, dicts, target_binary, cmplog_target_binary, args)
         ])
+
+    def find_queue_directory(self, output_dir):
+        """
+        Search the output directory recursively for a 'queue' directory.
+        Return the path to the 'queue' directory if found, else None.
+        """
+        for root, dirs, files in os.walk(output_dir):
+            if 'queue' in dirs:
+                return os.path.join(root, 'queue')
+        return None
 
     def copy_queue_to_input(self, queue_dir, input_dir):
         """
@@ -261,10 +273,20 @@ class EnsembleFuzzer:
                     fuzzer_input_dir = self.initial_corpus_dir
                 else:
                     # Subsequent fuzzers, use the previous fuzzer's output queue
-                    fuzzer_input_dir = os.path.join(prev_output_dir, 'default', 'queue')
+                    queue_dir = self.find_queue_directory(prev_output_dir)
+                    if queue_dir is None:
+                        logging.warning(f"No queue directory found in {prev_output_dir}. Using initial corpus.")
+                        fuzzer_input_dir = self.initial_corpus_dir
+                    else:
+                        fuzzer_input_dir = queue_dir
             else:
                 # Subsequent runs of the same fuzzer, use its previous output queue
-                fuzzer_input_dir = os.path.join(fuzzer.output_dir, 'default', 'queue')
+                queue_dir = self.find_queue_directory(fuzzer.output_dir)
+                if queue_dir is None:
+                    logging.warning(f"No queue directory found in {fuzzer.output_dir}. Using initial corpus.")
+                    fuzzer_input_dir = self.initial_corpus_dir
+                else:
+                    fuzzer_input_dir = queue_dir
 
             # Prepare the input directory by copying files
             fuzzer_input_dir_prepared = os.path.join(self.output_dir, f"{fuzzer.name}_input_{fuzzer.run_cnt}")
