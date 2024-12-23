@@ -102,7 +102,7 @@ class AFLFuzzer(AbstractFuzzer):
         self.command += COMMON_ARGS
         for dict_path in self.dicts:
             self.command += ['-x', dict_path]
-        self.command += ['-i', self.corpus_dir, '-o', self.output_dir, '-M', self.name, '--', self.target_binary] + self.args + [INT_MAX]
+        self.command += ['-i', self.corpus_dir, '-o', self.output_dir, '--', self.target_binary] + self.args + [INT_MAX]
 
     def do_run(self):
         """
@@ -115,9 +115,11 @@ class AFLFuzzer(AbstractFuzzer):
                 subprocess.run(self.command, check=True, timeout=self.get_timeout())
             else:
                 subprocess.run(self.command, check=True)
+            self.run_err = None
         except subprocess.TimeoutExpired:
             logging.info(f"Fuzzer {self.name} timed out after {self.get_timeout()} seconds")
-            self.run_err = 'Timeout'
+            # Timeout is not considered an error; fuzzer can be re-queued
+            self.run_err = None
         except subprocess.CalledProcessError as e:
             logging.error(f"Unexpected error while running the fuzzer")
             logging.exception(e)
@@ -306,11 +308,12 @@ class EnsembleFuzzer:
             # After running the fuzzer, update prev_output_dir
             prev_output_dir = fuzzer.output_dir
 
-            if fuzzer.run_err is None:
+            if isinstance(fuzzer.run_err, Exception):
+                # If an actual error occurred (non-timeout), do not re-queue
+                logging.info(f"Fuzzer {fuzzer.name} encountered an error and will not be re-queued.")
+            else:
                 # Re-queue the fuzzer to run again
                 self.fuzzer_queue.append(fuzzer)
-            else:
-                logging.info(f"Fuzzer {fuzzer.name} encountered an error and will not be re-queued.")
 
         # If we exit the loop, no fuzzer is left
         logging.info("Fuzzing completed: all fuzzers have been processed.")
