@@ -2,7 +2,10 @@
 Description: Ensemble runner for Cmplog, FOX, and ZTaint fuzzer modes.
 
 Usage:
-    python3 ensemble_runner.py -i [corpus_dir] -o [output_dir] -b [target_binary] -x [dicts] --fox_target_binary [fox_target_binary] --cmplog_target_binary [cmplog_target_binary] --ztaint_target_binary [ztaint_target_binary]
+    python3 ensemble_runner.py -i [corpus_dir] -o [output_dir] -b [target_binary] -x [dicts]
+        --fox_target_binary [fox_target_binary]
+        --cmplog_target_binary [cmplog_target_binary]
+        --ztaint_target_binary [ztaint_target_binary]
 
 Note:
     - Input and output directories are managed per fuzzer instance.
@@ -12,7 +15,11 @@ Note:
     - The environment variable 'AFL_AUTORESUME' is not set.
 
 Alternatively, you can directly import the EnsembleFuzzer class and use it as follows:
-    EnsembleFuzzer(corpus_dir, output_dir, dicts, target_binary, cmplog_target_binary, fox_target_binary, ztaint_target_binary).run()
+    EnsembleFuzzer(corpus_dir, output_dir, dicts,
+                   target_binary,
+                   cmplog_target_binary,
+                   fox_target_binary,
+                   ztaint_target_binary).run()
 
 Required fuzzer binaries in the current directory (names/paths modifiable in the script, see CMPLOG_FUZZ_BIN_NAME, FOX_FUZZ_BIN_NAME, and ZTAINT_FUZZ_BIN_NAME):
     - fox_4.30c_hybrid_start
@@ -85,7 +92,15 @@ class AFLFuzzer(AbstractFuzzer):
     time_start: int
     time_end: int
 
-    def __init__(self, name: str, corpus_dir: str, output_dir: str, dicts: List[str], target_binary: str, args: List[str]):
+    def __init__(
+        self,
+        name: str,
+        corpus_dir: str,
+        output_dir: str,
+        dicts: List[str],
+        target_binary: str,
+        args: List[str]
+    ):
         self.name = name
         self.corpus_dir = corpus_dir
         self.output_dir = output_dir
@@ -102,7 +117,12 @@ class AFLFuzzer(AbstractFuzzer):
         self.command += COMMON_ARGS
         for dict_path in self.dicts:
             self.command += ['-x', dict_path]
-        self.command += ['-i', self.corpus_dir, '-o', self.output_dir, '--', self.target_binary] + self.args + [INT_MAX]
+        self.command += [
+            '-i', self.corpus_dir,
+            '-o', self.output_dir,
+            '--',
+            self.target_binary
+        ] + self.args + [INT_MAX]
 
     def do_run(self):
         """
@@ -154,7 +174,15 @@ class CmplogFuzzer(AFLFuzzer):
     """Fuzzer class for the Cmplog mode."""
     cmplog_target_binary: str
 
-    def __init__(self, corpus_dir: str, output_dir: str, dicts: List[str], target_binary: str, cmplog_target_binary: str, args: List[str]):
+    def __init__(
+        self,
+        corpus_dir: str,
+        output_dir: str,
+        dicts: List[str],
+        target_binary: str,
+        cmplog_target_binary: str,
+        args: List[str]
+    ):
         self.cmplog_target_binary = cmplog_target_binary
         super().__init__("cmplog", corpus_dir, output_dir, dicts, target_binary, args)
 
@@ -163,7 +191,11 @@ class CmplogFuzzer(AFLFuzzer):
         Build the command for running the Cmplog fuzzer.
         The '-c' option specifies the cmplog-instrumented binary.
         """
-        self.command = [CMPLOG_FUZZ_BIN_NAME, '-c', self.cmplog_target_binary]
+        self.command = [
+            CMPLOG_FUZZ_BIN_NAME,
+            '-c',
+            self.cmplog_target_binary
+        ]
         self.add_common_args()
 
     def get_timeout(self):
@@ -174,12 +206,24 @@ class CmplogFuzzer(AFLFuzzer):
 class FoxFuzzer(AFLFuzzer):
     """Fuzzer class for the FOX mode."""
 
-    def __init__(self, corpus_dir: str, output_dir: str, dicts: List[str], target_binary: str, args: List[str]):
+    def __init__(
+        self,
+        corpus_dir: str,
+        output_dir: str,
+        dicts: List[str],
+        target_binary: str,
+        args: List[str]
+    ):
         super().__init__("fox", corpus_dir, output_dir, dicts, target_binary, args)
 
     def build_command(self):
         """Build the command for running the FOX fuzzer."""
-        self.command = [FOX_FUZZ_BIN_NAME, '-k', '-p', 'wd_scheduler']
+        self.command = [
+            FOX_FUZZ_BIN_NAME,
+            '-k',
+            '-p',
+            'wd_scheduler'
+        ]
         self.add_common_args()
 
     def get_timeout(self):
@@ -189,13 +233,36 @@ class FoxFuzzer(AFLFuzzer):
 
 class ZTaintFuzzer(AFLFuzzer):
     """Fuzzer class for the ZTaint mode."""
+    cmplog_target_binary: str
 
-    def __init__(self, corpus_dir: str, output_dir: str, dicts: List[str], target_binary: str, args: List[str]):
+    def __init__(
+        self,
+        corpus_dir: str,
+        output_dir: str,
+        dicts: List[str],
+        target_binary: str,
+        cmplog_target_binary: str,
+        args: List[str]
+    ):
+        """
+        如果传入了 cmplog_target_binary，则在构造命令时加上 -c cmplog_target_binary。
+        target_binary 为 ZTaint 编译出的可执行文件。
+        """
+        self.cmplog_target_binary = cmplog_target_binary
         super().__init__("ztaint", corpus_dir, output_dir, dicts, target_binary, args)
 
     def build_command(self):
         """Build the command for running the ZTaint fuzzer."""
-        self.command = [ZTAINT_FUZZ_BIN_NAME]
+        if self.cmplog_target_binary:
+            # 如果有 cmplog_target_binary，则像 cmplog 一样加上 -c 参数
+            self.command = [
+                ZTAINT_FUZZ_BIN_NAME,
+                '-c',
+                self.cmplog_target_binary
+            ]
+        else:
+            # 否则普通运行
+            self.command = [ZTAINT_FUZZ_BIN_NAME]
         self.add_common_args()
 
     def get_timeout(self):
@@ -217,16 +284,58 @@ class EnsembleFuzzer:
     args: List[str]
     dicts: List[str]
 
-    def __init__(self, corpus_dir: str, output_dir: str, dicts: List[str], target_binary: str, cmplog_target_binary: str, fox_target_binary: str, ztaint_target_binary: str, args: List[str]):
+    def __init__(
+        self,
+        corpus_dir: str,
+        output_dir: str,
+        dicts: List[str],
+        target_binary: str,
+        cmplog_target_binary: str,
+        fox_target_binary: str,
+        ztaint_target_binary: str,
+        args: List[str]
+    ):
         self.output_dir = os.path.join(output_dir, "ensemble_fuzzer")
         self.initial_corpus_dir = corpus_dir  # Store initial corpus directory
         self.dicts = dicts  # Store dictionaries
         self.args = args    # Store target binary arguments
-        self.fuzzer_queue = deque([
-            ZTaintFuzzer(None, None, dicts, ztaint_target_binary, args),
-            FoxFuzzer(None, None, dicts, fox_target_binary, args),
-            CmplogFuzzer(None, None, dicts, target_binary, cmplog_target_binary, args)
-        ])
+        self.fuzzer_queue = deque()
+
+        # 1. 如果没有提供这几个参数，就不会将其添加到队列
+        #   - 注意这里默认 target_binary 是普通的 AFL 编译产物，必需的
+        #   - cmplog_target_binary、fox_target_binary、ztaint_target_binary 则是可选的
+        if ztaint_target_binary:
+            self.fuzzer_queue.append(
+                ZTaintFuzzer(
+                    corpus_dir=None,
+                    output_dir=None,
+                    dicts=self.dicts,
+                    target_binary=ztaint_target_binary,
+                    cmplog_target_binary=cmplog_target_binary,
+                    args=self.args
+                )
+            )
+        if fox_target_binary:
+            self.fuzzer_queue.append(
+                FoxFuzzer(
+                    corpus_dir=None,
+                    output_dir=None,
+                    dicts=self.dicts,
+                    target_binary=fox_target_binary,
+                    args=self.args
+                )
+            )
+        if cmplog_target_binary:
+            self.fuzzer_queue.append(
+                CmplogFuzzer(
+                    corpus_dir=None,
+                    output_dir=None,
+                    dicts=self.dicts,
+                    target_binary=target_binary,
+                    cmplog_target_binary=cmplog_target_binary,
+                    args=self.args
+                )
+            )
 
     def find_queue_directory(self, output_dir):
         """
@@ -264,7 +373,10 @@ class EnsembleFuzzer:
             fuzzer = self.fuzzer_queue.popleft()
 
             # Create unique input and output directories per fuzzer run
-            fuzzer_output_dir = os.path.join(self.output_dir, f"{fuzzer.name}_run_{fuzzer.run_cnt}")
+            fuzzer_output_dir = os.path.join(
+                self.output_dir,
+                f"{fuzzer.name}_run_{fuzzer.run_cnt}"
+            )
             os.makedirs(fuzzer_output_dir, exist_ok=True)
 
             # Set up the input directory
@@ -291,7 +403,10 @@ class EnsembleFuzzer:
                     fuzzer_input_dir = queue_dir
 
             # Prepare the input directory by copying files
-            fuzzer_input_dir_prepared = os.path.join(self.output_dir, f"{fuzzer.name}_input_{fuzzer.run_cnt}")
+            fuzzer_input_dir_prepared = os.path.join(
+                self.output_dir,
+                f"{fuzzer.name}_input_{fuzzer.run_cnt}"
+            )
             os.makedirs(fuzzer_input_dir_prepared, exist_ok=True)
             self.copy_queue_to_input(fuzzer_input_dir, fuzzer_input_dir_prepared)
 
@@ -300,7 +415,8 @@ class EnsembleFuzzer:
             fuzzer.output_dir = fuzzer_output_dir
 
             # Decide on timeout
-            fuzzer.timeout = len(self.fuzzer_queue) > 0  # Enforce timeout if more than one fuzzer remains
+            # 如果队列里还有其它的 Fuzzer，就开启超时限制
+            fuzzer.timeout = len(self.fuzzer_queue) > 0
 
             # Run the fuzzer
             fuzzer.run()
@@ -322,21 +438,32 @@ class EnsembleFuzzer:
 def parse_args():
     """Parse command-line arguments."""
     parser = argparse.ArgumentParser()
-    parser.add_argument("-i", "--corpus_dir", type=str, required=True, help="Directory containing the corpus")
-    parser.add_argument("-o", "--output_dir", type=str, required=True, help="Directory to store output")
-    parser.add_argument("-b", "--target_binary", type=str, required=True, help="Path to the vanilla AFLplusplus-instrumented target binary")
-    parser.add_argument("-a", "--args", type=str, nargs="*", default=[], help="Arguments to pass to the target binary")
-    parser.add_argument("-x", "--dicts", type=str, nargs="+", default=None, help="Path to the dictionaries; if not provided, will use all .dict files in the current directory")
-    parser.add_argument("--fox_target_binary", type=str, required=True, help="Path to the FOX-instrumented target binary")
-    parser.add_argument("--cmplog_target_binary", type=str, required=True, help="Path to the cmplog-instrumented target binary")
-    parser.add_argument("--ztaint_target_binary", type=str, required=True, help="Path to the ZTaint-instrumented target binary")
+    parser.add_argument("-i", "--corpus_dir", type=str, required=True,
+                        help="Directory containing the corpus")
+    parser.add_argument("-o", "--output_dir", type=str, required=True,
+                        help="Directory to store output")
+    parser.add_argument("-b", "--target_binary", type=str, required=True,
+                        help="Path to the vanilla AFLplusplus-instrumented target binary")
+    parser.add_argument("-a", "--args", type=str, nargs="*", default=[],
+                        help="Arguments to pass to the target binary")
+    parser.add_argument("-x", "--dicts", type=str, nargs="+", default=None,
+                        help="Path to the dictionaries; if not provided, will use all .dict files in the current directory")
+    parser.add_argument("--fox_target_binary", type=str, required=False,
+                        help="Path to the FOX-instrumented target binary (optional)")
+    parser.add_argument("--cmplog_target_binary", type=str, required=False,
+                        help="Path to the cmplog-instrumented target binary (optional)")
+    parser.add_argument("--ztaint_target_binary", type=str, required=False,
+                        help="Path to the ZTaint-instrumented target binary (optional)")
     return parser.parse_args()
 
 
 def main(args):
     """Main function to run the ensemble fuzzer."""
     os.makedirs(args.output_dir, exist_ok=True)
-    logging.basicConfig(filename=os.path.join(args.output_dir, "ensemble_runner.log"), level=logging.DEBUG)
+    logging.basicConfig(
+        filename=os.path.join(args.output_dir, "ensemble_runner.log"),
+        level=logging.DEBUG
+    )
 
     if args.dicts is None:
         args.dicts = [os.path.abspath(f) for f in os.listdir('.') if f.endswith('.dict')]
@@ -345,7 +472,16 @@ def main(args):
     else:
         args.dicts = [os.path.abspath(dict_path) for dict_path in args.dicts]
 
-    fuzzer = EnsembleFuzzer(args.corpus_dir, args.output_dir, args.dicts, args.target_binary, args.cmplog_target_binary, args.fox_target_binary, args.ztaint_target_binary, args.args)
+    fuzzer = EnsembleFuzzer(
+        corpus_dir=args.corpus_dir,
+        output_dir=args.output_dir,
+        dicts=args.dicts,
+        target_binary=args.target_binary,
+        cmplog_target_binary=args.cmplog_target_binary,
+        fox_target_binary=args.fox_target_binary,
+        ztaint_target_binary=args.ztaint_target_binary,
+        args=args.args
+    )
     fuzzer.run()
 
 
