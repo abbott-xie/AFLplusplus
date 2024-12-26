@@ -15,7 +15,7 @@ def parse_local_edge_from_normal_sancov_instrument(instrument):
     if "inttoptr" not in instrument:
         local_edge = 0
     else:
-        local_edge = instrument.split()[15][:-1]
+        local_edge = instrument.split()[17][:-1]
     return local_edge
 
 isStrcmp = {"strcmp", "xmlStrcmp", "xmlStrEqual", "g_strcmp0", "curl_strequal", "strcsequal", "strcasecmp", "stricmp", "ap_cstr_casecmp", "OPENSSL_strcasecmp", "xmlStrcasecmp", "g_strcasecmp", "g_ascii_strcasecmp", "Curl_strcasecompare", "Curl_safe_strcasecompare", "cmsstrcasecmp"}
@@ -152,7 +152,7 @@ if __name__ == '__main__':
 
                 sancov_dst_instrument = tokens[5]
                 local_src_edge = int(parse_local_edge_from_normal_sancov_instrument(sancov_src_instrument))
-                local_dst_edge = int(sancov_dst_instrument.split()[16][:-1])
+                local_dst_edge = int(sancov_dst_instrument.split()[18][:-1])
                 sancov_dst_id = (local_dst_edge - local_src_edge) // 4 + sancov_src_id
                 id_2_cmp_type[sancov_src_id] = (cmp_typ_dic[cmp_type], -1, str_len)
                 sw_border_edge_2_br_dist[(sancov_src_id, sancov_dst_id)] = dummy_id
