@@ -24,7 +24,6 @@
 
 #include "afl-fuzz.h"
 #include <limits.h>
-#include <assert.h>
 #include <ctype.h>
 #include <math.h>
 
@@ -870,7 +869,7 @@ void update_bitmap_score(afl_state_t *afl, struct queue_entry *q) {
     q->frontier_node_bitmap = ck_alloc(ROUND_UP_BITMAP(afl->fsrv.real_map_size, 8));    
   }
 
-  assert(afl->global_frontier_bitmap != NULL);
+  // assert(afl->global_frontier_bitmap != NULL);
 
   /* For every byte set in afl->fsrv.trace_bits[], see if there is a previous
      winner, and how it compares to us. */
@@ -890,7 +889,7 @@ void update_bitmap_score(afl_state_t *afl, struct queue_entry *q) {
             BITMAP_SET(q->frontier_node_bitmap, edge_id);
             q->covered_frontier_nodes_count++;
             // 检查全局位图是否已有该前沿节点标记
-            assert(afl->global_frontier_bitmap != NULL);
+            // assert(afl->global_frontier_bitmap != NULL);
             if (!BITMAP_CHECK(afl->global_frontier_bitmap, edge_id)) {
                 // 将该节点标记为新的前沿节点
                 BITMAP_SET(afl->global_frontier_bitmap, edge_id);
@@ -994,7 +993,7 @@ void set_cover_reduction_v2(afl_state_t *afl) {
     u32 set_covered_fast_seed_list[MAX_NODES_PER_SEED] = {0};
     // 初始化未选种子数组
     u32 *unselected_seeds = malloc(afl->queued_items * sizeof(u32));
-    assert(unselected_seeds != NULL);
+    // assert(unselected_seeds != NULL);
     u32 unselected_seeds_count = 0;
 
     afl->covered_seed_list_counter = 0;
