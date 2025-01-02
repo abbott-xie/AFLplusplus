@@ -1031,7 +1031,7 @@ void set_cover_reduction_v2(afl_state_t *afl) {
         u32 random_index = rand() % unselected_seeds_count;
         u32 seed_index = unselected_seeds[random_index];
         
-        // 获取选中的种子
+       
         struct queue_entry *reduction_seed = afl->queue_buf[seed_index];
 
         unselected_seeds[random_index] = unselected_seeds[unselected_seeds_count - 1];
@@ -1129,10 +1129,10 @@ void update_global_frontier_nodes(struct queue_entry *q, afl_state_t *afl) {
                 }
             }
         }
-        // 更新位图到种子
+      
         q->frontier_node_bitmap[i] = current;
 
-        // 更新种子覆盖的前沿节点数量
+    
         updated_coverage_count+= __builtin_popcount(current);
     }
     q->covered_frontier_nodes_count = updated_coverage_count;
