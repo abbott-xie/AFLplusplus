@@ -261,9 +261,9 @@ struct queue_entry {
       stats_mutated;                    /* stats: # of mutations performed  */
 
 
-  u8  *frontier_node_bitmap;      /*用于记录每个种子覆盖的前沿节点*/
-  u32 covered_frontier_nodes_count;          /*记录已经覆盖的前沿节点数量*/
-  u32 newest_frontier_node_count;  // 种子覆盖的最新 frontier nodes 数量
+  u8  *frontier_node_bitmap;      
+  u32 covered_frontier_nodes_count;         
+  u32 newest_frontier_node_count;  
   
 
   u32 tc_ref;                           /* Trace bytes ref count            */
@@ -665,20 +665,20 @@ typedef struct afl_state {
       havoc_div,                        /* Cycle count divisor for havoc    */
       max_det_extras;                   /* deterministic extra count (dicts)*/
 
-  bool removed_frontier_found;          // 标志是否有frontier node减少
-  bool new_frontier_found;              // 标志是否有新的frontier node
-  bool global_frontier_updated;          // 标志是否有frontier node全局位图更新
-  u32 global_covered_frontier_nodes_count;          /*记录全局已经覆盖的前沿节点数量*/
-  u32 covered_seed_list_counter;             /*记录当前set cover的大小*/
-  u32 covered_fast_seed_list_counter;     /*记录过滤掉异常慢种子后的set cover的大小*/
+  bool removed_frontier_found;    
+  bool new_frontier_found;              
+  bool global_frontier_updated;          
+  u32 global_covered_frontier_nodes_count;          
+  u32 covered_seed_list_counter;             
+  u32 covered_fast_seed_list_counter;     
 
 
-  u8 *global_frontier_bitmap;  // 定义全局frontier nodes位图
-  u8 *initial_frontier_bitmap;   // 每轮 fuzzing 开始时保存的初始位图
-  u8 *local_covered;             //用位图记录已覆盖的前沿节点
-  u32 *recent_frontier_nodes;  // 存储最近发现的 frontier nodes
-  u32 recent_frontier_count;  // 当前记录的 frontier nodes 数量
-  u32 *frontier_discovery_time; // 记录每个 frontier node 的发现时间
+  u8 *global_frontier_bitmap;  
+  u8 *initial_frontier_bitmap;  
+  u8 *local_covered;            
+  u32 *recent_frontier_nodes;  
+  u32 recent_frontier_count;  
+  u32 *frontier_discovery_time; 
 
   u32 set_cover_call_nums;
   u32 use_previou_call_nums;
@@ -772,7 +772,7 @@ typedef struct afl_state {
   
 
 
-  char* cfg_path; // CFG 路径
+  char* cfg_path; 
 
   struct extra_data *extras;            /* Extra tokens to fuzz with        */
   u32                extras_cnt;        /* Total number of tokens read      */

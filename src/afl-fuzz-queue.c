@@ -980,19 +980,12 @@ void cull_queue_new(afl_state_t *afl) {
 
 }
 void set_cover_reduction_v2(afl_state_t *afl) {
-    // final version
-    // fprintf(afl->fsrv.set_cover_analysis, "set_cover_reduction_v2 \n");
-
-    // srand(time(NULL));
-
-
-  // 用位图记录已覆盖的前沿节点
-    memset((void *)afl->local_covered, 0, sizeof(afl->local_covered));
+    
+    memset((void *)afl->local_covered, 0, afl->fsrv.real_map_size >> 3);
 
     u8 fast_seed_exist = 0;
     u32 set_covered_seed_list[MAX_NODES_PER_SEED] = {0};
     u32 set_covered_fast_seed_list[MAX_NODES_PER_SEED] = {0};
-    // 初始化未选种子数组
     u32 *unselected_seeds = malloc(afl->queued_items * sizeof(u32));
     assert(unselected_seeds != NULL);
     u32 unselected_seeds_count = 0;
@@ -1024,7 +1017,7 @@ void set_cover_reduction_v2(afl_state_t *afl) {
 
     mean_exec_us = (total_exec_us - max_exec_us ) / (afl->queued_items - 1);
 
-    // 计算均值和标准差
+    
     mean_exec_us = total_exec_us / afl->queued_items;
     stddev_exec_us = sqrt((total_exec_us_sq / afl->queued_items) - (mean_exec_us * mean_exec_us));
 
@@ -1036,18 +1029,15 @@ void set_cover_reduction_v2(afl_state_t *afl) {
     } else {
 
       while (unselected_seeds_count > 0) {
-        // 从未选种子数组中随机选择一个种子
         u32 random_index = rand() % unselected_seeds_count;
         u32 seed_index = unselected_seeds[random_index];
         
         // 获取选中的种子
         struct queue_entry *reduction_seed = afl->queue_buf[seed_index];
 
-        // 将最后一个元素移动到被选中的位置，缩减数组大小
         unselected_seeds[random_index] = unselected_seeds[unselected_seeds_count - 1];
         unselected_seeds_count--;
 
-        // 如果该种子没有带来新的覆盖，跳过
         int local_covered_intersection_num = 0;
         for (u32 j = 0; j < ROUND_UP_BITMAP(afl->fsrv.real_map_size, 8); j++) {
             u8 previous = afl->local_covered[j];
@@ -1056,17 +1046,13 @@ void set_cover_reduction_v2(afl_state_t *afl) {
         }
 
         if (!local_covered_intersection_num) continue;
-
-        // 记录该种子到 set cover 集合中，并标记为已选择
         set_covered_seed_list[afl->covered_seed_list_counter++] = reduction_seed->id;
 
         if (afl->queue_buf[reduction_seed->id] -> exec_us < mean_exec_us + stddev_exec_us) {
           set_covered_fast_seed_list[afl->covered_fast_seed_list_counter++] = reduction_seed->id;
           fast_seed_exist = 1;
         }
-        // reduction_seed->set_covered = 1;
 
-        // 检查是否已覆盖所有前沿节点
         int all_covered = 1;
         for (u32 j = 0; j < ROUND_UP_BITMAP(afl->fsrv.real_map_size, 8); j++) {
             if (~afl->local_covered[j] & afl->global_frontier_bitmap[j]) {
@@ -1076,21 +1062,19 @@ void set_cover_reduction_v2(afl_state_t *afl) {
         }
 
         if (all_covered) {
-          // 已生成完成的Set Cover集合，现在基于优先级进行种子选择
-          // afl->set_favored_id = select_seed_covering_latest_frontier_node(afl, set_covered_seed_list);
           if (fast_seed_exist) {
             
             u32 random_index = rand() % afl->covered_fast_seed_list_counter;
             
             afl->set_favored_id = set_covered_fast_seed_list[random_index];
 
-            // fprintf(afl->fsrv.set_cover_analysis, "random_index from covered_fast_seed_list_counter : %u %u \n",random_index, afl->set_favored_id );
+            
           
           } else {
 
             u32 random_index = rand() % afl->covered_seed_list_counter;
             afl->set_favored_id = set_covered_seed_list[random_index];
-            // fprintf(afl->fsrv.set_cover_analysis, "random_index from covered_seed_list_counter :%u %u\n", random_index, afl->set_favored_id );
+           
 
           }
           
@@ -1106,35 +1090,33 @@ void set_cover_reduction_v2(afl_state_t *afl) {
         FATAL("Too many seeds selected in set cover reduction.");
     }
 
-    // 释放动态分配的内存
+
     free(unselected_seeds);
 }
 
 
 void update_global_frontier_nodes(struct queue_entry *q, afl_state_t *afl) {
-  // printf("---------4 . 开始调用update_global_frontier_nodes函数--------------\n");
 
-    // if (!afl->global_frontier_updated) return;  // 如果全局位图未更新，跳过该函数
 
-    u32 updated_coverage_count = 0;  // 临时存储已覆盖的前沿节点数量
+    u32 updated_coverage_count = 0;  
     q -> set_covered = 0;
 
     u32 init_count = q -> covered_frontier_nodes_count;
     u32 count = 0;
     for (u32 i = 0; i < (afl->fsrv.real_map_size >> 3); i++) {
-        u8 current = q->frontier_node_bitmap[i];  // 当前种子的前沿节点位图
+        u8 current = q->frontier_node_bitmap[i];  
 
-        if (current == 0) continue;  // 如果当前字节为空，跳过检查
+        if (current == 0) continue;  
         
         for (u8 bit = 0; bit < 8; bit++) {
             u32 edge_id = (i << 3) + bit;
 
             if (edge_id < (i << 3)) {
-              FATAL("edge_id溢出");
+              FATAL("edge_id overflow");
             }
             if (current & (1 << bit)) {
                 if (edge_id >= afl->fsrv.map_size) {
-                    FATAL("Edge ID %d 超出 trace_bits 范围，跳过该边\n", edge_id);
+                    FATAL("Edge ID %d exceed trace_bits range skip this edge\n", edge_id);
                 }   
                 if (!is_frontier_node_outer(afl, edge_id)) { 
                     count++;
@@ -1144,7 +1126,6 @@ void update_global_frontier_nodes(struct queue_entry *q, afl_state_t *afl) {
                       afl->global_covered_frontier_nodes_count--;
                     }
                     
-                    // 如果不再是前沿节点，从位图中清除该边
                     current &= ~(1 << bit);
                 }
             }
@@ -1159,21 +1140,17 @@ void update_global_frontier_nodes(struct queue_entry *q, afl_state_t *afl) {
     if (!afl->global_covered_frontier_nodes_count) {
       write_frontier_node_info(afl);
       write_trace_bits_info(afl); // 调用新函数记录 trace_bits
-      FATAL("遍历到种子 seed %u 全局frontier node变为 0！ 并被清理了 %u 次,初始covered_frontier_nodes_count数量为 %u\n",q->id,count,init_count);
     }
-    // printf("种子： %d 更新后覆盖的 updated_covered_frontier_nodes_count = %d\n", q->id, updated_coverage_count);
-    // printf("此时全局的frontier node数量为: %d \n", afl->global_covered_frontier_nodes_count);
     
 }
 bool is_frontier_node_inner(afl_state_t *afl, u32 id) {
 
     int num_successors = afl->fsrv.successor_count[id];
     if (num_successors <= 1) {
-        return 0;  // 该路径没有或只有一个后继节点，不是前沿节点
+        return 0;  
     }
-    // printf("该路径有%d个后继节点，是前沿节点\n", num_successors);    
+  
     int not_visited = 0;
-    // printf("正在判断edge: %d 是否 frontier node\n",id);
     for (int i = 0; i < num_successors; i++) {
         u32 succ_id = afl->fsrv.successor_map[id][i];
         u8 current_status = afl->fsrv.trace_bits[succ_id];
@@ -1192,11 +1169,11 @@ bool is_frontier_node_outer(afl_state_t *afl, u32 id) {
 
     int num_successors = afl->fsrv.successor_count[id];
     if (num_successors <= 1) {
-        return 0;  // 该路径没有或只有一个后继节点，不是前沿节点
+        return 0;  
     }
-    // printf("该路径有%d个后继节点，是前沿节点\n", num_successors);    
+ 
     int not_visited = 0;
-    // printf("正在判断edge: %d 是否 frontier node\n",id);
+
     for (int i = 0; i < num_successors; i++) {
         u32 succ_id = afl->fsrv.successor_map[id][i];
         u8 succ_status = afl->virgin_bits[succ_id];
@@ -1211,10 +1188,10 @@ bool is_frontier_node_outer(afl_state_t *afl, u32 id) {
 }
 
 void write_trace_bits_info(struct afl_state *afl) {
-  // 构造输出文件路径
+
   u8 *trace_bits_info_path = alloc_printf("%s/trace_bits_info", afl->out_dir);
   
-  // 打开文件，追加写入
+
   FILE *f = fopen(trace_bits_info_path, "a+");
   if (!f) {
     perror("Unable to open file for writing trace bits information");
@@ -1223,7 +1200,7 @@ void write_trace_bits_info(struct afl_state *afl) {
   }
   ck_free(trace_bits_info_path);
 
-  // 写入 trace_bits 的信息
+
   fprintf(f, "=== Trace Bits Information ===\n");
   for (u32 i = 0; i < afl->fsrv.map_size; i++) {
     if (afl->fsrv.trace_bits[i]) {

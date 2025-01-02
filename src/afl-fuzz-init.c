@@ -901,22 +901,24 @@ void read_testcases(afl_state_t *afl, u8 *directory) {
 }
 
 void get_cfg_path(afl_state_t *afl) {
-    char *cfg_path = getenv("AFL_CFG_PATH");
-    if (!cfg_path) {
-        fprintf(stderr, "Error: AFL_CFG_PATH environment variable must be set\n");
-        exit(1);
-    }
-    afl->cfg_path = cfg_path;
+    #ifndef AFL_CFG_PATH
+    # error "AFL_CFG_PATH is not defined"
+        // char *cfg_path = getenv("AFL_CFG_PATH");
+        // if (!cfg_path) {
+        //     fprintf(stderr, "Error: AFL_CFG_PATH environment variable must be set\n");
+        //     exit(1);
+        // }
+        // afl->cfg_path = cfg_path;
+    #else
+        afl->cfg_path = AFL_CFG_PATH;
+    #endif
 }
 
 
-//加载CFG，获取节点(边)从属关系
 void load_cfg(afl_state_t *afl) {
   afl_forkserver_t *fsrv = &afl->fsrv;
   
-  // initialize the fsrv
-  // u32 map_size= get_map_size();
-  // ACTF("map_size = %u\n", map_size);
+
   fsrv->successor_count = ck_alloc(afl->fsrv.real_map_size * sizeof(u32));
   fsrv->successor_map = ck_alloc(afl->fsrv.real_map_size * sizeof(u32 *));
   for (u32 i = 0; i < afl->fsrv.real_map_size; i++) {

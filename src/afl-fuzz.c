@@ -2756,16 +2756,14 @@ int main(int argc, char **argv_orig, char **envp) {
   if (afl->use_set_cover_scheduling) {
     
     get_cfg_path(afl);
-
     load_cfg(afl);
-
-
+    
     u32 alloc_size = ROUND_UP_BITMAP(afl->fsrv.real_map_size, 8);
+
     afl->global_frontier_bitmap = ck_alloc(alloc_size);
-    assert(afl->global_frontier_bitmap != NULL);
     afl->initial_frontier_bitmap = ck_alloc(alloc_size);
-    assert(afl->initial_frontier_bitmap != NULL);
     afl->local_covered = ck_alloc(alloc_size);
+
   }
     
 
@@ -2797,15 +2795,8 @@ int main(int argc, char **argv_orig, char **envp) {
     cull_queue_new(afl); 
     
     afl->current_entry = afl->set_favored_id;
+
     afl->queue_cur = afl->queue_buf[afl->current_entry];
-
-    // for (u32 i = 0; i < MAP_SIZE; i++) {
-    //   afl->frontier_discovery_time[i] = 0xFFFFFFFF;  // 未被发现
-    // }
-
-    
-    // fprintf(afl->fsrv.set_cover_analysis, "%u %u %u %lu\n",afl->covered_seed_list_counter,afl->queued_items, afl->global_covered_frontier_nodes_count,afl->set_favored_id );
-    // fflush(afl->fsrv.set_cover_analysis);
   } else {
     
     cull_queue(afl);
@@ -3223,17 +3214,17 @@ int main(int argc, char **argv_orig, char **envp) {
       skipped_fuzz = fuzz_one(afl);
 
       
-      if (!afl->use_set_cover_scheduling) {
-        fprintf(afl->fsrv.set_cover_analysis, "%u %u %u\n",afl->queued_items,afl->current_entry, skipped_fuzz );
-        fflush(afl->fsrv.set_cover_analysis);
-      } else {
-        fprintf(afl->fsrv.set_cover_analysis, "%u %u %u %u %lu\n",afl->covered_seed_list_counter, afl->covered_fast_seed_list_counter, afl->queued_items, afl->global_covered_frontier_nodes_count,afl->set_favored_id );
+      // if (!afl->use_set_cover_scheduling) {
+      //   fprintf(afl->fsrv.set_cover_analysis, "%u %u %u\n",afl->queued_items,afl->current_entry, skipped_fuzz );
+      //   fflush(afl->fsrv.set_cover_analysis);
+      // } else {
+      //   fprintf(afl->fsrv.set_cover_analysis, "%u %u %u %u %lu\n",afl->covered_seed_list_counter, afl->covered_fast_seed_list_counter, afl->queued_items, afl->global_covered_frontier_nodes_count,afl->set_favored_id );
         
-        if (skipped_fuzz) {
-          fprintf(afl->fsrv.set_cover_analysis, "skipped_fuzz : %u\n", skipped_fuzz);
-        }
-        fflush(afl->fsrv.set_cover_analysis); 
-      }
+      //   if (skipped_fuzz) {
+      //     fprintf(afl->fsrv.set_cover_analysis, "skipped_fuzz : %u\n", skipped_fuzz);
+      //   }
+      //   fflush(afl->fsrv.set_cover_analysis); 
+      // }
 
       u64 fuzz_one_curr_time = get_cur_time();
       // fprintf(afl->fsrv.plot_file, "fuzz_one_curr_time - afl->start_time: %llu, time_counter: %u", fuzz_one_curr_time - afl->start_time, time_counter);

@@ -363,7 +363,6 @@ u8 fuzz_one_original(afl_state_t *afl) {
     });
 
   }
-  // printf("+++++++++++++++++++++\n");
   if (!afl->use_set_cover_scheduling){
       if (likely(afl->pending_favored)) {
 

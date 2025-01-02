@@ -478,10 +478,10 @@
 #define BITMAP_CHECK(bitmap, id) (bitmap[id >> 3] & (1 << (id & 7)))
 
 
-#define MAX_NODES_PER_SEED 1000  // 假设最多每个节点关联1000个种子
-// #define MAX_NODES 102400          // 假设 trace_bits[] 的最大大小
-#define MAX_SUCCESSORS 1024     // 每个节点最多1024个后继节点
-#define RECENT_FRONTIER_LIMIT 100  // 保留最新的 100 个 frontier nodes
+#define MAX_NODES_PER_SEED 1000 
+// #define MAX_NODES 102400          
+#define MAX_SUCCESSORS 1024    
+#define RECENT_FRONTIER_LIMIT 100  
 
 #define ROUND_DOWN_BITMAP(a, b) ((a) / (b))
 #define ROUND_UP_BITMAP(a, b) ROUND_DOWN_BITMAP(((a) + (b) - 1), b)

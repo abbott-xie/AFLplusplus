@@ -102,8 +102,8 @@ nyx_plugin_handler_t *afl_load_libnyx_plugin(u8 *libnyx_binary);
 typedef struct afl_forkserver {
 
   /* a program that includes afl-forkserver needs to define these */
-  u32 **successor_map;  // 每个节点的后继节点ID数组
-  u32 *successor_count;  // 每个节点的后继节点数量
+  u32 **successor_map;  
+  u32 *successor_count;  
 
   u8 *trace_bits;                       /* SHM with instrumentation bitmap  */
 
