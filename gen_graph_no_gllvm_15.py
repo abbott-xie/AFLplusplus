@@ -161,7 +161,7 @@ if __name__ == '__main__':
     
     # cmp_type[node_id] = cmp_type
     # sancov node_id, cmp_type
-    with open("ztaint_br_node_id_2_cmp_type", "w") as f:
+    with open("hfuzz2_br_node_id_2_cmp_type", "w") as f:
         for node in sorted(cfg.keys()):
             children = cfg[node]
             children.sort()
@@ -199,14 +199,14 @@ if __name__ == '__main__':
 
     # border_edge_parent sancov id, boder_edge_child sancov id, border_edge_br_dist_id(i.e., dummy id), str_len
     # DO NOT FORGET to add offset to the node_id!!!!
-    with open("ztaint_border_edges", "w") as f:
+    with open("hfuzz2_border_edges", "w") as f:
         for parent, child, dummy_id, str_len in border_edges:
             f.write(str(parent+6) + " " + str(child+6) + " " + str(dummy_id) + " " + str(str_len) + "\n")
 
-    with open("ztaint_max_border_edge_id", "w") as f:
+    with open("hfuzz2_max_border_edge_id", "w") as f:
         f.write(str(len(border_edges)))
 
-    with open("ztaint_max_br_dist_edge_id", "w") as f:
+    with open("hfuzz2_max_br_dist_edge_id", "w") as f:
         f.write(str(max(dummy_id + str_len for _, _, dummy_id, str_len in border_edges if dummy_id != -1)))
 
     parent_node_id_map = defaultdict(list)
@@ -214,7 +214,7 @@ if __name__ == '__main__':
         parent_node_id_map[val[0]].append(key)
 
     # border_edge_parent, first_border_edge_idx, num_of_border_edges_starting_from_this_parent
-    with open("ztaint_border_edges_cache", "w") as f:
+    with open("hfuzz2_border_edges_cache", "w") as f:
         for parent, id_list in parent_node_id_map.items():
             f.write(str(parent+6) + " " + str(id_list[0]) + " " + str(id_list[-1] - id_list[0] + 1) + "\n")
             if (id_list[-1] - id_list[0] + 1) <= 1:
