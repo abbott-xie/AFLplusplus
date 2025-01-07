@@ -908,7 +908,7 @@ void load_metadata(afl_state_t *afl) {
 
   // read border edge file
   // FORMAT: (border_edge_parent, border_edge_child, border_edge_2_br_dist_id)
-  fp = fopen("ztaint_border_edges", "r");
+  fp = fopen("hfuzz2_border_edges", "r");
   if (!fp) { FATAL("border_edges open failed"); }
 
   line = NULL;
@@ -938,7 +938,7 @@ void load_metadata(afl_state_t *afl) {
 
   // read border edge fast access cache
   // FORMAT: (border_edge_parent, first_id, num_of_children)
-  fp = fopen("ztaint_border_edges_cache", "r");
+  fp = fopen("hfuzz2_border_edges_cache", "r");
   if (!fp) { FATAL("border_edges_cache open failed"); }
 
   line = NULL;
@@ -959,7 +959,7 @@ void load_metadata(afl_state_t *afl) {
 
   // read border edge cmp type
   // FORMAT: (border_edge_parent, cmp_type)
-  fp = fopen("ztaint_br_node_id_2_cmp_type", "r");
+  fp = fopen("hfuzz2_br_node_id_2_cmp_type", "r");
   if (!fp) { FATAL("br_node_id_2_cmp_type open failed"); }
 
   line = NULL;
