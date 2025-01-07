@@ -168,10 +168,10 @@ if __name__ == '__main__':
             if len(children) > 1:
                 # branch_NO_instrumentation_info
                 if node not in id_2_cmp_type:
-                    f.write(str(node+6) + " " + str(0) + "\n")
+                    f.write(str(node+5) + " " + str(0) + "\n")
                 else:
                     cmp_type = id_2_cmp_type[node][0]
-                    f.write(str(node+6) + " " + str(cmp_type) + "\n")
+                    f.write(str(node+5) + " " + str(cmp_type) + "\n")
 
     # build border edge array
     for node in sorted(cfg.keys()):
@@ -201,7 +201,7 @@ if __name__ == '__main__':
     # DO NOT FORGET to add offset to the node_id!!!!
     with open("border_edges", "w") as f:
         for parent, child, dummy_id, str_len in border_edges:
-            f.write(str(parent+6) + " " + str(child+6) + " " + str(dummy_id) + " " + str(str_len) + "\n")
+            f.write(str(parent+5) + " " + str(child+5) + " " + str(dummy_id) + " " + str(str_len) + "\n")
 
     with open("max_border_edge_id", "w") as f:
         f.write(str(len(border_edges)))
@@ -216,6 +216,6 @@ if __name__ == '__main__':
     # border_edge_parent, first_border_edge_idx, num_of_border_edges_starting_from_this_parent
     with open("border_edges_cache", "w") as f:
         for parent, id_list in parent_node_id_map.items():
-            f.write(str(parent+6) + " " + str(id_list[0]) + " " + str(id_list[-1] - id_list[0] + 1) + "\n")
+            f.write(str(parent+5) + " " + str(id_list[0]) + " " + str(id_list[-1] - id_list[0] + 1) + "\n")
             if (id_list[-1] - id_list[0] + 1) <= 1:
                 print("BUG: bug in 'border_edges_cache'")
