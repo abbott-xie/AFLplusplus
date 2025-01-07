@@ -519,7 +519,7 @@ void load_max_edge_cnts_fallback(afl_state_t *afl) {
   free(line);
 }
 void load_max_edge_cnts(afl_state_t *afl) {
-  FILE *f = fopen("ztaint_max_border_edge_id", "r");
+  FILE *f = fopen("hfuzz2_max_border_edge_id", "r");
   if (!f) {
     WARNF("Failed to open total_border_edge_cnt");
     return load_max_edge_cnts_fallback(afl);
@@ -527,7 +527,7 @@ void load_max_edge_cnts(afl_state_t *afl) {
   fscanf(f, "%u", &afl->fox_total_border_edge_cnt);
   fclose(f);
 
-  f = fopen("ztaint_max_br_dist_edge_id", "r");
+  f = fopen("hfuzz2_max_br_dist_edge_id", "r");
   if (!f) {
     WARNF("Failed to open total_br_dist_edge_cnt");
     return load_max_edge_cnts_fallback(afl);
